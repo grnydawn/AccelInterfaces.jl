@@ -124,11 +124,8 @@ function launch!(kinfo::KernelInfo, invars...;
                  compile::Union{String, Nothing}=nothing,
                  workdir::Union{String, Nothing}=nothing)
 
-    #println("TTT", length(kernel.accel.constnames))
-
 
     inargs, indtypes = argsdtypes(kinfo.accel, invars)
-    inoutargs, inoutdtypes = argsdtypes(kinfo.accel, [inv for invar in invars if invar in outvars])
     outargs, outdtypes = argsdtypes(kinfo.accel, outvars)
 
     args = vcat(inargs, outargs)
@@ -136,14 +133,14 @@ function launch!(kinfo::KernelInfo, invars...;
 
     # generate hash for exitdata
 
-    hashid = hash(("launch!", kinfo.accel.acceltype, indtypes, inoutdtypes, outdtypes))
+    hashid = hash(("launch!", kinfo.accel.acceltype, indtypes, outdtypes))
 
     # load shared lib
     if haskey(kinfo.sharedlibs, hashid)
         dlib = kinfo.sharedlibs[hashid]
 
     else
-        libpath = build!(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+        libpath = build!(kinfo, hashid, inargs, indtypes,
                         outargs, outdtypes, innames, outnames, compile, workdir)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
 
@@ -159,7 +156,7 @@ function launch!(kinfo::KernelInfo, invars...;
 end
 
 function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vector,
-                inoutargs::Vector, inoutdtypes::Vector, outargs::Vector, outdtypes::Vector,
+                outargs::Vector, outdtypes::Vector,
                 innames::NTuple, outnames::NTuple, compile::Union{String, Nothing},
                 workdir::Union{String, Nothing})
 
@@ -184,7 +181,7 @@ function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vec
     # generate source code
     if !isfile(srcpath)
 
-        generate!(kinfo, srcpath, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+        generate!(kinfo, srcpath, hashid, inargs, indtypes,
                         outargs, outdtypes, innames, outnames)
 
     end
@@ -199,16 +196,16 @@ end
 
 
 function generate!(kinfo::KernelInfo, srcpath::String, hashid::UInt64, inargs::Vector, indtypes::Vector,
-                inoutargs::Vector, inoutdtypes::Vector, outargs::Vector, outdtypes::Vector,
+                outargs::Vector, outdtypes::Vector,
                 innames::NTuple, outnames::NTuple)
 
 
     if kinfo.accel.acceltype == FLANG
-        code = gencode_fortran(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+        code = gencode_fortran(kinfo, hashid, inargs, indtypes,
                                 outargs, outdtypes, innames, outnames)
 
     elseif kinfo.accel.acceltype == CLANG
-        code = gencode_cpp(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+        code = gencode_cpp(kinfo, hashid, inargs, indtypes,
                                 outargs, outdtypes, innames, outnames)
 
     end
