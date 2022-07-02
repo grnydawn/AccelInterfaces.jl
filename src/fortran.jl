@@ -48,7 +48,7 @@ function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Ve
                 inoutargs::Vector, inoutdtypes::Vector, outargs::Vector, outdtypes::Vector,
                 innames::NTuple, outnames::NTuple)
 
-    arguments = "x, y, z" 
+    arguments = join((innames...,outnames...), ",")
 
     funcsig = "INTEGER (C_INT64_T) FUNCTION launch($arguments) BIND(C, name=\"launch\")\n"
     typedecls = """
