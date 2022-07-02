@@ -1,3 +1,4 @@
+[fortran]
 INTEGER i
 
 DO i=LBOUND(x, 1), UBOUND(x, 1)

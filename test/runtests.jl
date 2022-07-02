@@ -1,19 +1,12 @@
 using AccelInterfaces
 using Test
 
-function launch_test()
-    return true
-end
-
-
-@testset "AccelInterfaces.jl" begin
-
-    @test FLANG isa AccelType
+function basic_tests()
 
     constvars = (100,)
     constnames = ("TEST",)
 
-    accel = AccelInfo(FLANG, constnames=constnames, constvars=constvars)
+    accel = AccelInfo(JAI_FORTRAN, constnames=constnames, constvars=constvars)
     @test accel isa AccelInfo
 
     kernel = KernelInfo(accel, "ex1.knl")
@@ -30,6 +23,15 @@ end
     launch!(kernel, x, y, z, outvars=(z,), innames=innames,
             outnames=outnames, compile=compile)
     @test z == [3,5,7]
+
+end
+
+@testset "AccelInterfaces.jl" begin
+
+    # testing AccelInterfaces module loading
+    @test JAI_FORTRAN isa AccelType
+
+    basic_tests()
 
 end
 

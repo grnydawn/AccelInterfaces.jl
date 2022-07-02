@@ -9,10 +9,10 @@ import Libdl.dlopen,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-export AccelType, FLANG, CLANG, ANYACCEL, AccelInfo, KernelInfo,
+export AccelType, JAI_FORTRAN, JAI_CPP, JAI_ANYACCEL, AccelInfo, KernelInfo,
         get_accel!,get_kernel!, allocate!, deallocate!, copyin!, copyout!, launch!
 
-@enum AccelType FLANG CLANG ANYACCEL
+@enum AccelType JAI_FORTRAN JAI_CPP JAI_ANYACCEL JAI_HEADER
 
 struct AccelInfo
 
@@ -24,29 +24,20 @@ struct AccelInfo
     sharedlibs::Dict
     constants::Dict
 
-    function AccelInfo(acceltype::AccelType; ismaster::Bool=true, constvars::Tuple=(),
-                    compile::Union{String, Nothing}=nothing,
+    function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
+                    constvars::Tuple=(), compile::Union{String, Nothing}=nothing,
                     constnames::NTuple=())
+
+        # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
+        #     : detect available acceltypes according to h/w, compiler, flags, ...
 
         new(acceltype, ismaster, constvars, constnames, compile, Dict(), Dict())
     end
 end
 
-struct KernelInfo
-
-    accel::AccelInfo
-    kernelpath::String
-    sharedlibs::Dict
-
-    function KernelInfo(accel::AccelInfo, path::String)
-
-        new(accel, path, Dict())
-    end
-end
-
+include("./kernel.jl")
 include("./fortran.jl")
 include("./cpp.jl")
-
 
 
 function get_accel!(acceltype::AccelType; ismaster::Bool=true, constvars::Tuple=(),
@@ -105,11 +96,11 @@ function argsdtypes(ainfo::AccelInfo, data)
             push!(args, arg)
             push!(dtypes, Ptr{typeof(args[end])})
 
-        elseif ainfo.acceltype == CLANG
+        elseif ainfo.acceltype == JAI_CPP
             push!(args, arg)
             push!(dtypes, typeof(args[end]))
 
-        elseif ainfo.acceltype == FLANG
+        elseif ainfo.acceltype == JAI_FORTRAN
             push!(args, arg)
             push!(dtypes, Ref{typeof(args[end])})
 
@@ -140,8 +131,8 @@ function launch!(kinfo::KernelInfo, invars...;
         dlib = kinfo.sharedlibs[hashid]
 
     else
-        libpath = build!(kinfo, hashid, inargs, indtypes,
-                        outargs, outdtypes, innames, outnames, compile, workdir)
+        libpath = build!(kinfo, hashid, inargs, outargs, innames,
+                            outnames, compile, workdir)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
 
     end
@@ -155,8 +146,7 @@ function launch!(kinfo::KernelInfo, invars...;
 
 end
 
-function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vector,
-                outargs::Vector, outdtypes::Vector,
+function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, outargs::Vector,
                 innames::NTuple, outnames::NTuple, compile::Union{String, Nothing},
                 workdir::Union{String, Nothing})
 
@@ -168,11 +158,11 @@ function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vec
         mkdir(workdir)
     end
 
-    if kinfo.accel.acceltype == FLANG
+    if kinfo.accel.acceltype == JAI_FORTRAN
         srcpath = joinpath(workdir, "F$(hashid).F90")
         compile = (compile == nothing ? "gfortran -fPIC -shared" : compile)
 
-    elseif  kinfo.accel.acceltype == CLANG
+    elseif  kinfo.accel.acceltype == JAI_CPP
         srcpath = joinpath(workdir, "C$(hashid).cpp")
         compile = compile == nothing ? "g++ -fPIC -shared -g" : compile
 
@@ -181,8 +171,7 @@ function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vec
     # generate source code
     if !isfile(srcpath)
 
-        generate!(kinfo, srcpath, hashid, inargs, indtypes,
-                        outargs, outdtypes, innames, outnames)
+        generate!(kinfo, srcpath, hashid, inargs, outargs, innames, outnames)
 
     end
 
@@ -195,18 +184,16 @@ function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vec
 end
 
 
-function generate!(kinfo::KernelInfo, srcpath::String, hashid::UInt64, inargs::Vector, indtypes::Vector,
-                outargs::Vector, outdtypes::Vector,
-                innames::NTuple, outnames::NTuple)
+function generate!(kinfo::KernelInfo, srcpath::String, hashid::UInt64, inargs::Vector,
+                outargs::Vector, innames::NTuple, outnames::NTuple)
 
+    body = get_kernelbody(kinfo.kerneldef, kinfo.accel.acceltype)
 
-    if kinfo.accel.acceltype == FLANG
-        code = gencode_fortran(kinfo, hashid, inargs, indtypes,
-                                outargs, outdtypes, innames, outnames)
+    if kinfo.accel.acceltype == JAI_FORTRAN
+        code = gencode_fortran(kinfo, hashid, body, inargs, outargs, innames, outnames)
 
-    elseif kinfo.accel.acceltype == CLANG
-        code = gencode_cpp(kinfo, hashid, inargs, indtypes,
-                                outargs, outdtypes, innames, outnames)
+    elseif kinfo.accel.acceltype == JAI_CPP
+        code = gencode_cpp(kinfo, hashid, body, inargs, outargs, innames, outnames)
 
     end
 

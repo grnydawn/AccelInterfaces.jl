@@ -95,8 +95,8 @@ function genparams(kinfo::KernelInfo)
     return join(typedecls, "\n")
 end
 
-function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vector,
-                outargs::Vector, outdtypes::Vector, innames::NTuple, outnames::NTuple)
+function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector,
+                outargs::Vector, innames::NTuple, outnames::NTuple)
 
     onames = []
     for (index, ovar) in enumerate(outargs)
@@ -110,7 +110,7 @@ function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Ve
     funcsig = "INTEGER (C_INT64_T) FUNCTION launch($arguments) BIND(C, name=\"launch\")\n"
     typedecls = []
 
-    for (arg, dtype, varname) in zip(inargs, indtypes, innames)
+    for (arg, varname) in zip(inargs, innames)
 
         typestr, dimstr = typedef(arg)
 
@@ -125,7 +125,7 @@ function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Ve
         push!(typedecls, typestr * dimstr * intentstr * " :: " * varname)
     end
 
-    for (arg, dtype, varname) in zip(outargs, outdtypes, outnames)
+    for (arg, varname) in zip(outargs, outnames)
         if !(arg in inargs)
             typestr, dimstr = typedef(arg)
             intentstr = ", INTENT(OUT)"
@@ -136,17 +136,13 @@ function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Ve
     return funcsig, join(typedecls, "\n")
 end
 
-function gencode_fortran(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vector,
-                outargs::Vector, outdtypes::Vector, innames::NTuple, outnames::NTuple)
+function gencode_fortran(kinfo::KernelInfo, hashid::UInt64, kernelbody::String,
+                inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple)
 
-    open(kinfo.kernelpath, "r") do io
-        kernelbody = read(io, String)
+    params = genparams(kinfo)
+    funcsig, typedecls = genvars(kinfo, hashid, inargs, outargs,
+                                innames, outnames)
 
-        params = genparams(kinfo)
-        funcsig, typedecls = genvars(kinfo, hashid, inargs, indtypes,
-                                    outargs, outdtypes, innames, outnames)
-
-        return (kpart1 * params * kpart2 * funcsig * kpart3 * typedecls * kpart4 *
-                kernelbody * kpart5)
-    end
+    return (kpart1 * params * kpart2 * funcsig * kpart3 * typedecls * kpart4 *
+            kernelbody * kpart5)
 end
