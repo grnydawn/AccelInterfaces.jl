@@ -1,0 +1,5 @@
+INTEGER i
+
+DO i=LBOUND(x, 1), UBOUND(x, 1)
+    z(i) = x(i) + y(i)
+END DO

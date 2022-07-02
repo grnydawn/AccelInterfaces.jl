@@ -17,9 +17,7 @@ const kpart3 = """
 """
 
 const kpart4 = """
-    INTEGER (C_INT64_T) :: res
-
-    res = 0
+    INTEGER (C_INT64_T) :: res = 0
 
 """
 
@@ -36,7 +34,7 @@ function typeconv(value)
     return "VALUE"
 end
 
-function genparams(constants::Dict)
+function genparams(kinfo::KernelInfo)
 
     params = []
     for (name, value) in kinfo.accel.constants
@@ -50,9 +48,15 @@ function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Ve
                 inoutargs::Vector, inoutdtypes::Vector, outargs::Vector, outdtypes::Vector,
                 innames::NTuple, outnames::NTuple)
 
-#INTEGER (C_INT64_T) FUNCTION launch($arguments) BIND(C, name="launch")
+    arguments = "x, y, z" 
 
-    return "", ""
+    funcsig = "INTEGER (C_INT64_T) FUNCTION launch($arguments) BIND(C, name=\"launch\")\n"
+    typedecls = """
+        INTEGER (C_INT64_T), DIMENSION(3), INTENT(IN) :: x
+        INTEGER (C_INT64_T), DIMENSION(3), INTENT(IN) :: y
+        INTEGER (C_INT64_T), DIMENSION(3), INTENT(OUT) :: z
+"""
+    return funcsig, typedecls
 end
 
 function gencode_fortran(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vector,
@@ -60,14 +64,13 @@ function gencode_fortran(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indt
                 innames::NTuple, outnames::NTuple)
 
     open(kinfo.kernelpath, "r") do io
-           kernelbody = read(io)
+        kernelbody = read(io, String)
+
+        params = genparams(kinfo)
+        funcsig, typedecls = genvars(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+                                    outargs, outdtypes, innames, outnames)
+
+        return (kpart1 * params * kpart2 * funcsig * kpart3 * typedecls * kpart4 *
+                kernelbody * kpart5)
     end
-
-    params = genparams(kinfo.accel.constants)
-    args, typedecls = getvars(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
-                                outargs, outdtypes, innames, outnames)
-
-    return (kpart1 * params * kpart2 * args * kpart3 * typedecls * kpart4 *
-            kernelbody * kpart5)
-
 end

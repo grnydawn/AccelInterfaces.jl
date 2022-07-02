@@ -24,7 +24,7 @@ struct AccelInfo
     sharedlibs::Dict
     constants::Dict
 
-    function AccelInfo(acceltype::AccelType; ismaster::Bool=true, constvars::Tuple,
+    function AccelInfo(acceltype::AccelType; ismaster::Bool=true, constvars::Tuple=(),
                     compile::Union{String, Nothing}=nothing,
                     constnames::NTuple=())
 
@@ -152,8 +152,7 @@ function launch!(kinfo::KernelInfo, invars...;
 
     kfunc = dlsym(dlib, :launch)
     argtypes = Meta.parse(string(((dtypes...),)))
-    #ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
-    ccallexpr = :(ccall($kfunc, Int64, ()))
+    ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
 
     @eval return $ccallexpr
 
@@ -178,7 +177,7 @@ function build!(kinfo::KernelInfo, hashid::UInt64, inargs::Vector, indtypes::Vec
 
     elseif  kinfo.accel.acceltype == CLANG
         srcpath = joinpath(workdir, "C$(hashid).cpp")
-        compile = compile == nothing ? "g++ -fPIC -shared" : compile
+        compile = compile == nothing ? "g++ -fPIC -shared -g" : compile
 
     end
 
@@ -205,11 +204,11 @@ function generate!(kinfo::KernelInfo, srcpath::String, hashid::UInt64, inargs::V
 
 
     if kinfo.accel.acceltype == FLANG
-        code = Fortran.gencode(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+        code = gencode_fortran(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
                                 outargs, outdtypes, innames, outnames)
 
     elseif kinfo.accel.acceltype == CLANG
-        code = CPP.gencode(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
+        code = gencode_cpp(kinfo, hashid, inargs, indtypes, inoutargs, inoutdtypes,
                                 outargs, outdtypes, innames, outnames)
 
     end
