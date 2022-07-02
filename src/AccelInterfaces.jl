@@ -221,5 +221,3 @@ function generate!(kinfo::KernelInfo, srcpath::String, hashid::UInt64, inargs::V
 end
 
 end
-
-end
