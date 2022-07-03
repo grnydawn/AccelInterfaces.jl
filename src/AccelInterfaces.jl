@@ -124,6 +124,7 @@ function launch!(kinfo::KernelInfo, invars...;
                  compile::Union{String, Nothing}=nothing,
                  workdir::Union{String, Nothing}=nothing)
 
+    println("LLL COM: ", compile)
 
     inargs, indtypes, insizes = argsdtypes(kinfo.accel, invars)
     outargs, outdtypes, outsizes = argsdtypes(kinfo.accel, outvars)
