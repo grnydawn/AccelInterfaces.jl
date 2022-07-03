@@ -183,6 +183,8 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
         mkdir(workdir)
     end
 
+    println("COMPILE: ", compile)
+
     if kinfo.accel.acceltype == JAI_FORTRAN
         srcpath = joinpath(workdir, "F$(launchid).F90")
         compile = (compile == nothing ? "gfortran -fPIC -shared" : compile)
