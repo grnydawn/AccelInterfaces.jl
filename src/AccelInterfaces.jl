@@ -8,7 +8,8 @@ import Libdl.dlopen,
 
 import SHA.sha1
 
-import OffsetArrays.OffsetArray
+import OffsetArrays.OffsetArray,
+       OffsetArrays.OffsetVector
 
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_ANYACCEL, AccelInfo,
         KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
