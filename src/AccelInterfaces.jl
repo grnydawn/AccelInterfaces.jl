@@ -195,7 +195,6 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
 
     elseif  kinfo.accel.acceltype == JAI_CPP
         srcpath = joinpath(workdir, "C$(launchid).cpp")
-        compile = compile == nothing ?  : compile
         if compile == nothing
             if kinfo.accel.compile == nothing
                 compile = "g++ -fPIC -shared -g"
