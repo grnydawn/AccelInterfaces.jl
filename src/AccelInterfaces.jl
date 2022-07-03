@@ -8,8 +8,7 @@ import Libdl.dlopen,
 
 import SHA.sha1
 
-import OffsetArrays.OffsetArray,
-       OffsetArrays.OffsetVector
+import OffsetArrays.OffsetArray
 
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_ANYACCEL, AccelInfo,
         KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
@@ -98,12 +97,7 @@ function argsdtypes(ainfo::AccelInfo, data)
     sizes = []
 
     for arg in data
-        if typeof(arg) <: OffsetArray
-            #push!(args, arg.parent)
-            push!(args, arg)
-            push!(dtypes, Ptr{typeof(args[end])})
-
-        elseif typeof(arg) <: AbstractArray
+        if typeof(arg) <: AbstractArray
             push!(args, arg)
             push!(dtypes, Ptr{typeof(args[end])})
 
@@ -208,7 +202,8 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
     fname, ext = splitext(basename(srcpath))
     outpath = joinpath(workdir, "S$(launchid).so")
 
-    run(`$(split(compile)) -o $outpath $(srcpath)`)
+    compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
+    println("COMPIE LOG\n", compilelog)
 
     outpath
 end
