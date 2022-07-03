@@ -11,7 +11,7 @@ import SHA.sha1
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OEPNACC,
+export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
         JAI_ANYACCEL, AccelInfo,
         KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
         copyout!, launch!
