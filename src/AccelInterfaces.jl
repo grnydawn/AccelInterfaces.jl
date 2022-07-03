@@ -85,7 +85,7 @@ function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
 
     inargs, indtypes, insizes = argsdtypes(accel, invars)
 
-    launchid = bytes2hex(sha1(string(JAI_ALLOCATE, accel.accelid, dtypes, sizes))[1:4])
+    launchid = bytes2hex(sha1(string(JAI_ALLOCATE, accel.accelid, indtypes, insizes))[1:4])
 
     # load shared lib
     if haskey(kinfo.accel.sharedlibs, launchid)
