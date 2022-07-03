@@ -1,6 +1,13 @@
 [fortran]
+
 INTEGER i
 
 DO i=LBOUND(x, 1), UBOUND(x, 1)
     z(i) = x(i) + y(i)
 END DO
+
+[cpp]
+
+for (int i=0; i < JAI_LEN(x); i++) {
+	z[i] = x[i] + j[i]
+}

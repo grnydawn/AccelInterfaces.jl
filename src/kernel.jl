@@ -58,7 +58,7 @@ struct KernelDef
 
             elseif s[1] == '[' && s[end] == ']'
 
-                bodystr = join(body)
+                bodystr = join(body, "\n")
 
                 for acctype in acctypes
                     push!(sections, KernelSection(acctype, params, bodystr))

@@ -15,13 +15,13 @@ const typemap_j2f = Dict(
     Float64	=> "REAL (C_DOUBLE )"
 )
 
-const kpart1 = """
+const f_part1 = """
 module kernelmod
 USE, INTRINSIC :: ISO_C_BINDING
 
 """
 
-const kpart2 = """
+const f_part2 = """
 
 public launch
 
@@ -29,19 +29,19 @@ contains
 
 """
 
-const kpart3 = """
+const f_part3 = """
 
     USE, INTRINSIC :: ISO_C_BINDING
 
 """
 
-const kpart4 = """
+const f_part4 = """
 
     INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 """
 
-const kpart5 = """
+const f_part5 = """
 
     launch = JAI_ERRORCODE
 
@@ -143,6 +143,6 @@ function gencode_fortran(kinfo::KernelInfo, hashid::UInt64, kernelbody::String,
     funcsig, typedecls = genvars(kinfo, hashid, inargs, outargs,
                                 innames, outnames)
 
-    return (kpart1 * params * kpart2 * funcsig * kpart3 * typedecls * kpart4 *
-            kernelbody * kpart5)
+    return (f_part1 * params * f_part2 * funcsig * f_part3 * typedecls * f_part4 *
+            kernelbody * f_part5)
 end
