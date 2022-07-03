@@ -83,6 +83,10 @@ end
 
 function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
 
+    if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
+        return
+    end
+
     inargs, indtypes, insizes = argsdtypes(accel, invars)
 
     launchid = bytes2hex(sha1(string(JAI_ALLOCATE, accel.accelid, indtypes, insizes))[1:4])
@@ -324,14 +328,11 @@ end
 function generate!(ainfo::AccelInfo, buildtype::BuildType, srcpath::String,
                     launchid::String, inargs::Vector, innames::NTuple)
 
-    if kinfo.accel.acceltype == JAI_FORTRAN
-        code = gencode_fortran_allocate(ainfo, launchid, inargs, innames)
+    if ainfo.acceltype == JAI_FORTRAN_OPENACC
+        code = gencode_fortran_openacc_allocate(ainfo, launchid, inargs, innames)
 
-    elseif kinfo.accel.acceltype == JAI_CPP
-        code = gencode_cpp_allocate(ainfo, launchid, inargs, innames)
-
-    elseif kinfo.accel.acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_allocate(ainfo, launchid, inargs, innames)
+    else
+        error(string(ainfo.acceltype) * " is not supported for allocation.")
 
     end
 
