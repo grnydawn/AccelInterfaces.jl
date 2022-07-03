@@ -228,6 +228,16 @@ function setup_build(acceltype, compile, workdir, launchid)
         if compile == nothing
             compile = "g++ -fPIC -shared -g"
         end
+
+    elseif  acceltype == JAI_FORTRAN_OPENACC
+        srcpath = joinpath(workdir, "C$(launchid).cpp")
+        if compile == nothing
+            compile = "gfortran -fPIC -shared -fopenacc -g"
+        end
+
+    else
+        error(string(acceltype) * " is not supported yet.")
+
     end
 
     (workdir, srcpath, compile)
