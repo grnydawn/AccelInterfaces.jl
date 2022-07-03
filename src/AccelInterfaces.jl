@@ -88,8 +88,8 @@ function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
     launchid = bytes2hex(sha1(string(JAI_ALLOCATE, accel.accelid, indtypes, insizes))[1:4])
 
     # load shared lib
-    if haskey(kinfo.accel.sharedlibs, launchid)
-        dlib = kinfo.accel.sharedlibs[launchid]
+    if haskey(accel.sharedlibs, launchid)
+        dlib = accel.sharedlibs[launchid]
 
     elseif kinfo.accel.ismaster
         libpath = build!(accel, JAI_ALLOCATE, launchid, inargs, innames)
