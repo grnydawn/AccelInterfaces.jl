@@ -11,14 +11,16 @@ import SHA.sha1
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_ANYACCEL, AccelInfo,
+export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OEPNACC,
+        JAI_ANYACCEL, AccelInfo,
         KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
         copyout!, launch!
 
 const TIMEOUT = 60
 const JAI_VERSION = "0.0.1"
 
-@enum AccelType JAI_FORTRAN JAI_CPP JAI_ANYACCEL JAI_HEADER
+@enum AccelType JAI_FORTRAN JAI_CPP JAI_ANYACCEL JAI_FORTRAN_OPENACC JAI_HEADER
+@enum BuildType JAI_LAUNCH JAI_ALLOCATE JAI_DEALLOCATE JAI_COPYIN JAI_COPYOUT
 
 struct AccelInfo
 
@@ -29,10 +31,11 @@ struct AccelInfo
     constnames::NTuple
     compile::Union{String, Nothing}
     sharedlibs::Dict
+    workdir::Union{String, Nothing}
 
     function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
                     constvars::Tuple=(), compile::Union{String, Nothing}=nothing,
-                    constnames::NTuple=())
+                    constnames::NTuple=(), workdir::Union{String, Nothing}=nothing)
 
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
@@ -40,7 +43,8 @@ struct AccelInfo
         accelid = bytes2hex(sha1(string(Sys.STDLIB, JAI_VERSION,
                         acceltype, constvars, constnames, compile))[1:4])
 
-        new(accelid, acceltype, ismaster, constvars, constnames, compile, Dict())
+        new(accelid, acceltype, ismaster, constvars, constnames, compile, 
+            Dict(), workdir)
     end
 end
 
@@ -48,6 +52,21 @@ include("./kernel.jl")
 include("./fortran.jl")
 include("./cpp.jl")
 
+function timeout(duration)
+
+    tstart = now()
+    while true
+        if isfile(libpath)
+            break
+
+        elseif now() - tstart > duration
+            error("Timeout occured while waiting for shared library")
+
+        else
+            sleep(0.1)
+        end
+    end
+end
 
 function get_accel!(acceltype::AccelType; ismaster::Bool=true, constvars::Tuple=(),
                     compile::Union{String, Nothing}=nothing,
@@ -62,7 +81,35 @@ function get_kernel!(accel::AccelInfo, path::String)
     return KernelInfo(accel, path)
 end
 
-function allocate!(accel::AccelInfo, data...)
+function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
+
+    inargs, indtypes, insizes = argsdtypes(accel, invars)
+
+    launchid = bytes2hex(sha1(string(JAI_ALLOCATE, accel.accelid, dtypes, sizes))[1:4])
+
+    # load shared lib
+    if haskey(kinfo.accel.sharedlibs, launchid)
+        dlib = kinfo.accel.sharedlibs[launchid]
+
+    elseif kinfo.accel.ismaster
+        libpath = build!(accel, JAI_ALLOCATE, launchid, inargs, innames)
+        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+        accel.sharedlibs[launchid] = dlib
+
+    else
+        timeout(TIMEOUT)
+
+        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+        accel.sharedlibs[launchid] = dlib
+    end
+
+
+    dfunc = dlsym(dlib, :allocate)
+    argtypes = Meta.parse(string(((indtypes...),)))
+    ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(inargs...)))
+
+    @eval return $ccallexpr
+
 end
 
 function allocate!(kernel::KernelInfo, data...)
@@ -118,6 +165,7 @@ function argsdtypes(ainfo::AccelInfo, data)
     args, dtypes, sizes
 end
 
+# kernel launch
 function launch!(kinfo::KernelInfo, invars...;
                  innames::NTuple=(), outnames=NTuple=(),
                  outvars::Union{Tuple, Vector}=(),
@@ -130,7 +178,7 @@ function launch!(kinfo::KernelInfo, invars...;
     args = vcat(inargs, outargs)
     dtypes = vcat(indtypes, outdtypes)
 
-    launchid = bytes2hex(sha1(string(kinfo.kernelid, indtypes, insizes,
+    launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
                             outdtypes, outsizes))[1:4])
 
     # load shared lib
@@ -144,18 +192,7 @@ function launch!(kinfo::KernelInfo, invars...;
         kinfo.accel.sharedlibs[launchid] = dlib
 
     else
-        tstart = now()
-        while true
-            if isfile(libpath)
-                break
-
-            elseif now() - tstart > TIMEOUT
-                error("Timeout occured while waiting for shared library")
-
-            else
-                sleep(0.1)
-            end
-        end
+        timeout(TIMEOUT)
 
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
@@ -170,9 +207,7 @@ function launch!(kinfo::KernelInfo, invars...;
 
 end
 
-function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Vector,
-                innames::NTuple, outnames::NTuple, compile::Union{String, Nothing},
-                workdir::Union{String, Nothing})
+function setup_build(acceltype, compile, workdir, launchid)
 
     if workdir == nothing
         workdir = joinpath(pwd(), ".jaitmp")
@@ -182,29 +217,40 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
         mkdir(workdir)
     end
 
-    if kinfo.accel.acceltype == JAI_FORTRAN
+    if acceltype == JAI_FORTRAN
         srcpath = joinpath(workdir, "F$(launchid).F90")
         if compile == nothing
-            if kinfo.accel.compile == nothing
-                compile = "gfortran -fPIC -shared -g"
-
-            else 
-                compile = kinfo.accel.compile
-            end
+            compile = "gfortran -fPIC -shared -g"
         end
 
     elseif  kinfo.accel.acceltype == JAI_CPP
         srcpath = joinpath(workdir, "C$(launchid).cpp")
         if compile == nothing
-            if kinfo.accel.compile == nothing
-                compile = "g++ -fPIC -shared -g"
+            compile = "g++ -fPIC -shared -g"
 
-            else 
-                compile = kinfo.accel.compile
-            end
+        else 
+            compile = accel.compile
         end
-
     end
+
+    (workdir, srcpath, compile)
+end
+
+
+# kernel build
+function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Vector,
+                innames::NTuple, outnames::NTuple, compile::Union{String, Nothing},
+                workdir::Union{String, Nothing})
+
+    if compile == nothing
+        compile = kinfo.accel.compile
+    end
+
+    if workdir == nothing
+        workdir = kinfo.accel.workdir
+    end
+
+    workdir, srcpath, compile = setup_build(kinfo.accel.acceltype, compile, workdir, launchid)
 
     # generate source code
     if !isfile(srcpath)
@@ -224,16 +270,65 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
 end
 
 
+# allocate! build
+function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String, inargs::Vector,
+                innames::NTuple)
+
+    if compile == nothing
+        compile = accel.compile
+    end
+
+    workdir, srcpath, compile = setup_build(accel.acceltype, compile, accel.workdir, launchid)
+
+    # generate source code
+    if !isfile(srcpath)
+        generate!(accel, buildtype, srcpath, launchid, inargs, innames)
+
+    end
+
+    fname, ext = splitext(basename(srcpath))
+    outpath = joinpath(workdir, "S$(launchid).so")
+
+    compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
+
+    outpath
+end
+
+# kernel generate
 function generate!(kinfo::KernelInfo, srcpath::String, launchid::String, inargs::Vector,
                 outargs::Vector, innames::NTuple, outnames::NTuple)
 
     body = kinfo.kerneldef.body
 
     if kinfo.accel.acceltype == JAI_FORTRAN
-        code = gencode_fortran(kinfo, launchid, body, inargs, outargs, innames, outnames)
+        code = gencode_fortran_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
 
     elseif kinfo.accel.acceltype == JAI_CPP
-        code = gencode_cpp(kinfo, launchid, body, inargs, outargs, innames, outnames)
+        code = gencode_cpp_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
+
+    elseif kinfo.accel.acceltype == JAI_FORTRAN_OPENACC
+        code = gencode_fortran_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
+
+    end
+
+    open(srcpath, "w") do io
+           write(io, code)
+    end
+
+end
+
+# accel generate
+function generate!(ainfo::AccelInfo, buildtype::BuildType, srcpath::String,
+                    launchid::String, inargs::Vector, innames::NTuple)
+
+    if kinfo.accel.acceltype == JAI_FORTRAN
+        code = gencode_fortran_allocate(ainfo, launchid, inargs, innames)
+
+    elseif kinfo.accel.acceltype == JAI_CPP
+        code = gencode_cpp_allocate(ainfo, launchid, inargs, innames)
+
+    elseif kinfo.accel.acceltype == JAI_FORTRAN_OPENACC
+        code = gencode_fortran_allocate(ainfo, launchid, inargs, innames)
 
     end
 

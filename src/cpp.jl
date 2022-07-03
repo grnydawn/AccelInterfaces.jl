@@ -5,7 +5,7 @@ c_part1 = """
 """
 
 
-function gencode_cpp(kinfo::KernelInfo, launchid::String, kernelbody::String,
+function gencode_cpp_kernell(kinfo::KernelInfo, launchid::String, kernelbody::String,
                 inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple)
 
 

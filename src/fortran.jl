@@ -136,7 +136,7 @@ function genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
     return funcsig, join(typedecls, "\n")
 end
 
-function gencode_fortran(kinfo::KernelInfo, launchid::String, kernelbody::String,
+function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String, kernelbody::String,
                 inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple)
 
     params = genparams(kinfo)
