@@ -99,7 +99,8 @@ function argsdtypes(ainfo::AccelInfo, data)
 
     for arg in data
         if typeof(arg) <: OffsetArray
-            push!(args, arg.parent)
+            #push!(args, arg.parent)
+            push!(args, arg)
             push!(dtypes, Ptr{typeof(args[end])})
 
         elseif typeof(arg) <: AbstractArray
