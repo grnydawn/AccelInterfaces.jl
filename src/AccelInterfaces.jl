@@ -91,7 +91,7 @@ function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
     if haskey(accel.sharedlibs, launchid)
         dlib = accel.sharedlibs[launchid]
 
-    elseif kinfo.accel.ismaster
+    elseif accel.ismaster
         libpath = build!(accel, JAI_ALLOCATE, launchid, inargs, innames)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
@@ -106,7 +106,7 @@ function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
 
     dfunc = dlsym(dlib, :allocate)
     argtypes = Meta.parse(string(((indtypes...),)))
-    ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(inargs...)))
+    ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(inargs...)))
 
     @eval return $ccallexpr
 
