@@ -60,7 +60,7 @@ function typedef(arg)
 
         dimlist = []
         if arg isa OffsetArray
-            for (offset, length) in zip(arg.offset, size(arg))
+            for (offset, length) in zip(arg.offsets, size(arg))
                 lbound = 1 + offset
                 ubound = length + offset 
                 push!(dimlist, "$lbound:$ubound")
