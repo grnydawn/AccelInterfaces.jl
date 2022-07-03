@@ -1,6 +1,7 @@
 # accel string to AccelType conversion
 const acceltypemap = Dict(
     "fortran" => JAI_FORTRAN,
+    "fortran_openacc" => JAI_FORTRAN_OPENACC,
     "cpp"   => JAI_CPP
 )
 
