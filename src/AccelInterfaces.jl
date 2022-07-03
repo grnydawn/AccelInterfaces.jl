@@ -204,6 +204,7 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
     outpath = joinpath(workdir, "S$(launchid).so")
 
     compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
+    println("COMPIE CMD\n", compile)
     println("COMPIE LOG\n", compilelog)
 
     outpath
