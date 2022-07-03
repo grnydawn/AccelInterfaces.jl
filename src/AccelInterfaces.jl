@@ -124,8 +124,6 @@ function launch!(kinfo::KernelInfo, invars...;
                  compile::Union{String, Nothing}=nothing,
                  workdir::Union{String, Nothing}=nothing)
 
-    println("LLL COM: ", compile)
-
     inargs, indtypes, insizes = argsdtypes(kinfo.accel, invars)
     outargs, outdtypes, outsizes = argsdtypes(kinfo.accel, outvars)
 
@@ -184,15 +182,28 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
         mkdir(workdir)
     end
 
-    println("COMPILE: ", compile)
-
     if kinfo.accel.acceltype == JAI_FORTRAN
         srcpath = joinpath(workdir, "F$(launchid).F90")
-        compile = (compile == nothing ? "gfortran -fPIC -shared" : compile)
+        if compile == nothing
+            if kinfo.accel.compile == nothing
+                compile = "gfortran -fPIC -shared -g"
+
+            else 
+                compile = kinfo.accel.compile
+            end
+        end
 
     elseif  kinfo.accel.acceltype == JAI_CPP
         srcpath = joinpath(workdir, "C$(launchid).cpp")
-        compile = compile == nothing ? "g++ -fPIC -shared -g" : compile
+        compile = compile == nothing ?  : compile
+        if compile == nothing
+            if kinfo.accel.compile == nothing
+                compile = "g++ -fPIC -shared -g"
+
+            else 
+                compile = kinfo.accel.compile
+            end
+        end
 
     end
 
