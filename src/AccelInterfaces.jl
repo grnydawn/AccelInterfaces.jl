@@ -274,11 +274,7 @@ end
 function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String, inargs::Vector,
                 innames::NTuple)
 
-    if compile == nothing
-        compile = accel.compile
-    end
-
-    workdir, srcpath, compile = setup_build(accel.acceltype, compile, accel.workdir, launchid)
+    workdir, srcpath, compile = setup_build(ainfo.acceltype, ainfo.compile, ainfo.workdir, launchid)
 
     # generate source code
     if !isfile(srcpath)
