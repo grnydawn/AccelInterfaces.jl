@@ -285,7 +285,7 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String, inargs
 
     # generate source code
     if !isfile(srcpath)
-        generate!(accel, buildtype, srcpath, launchid, inargs, innames)
+        generate!(ainfo, buildtype, srcpath, launchid, inargs, innames)
 
     end
 
