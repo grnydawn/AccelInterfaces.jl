@@ -223,13 +223,10 @@ function setup_build(acceltype, compile, workdir, launchid)
             compile = "gfortran -fPIC -shared -g"
         end
 
-    elseif  kinfo.accel.acceltype == JAI_CPP
+    elseif  acceltype == JAI_CPP
         srcpath = joinpath(workdir, "C$(launchid).cpp")
         if compile == nothing
             compile = "g++ -fPIC -shared -g"
-
-        else 
-            compile = accel.compile
         end
     end
 
