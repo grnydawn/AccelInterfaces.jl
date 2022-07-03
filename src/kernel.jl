@@ -1,4 +1,3 @@
-
 # accel string to AccelType conversion
 const acceltypemap = Dict(
     "fortran" => JAI_FORTRAN,
@@ -37,10 +36,11 @@ end
 
 struct KernelDef
 
-    rawdata::String
-    sections::Vector
+    specid::String
+    params::Dict
+    body::String
 
-    function KernelDef(kerneldef::String)
+    function KernelDef(acceltype::AccelType, kerneldef::String)
 
         sections = []
 
@@ -61,7 +61,9 @@ struct KernelDef
                 bodystr = join(body, "\n")
 
                 for acctype in acctypes
-                    push!(sections, KernelSection(acctype, params, bodystr))
+                    if acctype == acceltype
+                        push!(sections, KernelSection(acctype, params, bodystr))
+                    end
                 end
                     
                 acctypes, params = _parse_header(s[2:end-1])
@@ -75,29 +77,29 @@ struct KernelDef
         if length(acctypes) > 0
             bodystr = join(body, "\n")
             for acctype in acctypes
-                push!(sections, KernelSection(acctype, params, bodystr))
+                if acctype == acceltype
+                    push!(sections, KernelSection(acctype, params, bodystr))
+                end
             end
         end
 
-       new(kerneldef, sections)
-    end
+        if length(sections) > 0
+            section = sections[end]
+            specid = bytes2hex(sha1(string(section.body, section.params))[1:4])
 
-end
-
-function get_kernelbody(kdef::KernelDef, acceltype::AccelType)
-
-    for section in kdef.sections
-        if section.acceltype == acceltype
-            return section.body
+            new(specid, section.params, section.body)
+        else
+            error("No valid accelerator type is defined in kernel specification file")
         end
     end
+
 end
 
 struct KernelInfo
 
+    kernelid::String
     accel::AccelInfo
     kerneldef::KernelDef
-    sharedlibs::Dict
 
     function KernelInfo(accel::AccelInfo, kerneldef::String)
 
@@ -109,7 +111,10 @@ struct KernelInfo
             end
         end
 
-        new(accel, KernelDef(kdef), Dict())
+        kdefobj = KernelDef(accel.acceltype, kdef)
+        kernelid = bytes2hex(sha1(string(accel.accelid, kdefobj.specid))[1:4])
+
+        new(kernelid, accel, kdefobj)
     end
 
     function KernelInfo(accel::AccelInfo, kerneldef::IOStream)

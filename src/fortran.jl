@@ -95,7 +95,7 @@ function genparams(kinfo::KernelInfo)
     return join(typedecls, "\n")
 end
 
-function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector,
+function genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
                 outargs::Vector, innames::NTuple, outnames::NTuple)
 
     onames = []
@@ -136,11 +136,11 @@ function genvars(kinfo::KernelInfo, hashid::UInt64, inargs::Vector,
     return funcsig, join(typedecls, "\n")
 end
 
-function gencode_fortran(kinfo::KernelInfo, hashid::UInt64, kernelbody::String,
+function gencode_fortran(kinfo::KernelInfo, launchid::String, kernelbody::String,
                 inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple)
 
     params = genparams(kinfo)
-    funcsig, typedecls = genvars(kinfo, hashid, inargs, outargs,
+    funcsig, typedecls = genvars(kinfo, launchid, inargs, outargs,
                                 innames, outnames)
 
     return (f_part1 * params * f_part2 * funcsig * f_part3 * typedecls * f_part4 *
