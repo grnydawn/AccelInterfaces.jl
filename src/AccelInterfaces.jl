@@ -7,7 +7,8 @@ import Libdl.dlopen,
        Libdl.dlsym
 
 import SHA.sha1
-import Dates.now
+import Dates.now,
+       Dates.Second
 
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
@@ -72,7 +73,7 @@ function timeout(libpath::String, duration::Integer)
         if isfile(libpath)
             break
 
-        elseif convert(Dates.Second, (now() - tstart)) > duration
+        elseif convert(Second, (now() - tstart)) > duration
             error("Timeout occured while waiting for shared library")
 
         else
