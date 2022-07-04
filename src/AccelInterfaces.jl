@@ -126,7 +126,7 @@ function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NT
         accel.sharedlibs[launchid] = dlib
 
     else
-        timeout(libpath, TIMEOUT)
+        #timeout(libpath, TIMEOUT)
 
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
@@ -243,7 +243,7 @@ function launch!(kinfo::KernelInfo, invars...;
         kinfo.accel.sharedlibs[launchid] = dlib
 
     else
-        timeout(libpath, TIMEOUT)
+        #timeout(libpath, TIMEOUT)
 
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
