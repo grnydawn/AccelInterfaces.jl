@@ -103,17 +103,25 @@ function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NT
 
     launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
 
+    workdir = accel.workdir == nothing ? joinpath(pwd(), ".jaitmp") : accel.workdir
+
+    if !isdir(workdir)
+        mkdir(workdir)
+    end
+
+    libpath = joinpath(workdir, "SL$(launchid).so")
+
     # load shared lib
     if haskey(accel.sharedlibs, launchid)
         dlib = accel.sharedlibs[launchid]
 
     elseif accel.ismaster
-        libpath = build!(accel, buildtype, launchid, args, names)
+        build!(accel, buildtype, launchid, libpath, workdir, args, names)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
 
     else
-        timeout(TIMEOUT)
+        timeout(libpath, TIMEOUT)
 
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
@@ -218,18 +226,26 @@ function launch!(kinfo::KernelInfo, invars...;
     launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
                             outdtypes, outsizes))[1:4])
 
+    workdir = kinfo.accel.workdir == nothing ? joinpath(pwd(), ".jaitmp") : kinfo.accel.workdir
+
+    if !isdir(workdir)
+        mkdir(workdir)
+    end
+
+    libpath = joinpath(workdir, "SL$(launchid).so")
+
     # load shared lib
     if haskey(kinfo.accel.sharedlibs, launchid)
         dlib = kinfo.accel.sharedlibs[launchid]
 
     elseif kinfo.accel.ismaster
-        libpath = build!(kinfo, launchid, inargs, outargs, innames,
-                            outnames, compile, workdir)
+        build!(kinfo, launchid, libpath, workdir, inargs, outargs,
+                innames, outnames, compile)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
 
     else
-        timeout(TIMEOUT)
+        timeout(libpath, TIMEOUT)
 
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
@@ -245,15 +261,7 @@ function launch!(kinfo::KernelInfo, invars...;
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
-                compile::Union{String, Nothing}, workdir=Union{String, Nothing})
-
-    if workdir == nothing
-        workdir = joinpath(pwd(), ".jaitmp")
-    end
-
-    if !isdir(workdir)
-        mkdir(workdir)
-    end
+                workdir::String, compile::Union{String, Nothing})
 
     prefix = ACCEL_CODE[acceltype] * BUILD_CODE[buildtype]
  
@@ -280,24 +288,21 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
 
     end
 
-    (workdir, srcpath, compile)
+    (srcpath, compile)
 end
 
 
 # kernel build
-function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Vector,
-                innames::NTuple, outnames::NTuple, compile::Union{String, Nothing},
-                workdir::Union{String, Nothing})
+function build!(kinfo::KernelInfo, launchid::String, outpath::String, workdir::String,
+                inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple,
+                compile::Union{String, Nothing})
 
     if compile == nothing
         compile = kinfo.accel.compile
     end
 
-    if workdir == nothing
-        workdir = kinfo.accel.workdir
-    end
-
-    workdir, srcpath, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid, compile, workdir)
+    srcpath, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid,
+                                    workdir, compile)
 
     # generate source code
     if !isfile(srcpath)
@@ -307,7 +312,6 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
     end
 
     fname, ext = splitext(basename(srcpath))
-    outpath = joinpath(workdir, "S$(launchid).so")
 
     compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
     #println("COMPIE CMD\n", compile)
@@ -318,10 +322,11 @@ end
 
 
 # non-kernel build
-function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String, inargs::Vector,
-                innames::NTuple)
+function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
+                outpath::String, workdir::String, inargs::Vector, innames::NTuple)
 
-    workdir, srcpath, compile = setup_build(ainfo.acceltype, buildtype, launchid, ainfo.compile, ainfo.workdir)
+    srcpath, compile = setup_build(ainfo.acceltype, buildtype,
+                launchid, workdir, ainfo.compile)
 
     # generate source code
     if !isfile(srcpath)
@@ -330,7 +335,6 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String, inargs
     end
 
     fname, ext = splitext(basename(srcpath))
-    outpath = joinpath(workdir, "S$(launchid).so")
 
     compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
 

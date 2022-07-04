@@ -3,3 +3,5 @@
 *.mod
 core
 .jaitmp
+*.s
+*.o
