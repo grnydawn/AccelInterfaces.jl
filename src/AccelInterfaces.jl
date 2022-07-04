@@ -111,9 +111,9 @@ function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NT
     end
 
     args, dtypes, sizes = argsdtypes(accel, data)
-    println("AAAA", dtypes, sizes)
 
     launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
+    println("AAAAAAAAAAAA", launchid, accel.ismaster)
 
     libpath = joinpath(accel.workdir, "SL$(launchid).so")
 
@@ -224,14 +224,14 @@ function launch!(kinfo::KernelInfo, invars...;
 
     inargs, indtypes, insizes = argsdtypes(kinfo.accel, invars)
     outargs, outdtypes, outsizes = argsdtypes(kinfo.accel, outvars)
-    println("BBB", indtypes, insizes)
-    println("CCC", outdtypes, outsizes)
 
     args = vcat(inargs, outargs)
     dtypes = vcat(indtypes, outdtypes)
 
     launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
                             outdtypes, outsizes))[1:4])
+
+    println("KKKKKKKKKKKKK", launchid, kinfo.accel.ismaster)
 
     libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
 
