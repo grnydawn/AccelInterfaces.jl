@@ -74,14 +74,14 @@ include("./fortran.jl")
 include("./fortran_openacc.jl")
 include("./cpp.jl")
 
-function timeout(libpath::String, duration::Integer)
+function timeout(libpath::String, duration::Number)
 
     tstart = now()
     while true
         if isfile(libpath)
             break
 
-        elseif convert(Second, (now() - tstart)) > duration
+        elseif ((now() - tstart)/ Millisecond(1000)) > duration
             error("Timeout occured while waiting for shared library")
 
         else
