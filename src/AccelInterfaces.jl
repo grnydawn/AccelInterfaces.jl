@@ -18,6 +18,7 @@ export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
        copyout!, launch!
 
 const TIMEOUT = 60
+
 const JAI_VERSION = "0.0.1"
 
 @enum AccelType begin
@@ -64,7 +65,7 @@ include("./fortran.jl")
 include("./fortran_openacc.jl")
 include("./cpp.jl")
 
-function timeout(duration)
+function timeout(libpath::String, duration::Integer)
 
     tstart = now()
     while true
