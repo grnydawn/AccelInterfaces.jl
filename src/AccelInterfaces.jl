@@ -7,6 +7,7 @@ import Libdl.dlopen,
        Libdl.dlsym
 
 import SHA.sha1
+import Dates.now
 
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector

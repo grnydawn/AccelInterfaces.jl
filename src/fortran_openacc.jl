@@ -5,7 +5,8 @@ function fortran_openacc_directives(buildtype::BuildType, inargs::Vector, inname
 
     for (arg, varname) in zip(inargs, innames)
 
-        push!(directs, "print *, \"LOC " * string(buildtype) * " of " * varname * " = \", LOC(" * varname * ")\n")
+        # for debug
+        #push!(directs, "print *, \"LOC " * string(buildtype) * " of " * varname * " = \", LOC(" * varname * ")\n")
 
         if buildtype == JAI_ALLOCATE
             push!(directs, "!\$acc enter data create($(varname))\n")
