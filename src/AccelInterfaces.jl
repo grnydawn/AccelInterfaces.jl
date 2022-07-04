@@ -8,7 +8,7 @@ import Libdl.dlopen,
 
 import SHA.sha1
 import Dates.now,
-       Dates.Second
+       Dates.Millisecond
 
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
