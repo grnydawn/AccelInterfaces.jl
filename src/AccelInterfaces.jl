@@ -18,7 +18,7 @@ export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
        KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
        copyout!, launch!
 
-const TIMEOUT = 60
+const TIMEOUT = 10
 
 const JAI_VERSION = "0.0.1"
 
