@@ -79,7 +79,7 @@ function timeout(libpath::String, duration::Number)
     tstart = now()
     while true
         if isfile(libpath)
-            sleep(10) 
+            sleep(1) 
             break
 
         elseif ((now() - tstart)/ Millisecond(1000)) > duration
