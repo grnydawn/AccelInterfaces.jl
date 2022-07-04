@@ -72,7 +72,7 @@ function timeout(libpath::String, duration::Integer)
         if isfile(libpath)
             break
 
-        elseif now() - tstart > duration
+        elseif convert(Dates.Second, (now() - tstart)) > duration
             error("Timeout occured while waiting for shared library")
 
         else
