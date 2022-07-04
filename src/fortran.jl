@@ -16,7 +16,6 @@ const typemap_j2f = Dict(
 )
 
 const f_part1 = """
-module kernelmod
 USE, INTRINSIC :: ISO_C_BINDING
 
 """
@@ -51,6 +50,29 @@ end module
 
 """
 
+function dimensions(arg)
+
+    dimlist = []
+
+    if arg isa OffsetArray
+        for (offset, length) in zip(arg.offsets, size(arg))
+            lbound = 1 + offset
+            ubound = length + offset 
+            push!(dimlist, "$lbound:$ubound")
+        end
+    elseif arg isa AbstractArray
+        for length in size(arg)
+            push!(dimlist, "1:$length")
+        end
+
+    else
+        error("argument is not array type.")
+
+    end
+
+    join(dimlist, ", ")
+end
+
 function typedef(arg)
 
     dimstr = ""
@@ -67,7 +89,7 @@ function typedef(arg)
             end
         else
             for length in size(arg)
-                push!(dimlist, string(length))
+                push!(dimlist, "1:$length")
             end
         end
 
@@ -82,11 +104,16 @@ function typedef(arg)
 end
 
 
-function genparams(kinfo::KernelInfo)
+function fortran_genparams(kinfo::KernelInfo)
+    return fortran_genparams(kinfo.accel)
+
+end
+
+function fortran_genparams(ainfo::AccelInfo)
 
     typedecls = []
 
-    for (name, value) in zip(kinfo.accel.constnames, kinfo.accel.constvars)
+    for (name, value) in zip(ainfo.constnames, ainfo.constvars)
 
         typestr, dimstr = typedef(value)
         push!(typedecls, typestr * dimstr * ", PARAMETER :: " * name * " = " * string(value))
@@ -95,7 +122,7 @@ function genparams(kinfo::KernelInfo)
     return join(typedecls, "\n")
 end
 
-function genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
+function fortran_genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
                 outargs::Vector, innames::NTuple, outnames::NTuple)
 
     onames = []
@@ -107,7 +134,6 @@ function genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
 
     arguments = join((innames...,onames...), ",")
 
-    funcsig = "INTEGER (C_INT64_T) FUNCTION launch($arguments) BIND(C, name=\"launch\")\n"
     typedecls = []
 
     for (arg, varname) in zip(inargs, innames)
@@ -133,16 +159,56 @@ function genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
         end
     end
 
-    return funcsig, join(typedecls, "\n")
+    return arguments, join(typedecls, "\n")
 end
+
+function fortran_typedecls(launchid::String, buildtype::BuildType, inargs::Vector, innames::NTuple)
+
+    typedecls = []
+
+    for (arg, varname) in zip(inargs, innames)
+
+        typestr, dimstr = typedef(arg)
+        intent = buildtype in (JAI_DEALLOCATE, JAI_COPYOUT) ? "INOUT" : "INOUT"
+
+        push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
+    end
+
+    return join(typedecls, "\n")
+end
+
 
 function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String, kernelbody::String,
                 inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple)
 
-    params = genparams(kinfo)
-    funcsig, typedecls = genvars(kinfo, launchid, inargs, outargs,
+    params = fortran_genparams(kinfo)
+    arguments, typedecls = fortran_genvars(kinfo, launchid, inargs, outargs,
                                 innames, outnames)
 
-    return (f_part1 * params * f_part2 * funcsig * f_part3 * typedecls * f_part4 *
-            kernelbody * f_part5)
+    return code = """
+module mod$(launchid)
+USE, INTRINSIC :: ISO_C_BINDING
+
+$(params)
+
+public jai_launch
+
+contains
+
+INTEGER (C_INT64_T) FUNCTION jai_launch($(arguments)) BIND(C, name="jai_launch")
+USE, INTRINSIC :: ISO_C_BINDING
+
+$(typedecls)
+
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+$(kernelbody)
+
+jai_launch = JAI_ERRORCODE
+
+END FUNCTION
+
+end module
+
+"""
 end

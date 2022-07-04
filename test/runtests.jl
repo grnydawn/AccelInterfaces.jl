@@ -1,10 +1,21 @@
 using AccelInterfaces
 using Test
 
-function basic_tests()
+const constvars = (100,)
+const constnames = ("TEST",)
 
-    constvars = (100,)
-    constnames = ("TEST",)
+const N = 3
+const x = fill(1, N)
+const y = fill(2, N)
+
+const res = fill(3, N)
+
+innames = ("x", "y")
+outnames = ("z",)
+
+function fortran_tests()
+
+    z = fill(0, N)
 
     accel = AccelInfo(JAI_FORTRAN, constnames=constnames, constvars=constvars)
     @test accel isa AccelInfo
@@ -12,17 +23,38 @@ function basic_tests()
     kernel = KernelInfo(accel, "ex1.knl")
     @test kernel isa KernelInfo
 
-    x = [1,2,3]
-    y = [2,3,4]
-    z = [0,0,0]
-
-    innames = ("x", "y", "z")
-    outnames = ("z",)
     compile = "gfortran -fPIC -shared -g"
 
-    launch!(kernel, x, y, z, outvars=(z,), innames=innames,
+    launch!(kernel, x, y, outvars=(z,), innames=innames,
             outnames=outnames, compile=compile)
-    @test z == [3,5,7]
+    @test z == res
+
+end
+
+function fortran_openacc_tests()
+
+    z = fill(0, N)
+
+    compile = "ftn -shared -fPIC -h acc,noomp"
+
+    accel = AccelInfo(JAI_FORTRAN_OPENACC, constnames=constnames,
+                    constvars=constvars, compile=compile)
+
+    kernel = KernelInfo(accel, "ex1.knl")
+
+
+    #allocate!(accel, x, y, z, names=(innames..., outnames...))
+    allocate!(accel, z, names=outnames)
+    copyin!(accel, x, y, names=innames)
+
+    launch!(kernel, x, y, outvars=(z,), innames=innames,
+            outnames=outnames, compile=compile)
+
+    copyout!(accel, z, names=outnames)
+    #deallocate!(accel, x, y, z, names=(innames..., outnames...))
+    #deallocate!(accel, x, y, names=innames)
+
+    @test z == res
 
 end
 
@@ -31,7 +63,8 @@ end
     # testing AccelInterfaces module loading
     @test JAI_FORTRAN isa AccelType
 
-    basic_tests()
+    fortran_tests()
+    fortran_openacc_tests()
 
 end
 

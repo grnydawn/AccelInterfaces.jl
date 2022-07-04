@@ -1,4 +1,4 @@
 
 
 clean:
-	rm -rf core .jaitmp *.mod
+	rm -rf core .jaitmp *.mod *.o *.s

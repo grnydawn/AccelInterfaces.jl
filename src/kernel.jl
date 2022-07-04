@@ -1,8 +1,29 @@
+
+@enum BuildType JAI_LAUNCH JAI_ALLOCATE JAI_DEALLOCATE JAI_COPYIN JAI_COPYOUT
+
+const ACCEL_CODE = Dict(
+    JAI_FORTRAN => "FO",
+    JAI_FORTRAN_OPENACC => "FA",
+    JAI_FORTRAN_OMPTARGET => "FM",
+    JAI_CPP => "CP",
+    JAI_CPP_OPENACC => "CA",
+    JAI_CPP_OMPTARGET => "FM"
+)
+
+const BUILD_CODE = Dict(
+    JAI_LAUNCH => "L",
+    JAI_ALLOCATE => "A",
+    JAI_COPYIN => "I",
+    JAI_COPYOUT => "O",
+    JAI_DEALLOCATE => "D"
+)
+
 # accel string to AccelType conversion
 const acceltypemap = Dict(
     "fortran" => JAI_FORTRAN,
     "fortran_openacc" => JAI_FORTRAN_OPENACC,
-    "cpp"   => JAI_CPP
+    "cpp"   => JAI_CPP,
+    "cpp_openacc" => JAI_CPP_OPENACC
 )
 
 struct KernelSection
@@ -10,6 +31,30 @@ struct KernelSection
     params::Dict
     body::String
 end
+
+const LIBFUNC_NAME = Dict(
+    JAI_FORTRAN => Dict(
+        JAI_LAUNCH => "jai_launch",
+    ),
+    JAI_FORTRAN_OPENACC => Dict(
+        JAI_LAUNCH => "jai_launch",
+        JAI_ALLOCATE => "jai_allocate",
+        JAI_COPYIN => "jai_copyin",
+        JAI_COPYOUT => "jai_copyout",
+        JAI_DEALLOCATE => "jai_deallocate"
+    ),
+    JAI_CPP => Dict(
+        JAI_LAUNCH => "jai_launch",
+    ),
+    JAI_CPP_OPENACC => Dict(
+        JAI_LAUNCH => "jai_launch",
+        JAI_ALLOCATE => "jai_allocate",
+        JAI_COPYIN => "jai_copyin",
+        JAI_COPYOUT => "jai_copyout",
+        JAI_DEALLOCATE => "jai_deallocate"
+    )
+)
+
 
 function _parse_header(hdr)
 

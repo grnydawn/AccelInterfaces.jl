@@ -12,15 +12,24 @@ import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
-        JAI_ANYACCEL, AccelInfo,
-        KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
-        copyout!, launch!
+       JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo,
+       KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
+       copyout!, launch!
 
 const TIMEOUT = 60
 const JAI_VERSION = "0.0.1"
 
-@enum AccelType JAI_FORTRAN JAI_CPP JAI_ANYACCEL JAI_FORTRAN_OPENACC JAI_HEADER
-@enum BuildType JAI_LAUNCH JAI_ALLOCATE JAI_DEALLOCATE JAI_COPYIN JAI_COPYOUT
+@enum AccelType begin
+        JAI_FORTRAN
+        JAI_FORTRAN_OPENACC
+        JAI_FORTRAN_OMPTARGET
+        JAI_CPP
+        JAI_CPP_OPENACC
+        JAI_CPP_OMPTARGET
+        JAI_ANYACCEL
+        JAI_HEADER
+end
+
 
 struct AccelInfo
 
@@ -48,8 +57,10 @@ struct AccelInfo
     end
 end
 
+# NOTE: keep the order of includes
 include("./kernel.jl")
 include("./fortran.jl")
+include("./fortran_openacc.jl")
 include("./cpp.jl")
 
 function timeout(duration)
@@ -81,22 +92,22 @@ function get_kernel!(accel::AccelInfo, path::String)
     return KernelInfo(accel, path)
 end
 
-function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
+function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NTuple=())
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
         return
     end
 
-    inargs, indtypes, insizes = argsdtypes(accel, invars)
+    args, dtypes, sizes = argsdtypes(accel, data)
 
-    launchid = bytes2hex(sha1(string(JAI_ALLOCATE, accel.accelid, indtypes, insizes))[1:4])
+    launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
 
     # load shared lib
     if haskey(accel.sharedlibs, launchid)
         dlib = accel.sharedlibs[launchid]
 
     elseif accel.ismaster
-        libpath = build!(accel, JAI_ALLOCATE, launchid, inargs, innames)
+        libpath = build!(accel, buildtype, launchid, args, names)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
 
@@ -107,39 +118,60 @@ function allocate!(accel::AccelInfo, invars...; innames::NTuple=())
         accel.sharedlibs[launchid] = dlib
     end
 
+    if buildtype == JAI_ALLOCATE
+        dfunc = dlsym(dlib, :jai_allocate)
 
-    dfunc = dlsym(dlib, :allocate)
-    argtypes = Meta.parse(string(((indtypes...),)))
-    ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(inargs...)))
+    elseif buildtype == JAI_COPYIN
+        dfunc = dlsym(dlib, :jai_copyin)
+
+    elseif buildtype == JAI_COPYOUT
+        dfunc = dlsym(dlib, :jai_copyout)
+
+    elseif buildtype == JAI_DEALLOCATE
+        dfunc = dlsym(dlib, :jai_deallocate)
+
+    else
+        error(string(buildtype) * " is not supported.")
+
+    end
+
+    argtypes = Meta.parse(string(((dtypes...),)))
+    ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(args...)))
 
     @eval return $ccallexpr
 
 end
 
-function allocate!(kernel::KernelInfo, data...)
-    return allocate!(kernel.accel, data...)
+function allocate!(accel::AccelInfo, data...; names::NTuple=())
+    accel_method(JAI_ALLOCATE, accel, data...; names=names)
 end
 
-function deallocate!(accel::AccelInfo, data...)
+function allocate!(kernel::KernelInfo, data...; names::NTuple=())
+    return allocate!(kernel.accel, data...; names=names)
 end
 
-function deallocate!(kernel::KernelInfo, data...)
-    return deallocate!(kernel.accel, data...)
+function deallocate!(accel::AccelInfo, data...; names::NTuple=())
+    accel_method(JAI_DEALLOCATE, accel, data...; names=names)
 end
 
-function copyin!(accel::AccelInfo, data...)
+function deallocate!(kernel::KernelInfo, data...; names::NTuple=())
+    return deallocate!(kernel.accel, data...; names=names)
 end
 
-function copyin!(kernel::KernelInfo, data...)
-    return copyin!(kernel.accel, data...)
+function copyin!(accel::AccelInfo, data...; names::NTuple=())
+    accel_method(JAI_COPYIN, accel, data...; names=names)
 end
 
-
-function copyout!(accel::AccelInfo, data...)
+function copyin!(kernel::KernelInfo, data...; names::NTuple=())
+    return copyin!(kernel.accel, data...; names=names)
 end
 
-function copyout!(kernel::KernelInfo, data...)
-    return copyout!(kernel.accel, data...)
+function copyout!(accel::AccelInfo, data...; names::NTuple=())
+    accel_method(JAI_COPYOUT, accel, data...; names=names)
+end
+
+function copyout!(kernel::KernelInfo, data...; names::NTuple=())
+    return copyout!(kernel.accel, data...; names=names)
 end
 
 function argsdtypes(ainfo::AccelInfo, data)
@@ -153,11 +185,11 @@ function argsdtypes(ainfo::AccelInfo, data)
             push!(args, arg)
             push!(dtypes, Ptr{typeof(args[end])})
 
-        elseif ainfo.acceltype == JAI_CPP
+        elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
             push!(args, arg)
             push!(dtypes, typeof(args[end]))
 
-        elseif ainfo.acceltype == JAI_FORTRAN
+        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OEPNACC)
             push!(args, arg)
             push!(dtypes, Ref{typeof(args[end])})
 
@@ -203,7 +235,7 @@ function launch!(kinfo::KernelInfo, invars...;
     end
 
 
-    kfunc = dlsym(dlib, :launch)
+    kfunc = dlsym(dlib, :jai_launch)
     argtypes = Meta.parse(string(((dtypes...),)))
     ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
 
@@ -211,7 +243,8 @@ function launch!(kinfo::KernelInfo, invars...;
 
 end
 
-function setup_build(acceltype, compile, workdir, launchid)
+function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
+                compile::Union{String, Nothing}, workdir=Union{String, Nothing})
 
     if workdir == nothing
         workdir = joinpath(pwd(), ".jaitmp")
@@ -221,20 +254,22 @@ function setup_build(acceltype, compile, workdir, launchid)
         mkdir(workdir)
     end
 
+    prefix = ACCEL_CODE[acceltype] * BUILD_CODE[buildtype]
+ 
     if acceltype == JAI_FORTRAN
-        srcpath = joinpath(workdir, "F$(launchid).F90")
+        srcpath = joinpath(workdir, "$(prefix)F$(launchid).F90")
         if compile == nothing
             compile = "gfortran -fPIC -shared -g"
         end
 
     elseif  acceltype == JAI_CPP
-        srcpath = joinpath(workdir, "C$(launchid).cpp")
+        srcpath = joinpath(workdir, "$(prefix)$(launchid).cpp")
         if compile == nothing
             compile = "g++ -fPIC -shared -g"
         end
 
     elseif  acceltype == JAI_FORTRAN_OPENACC
-        srcpath = joinpath(workdir, "C$(launchid).cpp")
+        srcpath = joinpath(workdir, "$(prefix)$(launchid).F90")
         if compile == nothing
             compile = "gfortran -fPIC -shared -fopenacc -g"
         end
@@ -261,7 +296,7 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
         workdir = kinfo.accel.workdir
     end
 
-    workdir, srcpath, compile = setup_build(kinfo.accel.acceltype, compile, workdir, launchid)
+    workdir, srcpath, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid, compile, workdir)
 
     # generate source code
     if !isfile(srcpath)
@@ -281,11 +316,11 @@ function build!(kinfo::KernelInfo, launchid::String, inargs::Vector, outargs::Ve
 end
 
 
-# allocate! build
+# non-kernel build
 function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String, inargs::Vector,
                 innames::NTuple)
 
-    workdir, srcpath, compile = setup_build(ainfo.acceltype, ainfo.compile, ainfo.workdir, launchid)
+    workdir, srcpath, compile = setup_build(ainfo.acceltype, buildtype, launchid, ainfo.compile, ainfo.workdir)
 
     # generate source code
     if !isfile(srcpath)
@@ -329,7 +364,7 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType, srcpath::String,
                     launchid::String, inargs::Vector, innames::NTuple)
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_openacc_allocate(ainfo, launchid, inargs, innames)
+        code = gencode_fortran_openacc(ainfo, buildtype, launchid, inargs, innames)
 
     else
         error(string(ainfo.acceltype) * " is not supported for allocation.")
