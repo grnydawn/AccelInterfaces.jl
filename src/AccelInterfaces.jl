@@ -188,21 +188,19 @@ function argsdtypes(ainfo::AccelInfo, data)
     sizes = []
 
     for arg in data
+        push!(args, arg)
+        push!(sizes, size(args[end]))
+
         if typeof(arg) <: AbstractArray
-            push!(args, arg)
             push!(dtypes, Ptr{typeof(args[end])})
 
         elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
-            push!(args, arg)
             push!(dtypes, typeof(args[end]))
 
         elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OEPNACC)
-            push!(args, arg)
             push!(dtypes, Ref{typeof(args[end])})
 
         end
-
-        push!(sizes, size(args[end]))
     end
 
     args, dtypes, sizes
@@ -222,8 +220,6 @@ function launch!(kinfo::KernelInfo, invars...;
 
     launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
                             outdtypes, outsizes))[1:4])
-
-    println("KKKKKKKKKKKKK", launchid, kinfo.accel.ismaster)
 
     libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
 
