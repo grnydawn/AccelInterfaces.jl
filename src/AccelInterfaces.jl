@@ -74,11 +74,14 @@ include("./fortran.jl")
 include("./fortran_openacc.jl")
 include("./cpp.jl")
 
-function timeout(libpath::String, duration::Number)
+function timeout(libpath::String, duration::Number; waittoexist::Bool=true)
 
     tstart = now()
+
     while true
-        if ispath(libpath)
+        check = waittoexist ? ispath(libpath) : ~ispath(libpath)
+
+        if check
             break
 
         elseif ((now() - tstart)/ Millisecond(1000)) > duration
@@ -288,6 +291,7 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                                     compile)
 
     srcpath = joinpath(kinfo.accel.workdir, srcfile)
+    pidfile = outpath * ".pid"
 
     # generate source code
     if !ispath(outpath)
@@ -302,7 +306,7 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                 cd(procdir)
 
                 open(srcfile, "w") do io
-                       write(io, code)
+                    write(io, code)
                 end
 
                 outfile = basename(outpath)
@@ -311,7 +315,15 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                     compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
                     if !ispath(outpath)
-                        cp(outfile, outpath)
+                        open(pidfile, "w") do io
+                            write(io, string(getpid()))
+                        end
+
+                        if !ispath(outpath)
+                            cp(outfile, outpath)
+                        end
+
+                        rm(pidfile)
                     end
                 end
             catch err
@@ -321,6 +333,8 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
             end
         end
     end
+
+    timeout(pidfile, TIMEOUT, waittoexist=false)
 
     outpath
 end
@@ -334,6 +348,7 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 launchid, ainfo.compile)
 
     srcpath = joinpath(ainfo.workdir, srcfile)
+    pidfile = outpath * ".pid"
 
     # generate source code
     if !ispath(outpath)
@@ -357,7 +372,15 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                     compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
                     if !ispath(outpath)
-                        cp(outfile, outpath)
+                        open(pidfile, "w") do io
+                            write(io, string(getpid()))
+                        end
+
+                        if !ispath(outpath)
+                            cp(outfile, outpath)
+                        end
+
+                        rm(pidfile)
                     end
                 end
             catch err
@@ -367,6 +390,8 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
             end
         end
     end
+
+    timeout(pidfile, TIMEOUT, waittoexist=false)
 
     outpath
 end
