@@ -258,7 +258,7 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
     if acceltype == JAI_FORTRAN
         ext = ".F90"
         if compile == nothing
-            compile = "gfortran -fPIC -shared -g"
+            compile = "gfortran -fPIC -shared -g -ffree-line-length-none"
         end
 
     elseif  acceltype == JAI_CPP
@@ -270,7 +270,7 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
     elseif  acceltype == JAI_FORTRAN_OPENACC
         ext = ".F90"
         if compile == nothing
-            compile = "gfortran -fPIC -shared -fopenacc -g"
+            compile = "gfortran -fPIC -shared -fopenacc -g -ffree-line-length-none"
         end
 
     else
