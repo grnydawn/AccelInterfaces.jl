@@ -79,7 +79,6 @@ function timeout(libpath::String, duration::Number)
     tstart = now()
     while true
         if isfile(libpath)
-            sleep(1) 
             break
 
         elseif ((now() - tstart)/ Millisecond(1000)) > duration
@@ -113,7 +112,6 @@ function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NT
     args, dtypes, sizes = argsdtypes(accel, data)
 
     launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
-    println("AAAAAAAAAAAA", launchid, accel.ismaster)
 
     libpath = joinpath(accel.workdir, "SL$(launchid).so")
 
@@ -121,14 +119,8 @@ function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NT
     if haskey(accel.sharedlibs, launchid)
         dlib = accel.sharedlibs[launchid]
 
-    elseif accel.ismaster
-        build!(accel, buildtype, launchid, libpath, args, names)
-        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
-        accel.sharedlibs[launchid] = dlib
-
     else
-        #timeout(libpath, TIMEOUT)
-
+        build!(accel, buildtype, launchid, libpath, args, names)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
     end
@@ -239,15 +231,9 @@ function launch!(kinfo::KernelInfo, invars...;
     if haskey(kinfo.accel.sharedlibs, launchid)
         dlib = kinfo.accel.sharedlibs[launchid]
 
-    elseif kinfo.accel.ismaster
+    else
         build!(kinfo, launchid, libpath, inargs, outargs,
                 innames, outnames, compile)
-        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
-        kinfo.accel.sharedlibs[launchid] = dlib
-
-    else
-        #timeout(libpath, TIMEOUT)
-
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
     end
@@ -262,24 +248,24 @@ function launch!(kinfo::KernelInfo, invars...;
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
-                workdir::String, compile::Union{String, Nothing})
+                compile::Union{String, Nothing})
 
     prefix = ACCEL_CODE[acceltype] * BUILD_CODE[buildtype]
  
     if acceltype == JAI_FORTRAN
-        srcpath = joinpath(workdir, "$(prefix)F$(launchid).F90")
+        ext = ".F90"
         if compile == nothing
             compile = "gfortran -fPIC -shared -g"
         end
 
     elseif  acceltype == JAI_CPP
-        srcpath = joinpath(workdir, "$(prefix)$(launchid).cpp")
+        ext = ".cpp"
         if compile == nothing
             compile = "g++ -fPIC -shared -g"
         end
 
     elseif  acceltype == JAI_FORTRAN_OPENACC
-        srcpath = joinpath(workdir, "$(prefix)$(launchid).F90")
+        ext = ".F90"
         if compile == nothing
             compile = "gfortran -fPIC -shared -fopenacc -g"
         end
@@ -289,7 +275,7 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
 
     end
 
-    (srcpath, compile)
+    (prefix*launchid*ext, compile)
 end
 
 
@@ -302,21 +288,42 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
         compile = kinfo.accel.compile
     end
 
-    srcpath, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid,
-                                    kinfo.accel.workdir, compile)
+    srcfile, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid,
+                                    compile)
+
+    srcpath = joinpath(kinfo.accel.workdir, srcfile)
 
     # generate source code
-    if !isfile(srcpath)
+    if !isfile(outpath)
+        code = generate!(kinfo, launchid, inargs, outargs, innames, outnames)
 
-        generate!(kinfo, srcpath, launchid, inargs, outargs, innames, outnames)
+        if !isfile(outpath)
 
+            curdir = pwd()
+
+            try
+                procdir = mktempdir()
+                cd(procdir)
+
+                open(srcfile, "w") do io
+                       write(io, code)
+                end
+
+                outfile = basename(outpath)
+
+                if !isfile(outpath)
+                    compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
+
+                    if !isfile(outpath)
+                        cp(outfile, outpath)
+                    end
+                end
+
+            finally
+                cd(curdir)
+            end
+        end
     end
-
-    fname, ext = splitext(basename(srcpath))
-
-    compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
-    #println("COMPIE CMD\n", compile)
-    #println("COMPIE LOG\n", compilelog)
 
     outpath
 end
@@ -326,24 +333,48 @@ end
 function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 outpath::String, inargs::Vector, innames::NTuple)
 
-    srcpath, compile = setup_build(ainfo.acceltype, buildtype,
-                launchid, ainfo.workdir, ainfo.compile)
+    srcfile, compile = setup_build(ainfo.acceltype, buildtype,
+                launchid, ainfo.compile)
+
+    srcpath = joinpath(ainfo.workdir, srcfile)
 
     # generate source code
-    if !isfile(srcpath)
-        generate!(ainfo, buildtype, srcpath, launchid, inargs, innames)
+    if !isfile(outpath)
+        code = generate!(ainfo, buildtype, launchid, inargs, innames)
 
+        if !isfile(outpath)
+
+            curdir = pwd()
+
+            try
+                procdir = mktempdir()
+                cd(procdir)
+
+                open(srcfile, "w") do io
+                       write(io, code)
+                end
+
+                outfile = basename(outpath)
+
+                if !isfile(outpath)
+                    compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
+
+                    if !isfile(outpath)
+                        cp(outfile, outpath)
+                    end
+                end
+
+            finally
+                cd(curdir)
+            end
+        end
     end
-
-    fname, ext = splitext(basename(srcpath))
-
-    compilelog = read(run(`$(split(compile)) -o $outpath $(srcpath)`), String)
 
     outpath
 end
 
 # kernel generate
-function generate!(kinfo::KernelInfo, srcpath::String, launchid::String, inargs::Vector,
+function generate!(kinfo::KernelInfo, launchid::String, inargs::Vector,
                 outargs::Vector, innames::NTuple, outnames::NTuple)
 
     body = kinfo.kerneldef.body
@@ -359,14 +390,11 @@ function generate!(kinfo::KernelInfo, srcpath::String, launchid::String, inargs:
 
     end
 
-    open(srcpath, "w") do io
-           write(io, code)
-    end
-
+    code
 end
 
 # accel generate
-function generate!(ainfo::AccelInfo, buildtype::BuildType, srcpath::String,
+function generate!(ainfo::AccelInfo, buildtype::BuildType,
                     launchid::String, inargs::Vector, innames::NTuple)
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
@@ -377,10 +405,7 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType, srcpath::String,
 
     end
 
-    open(srcpath, "w") do io
-           write(io, code)
-    end
-
+    code
 end
 
 end
