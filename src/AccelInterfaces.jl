@@ -14,13 +14,15 @@ import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
-       JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo,
-       KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, copyin!,
-       copyout!, launch!
+       JAI_ANYACCEL, JAI_CPP_OPENACC, JAI_HOST, JAI_DEVICE, AccelInfo,
+       KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, update!,
+       launch!
 
 const TIMEOUT = 10
 
 const JAI_VERSION = "0.0.1"
+
+@enum DeviceType JAI_HOST JAI_DEVICE
 
 @enum AccelType begin
         JAI_FORTRAN
@@ -168,20 +170,22 @@ function deallocate!(kernel::KernelInfo, data...; names::NTuple=())
     return deallocate!(kernel.accel, data...; names=names)
 end
 
-function copyin!(accel::AccelInfo, data...; names::NTuple=())
-    accel_method(JAI_COPYIN, accel, data...; names=names)
+function update!(devtype::DeviceType, accel::AccelInfo, data...; names::NTuple=())
+
+	if devtype == JAI_HOST
+		accel_method(JAI_COPYOUT, accel, data...; names=names)
+
+	elseif devtype == JAI_DEVICE
+		accel_method(JAI_COPYIN, accel, data...; names=names)
+
+	else
+		error(string(devtype) * " is not supported.")
+	end
+
 end
 
-function copyin!(kernel::KernelInfo, data...; names::NTuple=())
-    return copyin!(kernel.accel, data...; names=names)
-end
-
-function copyout!(accel::AccelInfo, data...; names::NTuple=())
-    accel_method(JAI_COPYOUT, accel, data...; names=names)
-end
-
-function copyout!(kernel::KernelInfo, data...; names::NTuple=())
-    return copyout!(kernel.accel, data...; names=names)
+function update!(devtype::DeviceType, kernel::KernelInfo, data...; names::NTuple=())
+    return update!(devtype::DeviceType, kernel.accel, data...; names=names)
 end
 
 function argsdtypes(ainfo::AccelInfo, data)

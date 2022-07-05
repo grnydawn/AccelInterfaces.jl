@@ -23,7 +23,7 @@ function fortran_tests()
     kernel = KernelInfo(accel, "ex1.knl")
     @test kernel isa KernelInfo
 
-    compile = "gfortran -fPIC -shared -g"
+    compile = "ftn -fPIC -shared -g"
 
     launch!(kernel, x, y, outvars=(z,), innames=innames,
             outnames=outnames, compile=compile)
@@ -43,15 +43,15 @@ function fortran_openacc_tests()
     kernel = KernelInfo(accel, "ex1.knl")
 
 
-    #allocate!(accel, x, y, z, names=(innames..., outnames...))
-    allocate!(accel, z, names=outnames)
-    copyin!(accel, x, y, names=innames)
+    allocate!(accel, x, y, z, names=(innames..., outnames...))
+    #allocate!(accel, z, names=outnames)
+    update!(JAI_DEVICE, accel, x, y, names=innames)
 
     launch!(kernel, x, y, outvars=(z,), innames=innames,
             outnames=outnames, compile=compile)
 
-    copyout!(accel, z, names=outnames)
-    #deallocate!(accel, x, y, z, names=(innames..., outnames...))
+    update!(JAI_HOST, accel, z, names=outnames)
+    deallocate!(accel, x, y, z, names=(innames..., outnames...))
     #deallocate!(accel, x, y, names=innames)
 
     @test z == res
