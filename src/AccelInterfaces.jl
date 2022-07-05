@@ -204,7 +204,7 @@ function argsdtypes(ainfo::AccelInfo, data)
         elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
             push!(dtypes, typeof(args[end]))
 
-        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OEPNACC)
+        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
             push!(dtypes, Ref{typeof(args[end])})
 
         end
