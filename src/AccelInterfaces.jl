@@ -78,7 +78,7 @@ function timeout(libpath::String, duration::Number)
 
     tstart = now()
     while true
-        if isfile(libpath)
+        if ispath(libpath)
             break
 
         elseif ((now() - tstart)/ Millisecond(1000)) > duration
@@ -294,10 +294,10 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
     srcpath = joinpath(kinfo.accel.workdir, srcfile)
 
     # generate source code
-    if !isfile(outpath)
+    if !ispath(outpath)
         code = generate!(kinfo, launchid, inargs, outargs, innames, outnames)
 
-        if !isfile(outpath)
+        if !ispath(outpath)
 
             curdir = pwd()
 
@@ -311,10 +311,10 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
 
                 outfile = basename(outpath)
 
-                if !isfile(outpath)
+                if !ispath(outpath)
                     compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
-                    if !isfile(outpath)
+                    if !ispath(outpath)
                         cp(outfile, outpath)
                     end
                 end
@@ -339,10 +339,10 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
     srcpath = joinpath(ainfo.workdir, srcfile)
 
     # generate source code
-    if !isfile(outpath)
+    if !ispath(outpath)
         code = generate!(ainfo, buildtype, launchid, inargs, innames)
 
-        if !isfile(outpath)
+        if !ispath(outpath)
 
             curdir = pwd()
 
@@ -356,10 +356,10 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
 
                 outfile = basename(outpath)
 
-                if !isfile(outpath)
+                if !ispath(outpath)
                     compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
-                    if !isfile(outpath)
+                    if !ispath(outpath)
                         cp(outfile, outpath)
                     end
                 end
