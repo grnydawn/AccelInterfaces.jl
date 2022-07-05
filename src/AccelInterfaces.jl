@@ -318,6 +318,7 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                         cp(outfile, outpath)
                     end
                 end
+            catch err
 
             finally
                 cd(curdir)
@@ -363,6 +364,7 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                         cp(outfile, outpath)
                     end
                 end
+            catch err
 
             finally
                 cd(curdir)
