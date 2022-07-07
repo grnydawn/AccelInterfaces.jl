@@ -1,21 +1,20 @@
-[fortran, fortran_openacc]
+[fortran]
 
 INTEGER i
 
-!!$acc enter data create(z)
+DO i=LBOUND(x, 1), UBOUND(x, 1)
+    z(i) = x(i) + y(i)
+END DO
 
-!!$acc enter data copyin(x)
-!!$acc enter data copyin(y)
+[fortran_openacc]
+
+INTEGER i
 
 !$acc parallel loop present(x, y, z)
 DO i=LBOUND(x, 1), UBOUND(x, 1)
     z(i) = x(i) + y(i)
 END DO
 !$acc end parallel loop
-
-!!$acc exit data copyout(z)
-
-print *, z, x, y
 
 [cpp, cpp_openacc]
 

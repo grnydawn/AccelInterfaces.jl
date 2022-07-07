@@ -1,6 +1,8 @@
 using AccelInterfaces
 using Test
 
+import Profile
+
 const constvars = (100,)
 const constnames = ("TEST",)
 
@@ -63,8 +65,8 @@ end
     # testing AccelInterfaces module loading
     @test JAI_FORTRAN isa AccelType
 
-    fortran_tests()
-    fortran_openacc_tests()
+    #fortran_tests()
+    @time fortran_openacc_tests()
 
 end
 
