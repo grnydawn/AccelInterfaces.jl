@@ -15,41 +15,6 @@ const typemap_j2f = Dict(
     Float64	=> "REAL (C_DOUBLE )"
 )
 
-const f_part1 = """
-USE, INTRINSIC :: ISO_C_BINDING
-
-"""
-
-const f_part2 = """
-
-public launch
-
-contains
-
-"""
-
-const f_part3 = """
-
-    USE, INTRINSIC :: ISO_C_BINDING
-
-"""
-
-const f_part4 = """
-
-    INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-"""
-
-const f_part5 = """
-
-    launch = JAI_ERRORCODE
-
-END FUNCTION
-
-end module
-
-"""
-
 function dimensions(arg)
 
     dimlist = []
