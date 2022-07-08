@@ -155,7 +155,8 @@ function accel_method(buildtype::BuildType, accel::AccelInfo,
 
     end
 
-    local argtypes = Meta.parse(string(((dtypes...),)))
+    #local argtypes = Meta.parse(string(((dtypes...),)))
+    local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
     local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(args...)))
 
     @eval return $ccallexpr
@@ -209,11 +210,12 @@ end
 
 function argsdtypes(ainfo::AccelInfo,
             data::Vararg{JaiDataType, N} where {N};
-        ) :: Tuple{Vector{DataType}, Vector{NTuple{M, T} where {M, T<:Integer}}}
+        ) :: Tuple{Vector{String}, Vector{NTuple{M, T} where {M, T<:Integer}}}
+        #) :: Tuple{Vector{DataType}, Vector{NTuple{M, T} where {M, T<:Integer}}}
 
     local N = length(data)
 
-    dtypes = Vector{DataType}(undef, N)
+    dtypes = Vector{String}(undef, N)
     sizes = Vector{NTuple{M, T} where {M, T<:Integer}}(undef, N)
 
     for (index, arg) in enumerate(data)
@@ -222,13 +224,17 @@ function argsdtypes(ainfo::AccelInfo,
         sizes[index] = size(arg)
 
         if typeof(arg) <: AbstractArray
-            dtypes[index] = Ptr{typeof(arg)}
+            #dtypes[index] = Ptr{typeof(arg)}
+            dtypes[index] = string(Ptr{typeof(arg)})
 
         elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
-            dtypes[index] = typeof(arg)
+            #dtypes[index] = typeof(arg)
+            dtypes[index] = string(typeof(arg))
 
         elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
-            dtypes[index] = Ref{typeof(arg)}
+            #dtypes[index] = Ref{typeof(arg)}
+            #dtypes[index] = String(Ref{typeof(arg)})
+            dtypes[index] = string(Ref{typeof(arg)})
 
         end
     end
@@ -250,6 +256,7 @@ function argsdtypes(ainfo::AccelInfo,
 #        end
 #    end
 
+    println("WWWW", dtypes)
     dtypes, sizes
 end
 
@@ -290,7 +297,8 @@ function launch!(kinfo::KernelInfo,
 
 
     kfunc = dlsym(dlib, :jai_launch)
-    argtypes = Meta.parse(string(((dtypes...),)))
+    #argtypes = Meta.parse(string(((dtypes...),)))
+    argtypes = Meta.parse(join(dtypes, ","))
     #tt = Meta.quot(Tuple(d for d in dtypes))
     #argtypes = @eval $tt
     ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
