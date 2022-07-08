@@ -133,7 +133,11 @@ struct KernelDef
 
         if length(sections) > 0
             section = sections[end]
-            specid = bytes2hex(sha1(string(section.body, section.params))[1:4])
+            #specid = bytes2hex(sha1(string(section.body, section.params))[1:4])
+
+            io = IOBuffer()
+            ser = serialize(io, (section.body, section.params))
+            specid = bytes2hex(sha1(String(take!(io)))[1:4])
 
             new(specid, section.params, section.body)
         else
@@ -160,7 +164,11 @@ struct KernelInfo
         end
 
         kdefobj = KernelDef(accel.acceltype, kdef)
-        kernelid = bytes2hex(sha1(string(accel.accelid, kdefobj.specid))[1:4])
+        #kernelid = bytes2hex(sha1(string(accel.accelid, kdefobj.specid))[1:4])
+
+        io = IOBuffer()
+        ser = serialize(io, (accel.accelid, kdefobj.specid))
+        kernelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
         new(kernelid, accel, kdefobj)
     end
