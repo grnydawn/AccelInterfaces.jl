@@ -22,8 +22,6 @@ export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
 const JAI_VERSION = "0.0.1"
 const TIMEOUT = 10
 
-testvar = 0
-
 @enum DeviceType JAI_HOST JAI_DEVICE
 
 @enum AccelType begin
@@ -276,8 +274,7 @@ function launch!(kinfo::KernelInfo,
     ###### Need Opt
     #launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
     #                        outdtypes, outsizes))[1:4])
-    testvar = testvar * "t"
-    launchid = bytes2hex(sha1(testvar)[1:4])
+    launchid = bytes2hex(sha1(join(innames, ", "))[1:4])
 
     libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
 
