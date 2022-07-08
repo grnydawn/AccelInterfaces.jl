@@ -59,7 +59,8 @@ struct AccelInfo
         #     : detect available acceltypes according to h/w, compiler, flags, ...
 
         accelid = bytes2hex(sha1(string(Sys.STDLIB, JAI_VERSION,
-                        acceltype, constvars, constnames, compile))[1:4])
+                        acceltype, constnames, compile))[1:4])
+                        #acceltype, constvars, constnames, compile))[1:4])
 
         if workdir == nothing
             workdir = joinpath(pwd(), ".jaitmp")
@@ -271,6 +272,7 @@ function launch!(kinfo::KernelInfo,
     args = (inargs..., outargs...)
     dtypes = vcat(indtypes, outdtypes)
 
+    ###### Need Opt
     launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
                             outdtypes, outsizes))[1:4])
 
