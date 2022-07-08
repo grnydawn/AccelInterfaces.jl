@@ -214,7 +214,7 @@ function argsdtypes(ainfo::AccelInfo,
     local N = length(data)
 
     dtypes = Vector{DataType}(undef, N)
-    sizes = Vector{Tuple{T} where T<:Integer}(undef, N)
+    sizes = Vector{NTuple{M, T} where {M, T<:Integer}}(undef, N)
 
     for (index, arg) in enumerate(data)
         local arg = data[index]
