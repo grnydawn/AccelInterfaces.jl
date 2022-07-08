@@ -27,16 +27,13 @@ function fortran_tests()
 
     compile = "ftn -fPIC -shared -g"
 
-    allocate!(accel, x, y, z, names=(innames..., outnames...))
-
-    #launch!(kernel, x, y, outvars=(z,), innames=innames,
-    #        outnames=outnames, compile=compile)
+    @enterdata allocate(accel, x, y, z, names=(innames..., outnames...))
 
     @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
 
     @test z == res
 
-    deallocate!(accel, x, y, z, names=(innames..., outnames...))
+    @exitdata deallocate(accel, x, y, z, names=(innames..., outnames...))
 
 end
 
@@ -51,18 +48,19 @@ function fortran_openacc_tests()
 
     kernel = KernelInfo(accel, "ex1.knl")
 
+# TODO:
+# - @enterdata accel allocate(x, y, z) update(x, y)
+# - @exitdata accel update(z) deallocate(x, y, z) 
+# - any order of allocate, update, deallocate
+# - check allowed directives at enter and exit
 
-    allocate!(accel, x, y, z, names=(innames..., outnames...))
-    #allocate!(accel, z, names=outnames)
-
-    update!(JAI_DEVICE, accel, x, y, names=innames)
+    @enterdata allocate(accel, x, y, z, names=(innames..., outnames...)) update(JAI_DEVICE, accel, x, y, names=innames)
 
     @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
 
-    update!(JAI_HOST, accel, z, names=outnames)
+    update(JAI_HOST, accel, z, names=outnames)
 
-    deallocate!(accel, x, y, z, names=(innames..., outnames...))
-    #deallocate!(accel, x, y, names=innames)
+    @exitdata deallocate(accel, x, y, z, names=(innames..., outnames...))
 
     @test z == res
 

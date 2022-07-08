@@ -17,7 +17,7 @@ import OffsetArrays.OffsetArray,
 
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
        JAI_ANYACCEL, JAI_CPP_OPENACC, JAI_HOST, JAI_DEVICE, AccelInfo,
-       KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, update!,
+       KernelInfo, get_accel, get_kernel, allocate, deallocate, update,
        launch!, @enterdata, @exitdata, @launch
 
 
@@ -107,7 +107,7 @@ function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Not
     end
 end
 
-function get_accel!(acceltype::AccelType; ismaster::Bool=true,
+function get_accel(acceltype::AccelType; ismaster::Bool=true,
                     constvars::NTuple{N,JaiConstType} where {N}=(),
                     compile::Union{String, Nothing}=nothing,
                     constnames::NTuple{N, String} where {N}=()) :: AccelInfo
@@ -116,7 +116,7 @@ function get_accel!(acceltype::AccelType; ismaster::Bool=true,
                     compile=compile, constnames=constnames)
 end
 
-function get_kernel!(accel::AccelInfo, path::String) :: KernelInfo
+function get_kernel(accel::AccelInfo, path::String) :: KernelInfo
     return KernelInfo(accel, path)
 end
 
@@ -174,31 +174,31 @@ function accel_method(buildtype::BuildType, accel::AccelInfo,
 
 end
 
-function allocate!(accel::AccelInfo,
+function allocate(accel::AccelInfo,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=()) :: Int64
     return accel_method(JAI_ALLOCATE, accel, data...; names=names)
 end
 
-function allocate!(kernel::KernelInfo,
+function allocate(kernel::KernelInfo,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=()) :: Int64
-    return allocate!(kernel.accel, data...; names=names)
+    return allocate(kernel.accel, data...; names=names)
 end
 
-function deallocate!(accel::AccelInfo,
+function deallocate(accel::AccelInfo,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=()) :: Int64
     return accel_method(JAI_DEALLOCATE, accel, data...; names=names)
 end
 
-function deallocate!(kernel::KernelInfo,
+function deallocate(kernel::KernelInfo,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=()) :: Int64
-    return deallocate!(kernel.accel, data...; names=names)
+    return deallocate(kernel.accel, data...; names=names)
 end
 
-function update!(devtype::DeviceType, accel::AccelInfo,
+function update(devtype::DeviceType, accel::AccelInfo,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=()) :: Int64
 
@@ -213,10 +213,10 @@ function update!(devtype::DeviceType, accel::AccelInfo,
 	end
 end
 
-function update!(devtype::DeviceType, kernel::KernelInfo,
+function update(devtype::DeviceType, kernel::KernelInfo,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=()) :: Int64
-    return update!(devtype::DeviceType, kernel.accel, data...; names=names)
+    return update(devtype::DeviceType, kernel.accel, data...; names=names)
 end
 
 function argsdtypes(ainfo::AccelInfo,
@@ -257,7 +257,7 @@ function argsdtypes(ainfo::AccelInfo,
 end
 
 # kernel launch
-function launch!(kinfo::KernelInfo,
+function launch(kinfo::KernelInfo,
             invars::Vararg{JaiDataType, N} where {N};
             innames::NTuple{N, String} where {N}=(),
             outnames::NTuple{N, String} where {N}=(),
@@ -508,29 +508,39 @@ end
 
 macro enterdata(directs...)
     tmp = Expr(:block)
-    for func in funcs
-        kwexpr = Expr(:kw, :src, __source__)
-        push!(func.args, kwexpr)
-        #dump(func)
-        push!(tmp.args, func)
+    for direct in directs
+        push!(tmp.args, esc(direct))
+#
+#        kwline = Expr(:kw, :_lineno_, __source__.line)
+#        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+#        push!(tmp.args, esc(kwline))
+#        push!(tmp.args, esc(kwfile))
+
+        #dump(direct)
     end
     return(tmp)
 end
 
 macro exitdata(directs...)
+
     tmp = Expr(:block)
-    for func in funcs
-        kwexpr = Expr(:kw, :src, __source__)
-        push!(func.args, kwexpr)
-        #dump(func)
-        push!(tmp.args, func)
+
+    for direct in directs
+        push!(tmp.args, esc(direct))
+#
+#        kwline = Expr(:kw, :_lineno_, __source__.line)
+#        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+#        push!(tmp.args, esc(kwline))
+#        push!(tmp.args, esc(kwfile))
+
+        #dump(direct)
     end
     return(tmp)
 end
 
 macro launch(largs...)
     tmp = Expr(:call)
-    push!(tmp.args, :launch!)
+    push!(tmp.args, :launch)
 
     for larg in largs
         push!(tmp.args, esc(larg))
