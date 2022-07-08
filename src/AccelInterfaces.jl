@@ -274,7 +274,7 @@ function launch!(kinfo::KernelInfo,
     ###### Need Opt
     #launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
     #                        outdtypes, outsizes))[1:4])
-    launchid = bytes2hex(sha1("$(rand(Int64))")[1:4])
+    launchid = bytes2hex(sha1("tttt")[1:4])
 
     libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
 
