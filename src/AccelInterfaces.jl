@@ -269,13 +269,13 @@ function launch!(kinfo::KernelInfo,
     args = (invars..., outvars...)
     cachekey = (_lineno_, _filepath_)
 
-#    if _lineno_ isa Int64 && _filepath_ isa String
-#        if haskey(kinfo.launchcache, cachekey)
-#            kfunc, argtypes = kinfo.launchcache[cachekey]
-#            ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
-#            @eval return $ccallexpr
-#        end
-#    end
+    if _lineno_ isa Int64 && _filepath_ isa String
+        if haskey(kinfo.launchcache, cachekey)
+            kfunc, argtypes = kinfo.launchcache[cachekey]
+            ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
+            @eval return $ccallexpr
+        end
+    end
 
     indtypes, insizes = argsdtypes(kinfo.accel, invars...)
     outdtypes, outsizes = argsdtypes(kinfo.accel, outvars...)
