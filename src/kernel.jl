@@ -1,7 +1,7 @@
 
 @enum BuildType JAI_LAUNCH JAI_ALLOCATE JAI_DEALLOCATE JAI_COPYIN JAI_COPYOUT
 
-const ACCEL_CODE = Dict(
+const ACCEL_CODE = Dict{AccelType, String}(
     JAI_FORTRAN => "FO",
     JAI_FORTRAN_OPENACC => "FA",
     JAI_FORTRAN_OMPTARGET => "FM",
@@ -10,7 +10,7 @@ const ACCEL_CODE = Dict(
     JAI_CPP_OMPTARGET => "FM"
 )
 
-const BUILD_CODE = Dict(
+const BUILD_CODE = Dict{BuildType, String}(
     JAI_LAUNCH => "L",
     JAI_ALLOCATE => "A",
     JAI_COPYIN => "I",
@@ -19,7 +19,7 @@ const BUILD_CODE = Dict(
 )
 
 # accel string to AccelType conversion
-const acceltypemap = Dict(
+const acceltypemap = Dict{String, AccelType}(
     "fortran" => JAI_FORTRAN,
     "fortran_openacc" => JAI_FORTRAN_OPENACC,
     "cpp"   => JAI_CPP,
@@ -28,25 +28,25 @@ const acceltypemap = Dict(
 
 struct KernelSection
     acceltype::AccelType
-    params::Dict
+    params::Dict{String, String}
     body::String
 end
 
-const LIBFUNC_NAME = Dict(
-    JAI_FORTRAN => Dict(
+const LIBFUNC_NAME = Dict{AccelType, Dict}(
+    JAI_FORTRAN => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
     ),
-    JAI_FORTRAN_OPENACC => Dict(
+    JAI_FORTRAN_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
         JAI_COPYIN => "jai_copyin",
         JAI_COPYOUT => "jai_copyout",
         JAI_DEALLOCATE => "jai_deallocate"
     ),
-    JAI_CPP => Dict(
+    JAI_CPP => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
     ),
-    JAI_CPP_OPENACC => Dict(
+    JAI_CPP_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
         JAI_COPYIN => "jai_copyin",
@@ -56,12 +56,12 @@ const LIBFUNC_NAME = Dict(
 )
 
 
-function _parse_header(hdr)
+function _parse_header(hdr) :: Tuple{Vector{AccelType}, Dict{String, String}}
 
     acctypes = Vector{AccelType}()
-    params = Dict()
+    params = Dict{String, String}()
 
-    pos = findfirst(isequal(':'), hdr)
+    local pos = findfirst(isequal(':'), hdr)
     if pos == nothing
         hdrtype = hdr
         hdrparam = ""
@@ -77,9 +77,10 @@ function _parse_header(hdr)
     # TODO: eval params in a custom environment
     #@getparams params $hdrparam
 
-    return (acctypes, params)
+    acctypes, params
 end
 
+# keep the only matching section
 struct KernelDef
 
     specid::String
@@ -88,11 +89,11 @@ struct KernelDef
 
     function KernelDef(acceltype::AccelType, kerneldef::String)
 
-        sections = []
+        sections = KernelSection[]
 
-        acctypes = [JAI_HEADER]
-        params = Dict()
-        body = []
+        acctypes = AccelType[JAI_HEADER]
+        params = Dict{String, String}()
+        body = String[]
 
         for line in split(kerneldef, "\n")
 
@@ -113,13 +114,14 @@ struct KernelDef
                 end
                     
                 acctypes, params = _parse_header(s[2:end-1])
-                body = []
+                body = String[]
 
             else
                 push!(body, s)
             end
         end
 
+        # activate the only matching section
         if length(acctypes) > 0
             bodystr = join(body, "\n")
             for acctype in acctypes
@@ -163,11 +165,11 @@ struct KernelInfo
         new(kernelid, accel, kdefobj)
     end
 
-    function KernelInfo(accel::AccelInfo, kerneldef::IOStream)
+    function KernelInfo(accel::AccelInfo, kerneldef::IOStream) :: KernelInfo
         KernelInfo(accel, read(kerneldef, String))
     end
 
-    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef)
+    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef) :: KernelInfo
         new(accel, kerneldef, Dict())
     end
 

@@ -1,7 +1,7 @@
 using Debugger
 
 # Julia type to Fortran type conversion table
-const typemap_j2f = Dict(
+const typemap_j2f = Dict{DataType, String}(
     Int8    => "INTEGER (C_INT8_T  )",
     Int16   => "INTEGER (C_INT16_T )",
     Int32   => "INTEGER (C_INT32_T )",
@@ -16,9 +16,9 @@ const typemap_j2f = Dict(
     Float64	=> "REAL (C_DOUBLE )"
 )
 
-function dimensions(arg)
+function dimensions(arg::JaiDataType) :: String
 
-    dimlist = []
+    dimlist = String[]
 
     if arg isa OffsetArray
         for (offset, length) in zip(arg.offsets, size(arg))
@@ -39,13 +39,13 @@ function dimensions(arg)
     join(dimlist, ", ")
 end
 
-function typedef(arg) :: NTuple{2, String}
+function typedef(arg::JaiDataType) :: Tuple{String, String}
 
     dimstr = ""
 
     if arg isa AbstractArray
         typestr = typemap_j2f[eltype(arg)]
-        local dimlist = []
+        local dimlist = String[]
 
         if arg isa OffsetArray
             for (offset, length) in zip(arg.offsets, size(arg))
@@ -74,7 +74,7 @@ function typedef(arg) :: NTuple{2, String}
 end
 
 
-function fortran_genparams(kinfo::KernelInfo)
+function fortran_genparams(kinfo::KernelInfo) :: String
     return fortran_genparams(kinfo.accel)
 
 end
@@ -104,9 +104,9 @@ function fortran_genvalue(value::JaiConstType) :: String
 
 end
 
-function fortran_genparams(ainfo::AccelInfo)
+function fortran_genparams(ainfo::AccelInfo) :: String
 
-    typedecls = []
+    typedecls = String[]
 
     for (name, value) in zip(ainfo.constnames, ainfo.constvars)
 
@@ -166,7 +166,7 @@ function fortran_typedecls(launchid::String, buildtype::BuildType,
                 inargs::NTuple{N, JaiDataType} where {N},
                 innames::NTuple{N, String} where {N}) :: String
 
-    typedecls = []
+    typedecls = String[]
 
     for (arg, varname) in zip(inargs, innames)
 

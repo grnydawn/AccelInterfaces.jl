@@ -3,7 +3,7 @@ function fortran_openacc_directives(buildtype::BuildType,
                 inargs::NTuple{N, JaiDataType} where {N},
                 innames::NTuple{N, String} where {N}) :: String
 
-    directs = []
+    directs = String[]
 
     for (arg, varname) in zip(inargs, innames)
 

@@ -35,8 +35,8 @@ const TIMEOUT = 10
         JAI_HEADER
 end
 
-JaiConstType = Union{Number, NTuple{N, T}, AbstractArray{T, N}} where {N, T<:Number}
-JaiDataType = JaiConstType
+const JaiConstType = Union{Number, NTuple{N, T}, AbstractArray{T, N}} where {N, T<:Number}
+const JaiDataType = JaiConstType
 
 struct AccelInfo
 
