@@ -29,8 +29,11 @@ function fortran_tests()
 
     allocate!(accel, x, y, z, names=(innames..., outnames...))
 
-    launch!(kernel, x, y, outvars=(z,), innames=innames,
-            outnames=outnames, compile=compile)
+    #launch!(kernel, x, y, outvars=(z,), innames=innames,
+    #        outnames=outnames, compile=compile)
+
+    @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
+
     @test z == res
 
     deallocate!(accel, x, y, z, names=(innames..., outnames...))
@@ -51,12 +54,13 @@ function fortran_openacc_tests()
 
     allocate!(accel, x, y, z, names=(innames..., outnames...))
     #allocate!(accel, z, names=outnames)
+
     update!(JAI_DEVICE, accel, x, y, names=innames)
 
-    launch!(kernel, x, y, outvars=(z,), innames=innames,
-            outnames=outnames, compile=compile)
+    @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
 
     update!(JAI_HOST, accel, z, names=outnames)
+
     deallocate!(accel, x, y, z, names=(innames..., outnames...))
     #deallocate!(accel, x, y, names=innames)
 

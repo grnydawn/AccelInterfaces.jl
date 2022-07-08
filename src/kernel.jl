@@ -152,6 +152,7 @@ struct KernelInfo
     kernelid::String
     accel::AccelInfo
     kerneldef::KernelDef
+    launchcache::Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}
 
     function KernelInfo(accel::AccelInfo, kerneldef::String)
 
@@ -164,13 +165,13 @@ struct KernelInfo
         end
 
         kdefobj = KernelDef(accel.acceltype, kdef)
-        #kernelid = bytes2hex(sha1(string(accel.accelid, kdefobj.specid))[1:4])
 
         io = IOBuffer()
         ser = serialize(io, (accel.accelid, kdefobj.specid))
         kernelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-        new(kernelid, accel, kdefobj)
+        new(kernelid, accel, kdefobj,
+            Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
     end
 
     function KernelInfo(accel::AccelInfo, kerneldef::IOStream) :: KernelInfo

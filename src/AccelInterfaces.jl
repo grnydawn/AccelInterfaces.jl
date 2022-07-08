@@ -18,7 +18,7 @@ import OffsetArrays.OffsetArray,
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
        JAI_ANYACCEL, JAI_CPP_OPENACC, JAI_HOST, JAI_DEVICE, AccelInfo,
        KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, update!,
-       launch!
+       launch!, @enterdata, @exitdata, @launch
 
 
 const JAI_VERSION = "0.0.1"
@@ -262,21 +262,25 @@ function launch!(kinfo::KernelInfo,
             innames::NTuple{N, String} where {N}=(),
             outnames::NTuple{N, String} where {N}=(),
             outvars::NTuple{N,JaiDataType} where {N}=(),
-            compile::Union{String, Nothing}=nothing)
+            compile::Union{String, Nothing}=nothing,
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing) :: Int64
+
+    args = (invars..., outvars...)
+    cachekey = (_lineno_, _filepath_)
+
+#    if _lineno_ isa Int64 && _filepath_ isa String
+#        if haskey(kinfo.launchcache, cachekey)
+#            kfunc, argtypes = kinfo.launchcache[cachekey]
+#            ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
+#            @eval return $ccallexpr
+#        end
+#    end
 
     indtypes, insizes = argsdtypes(kinfo.accel, invars...)
-    inargs = invars
-
     outdtypes, outsizes = argsdtypes(kinfo.accel, outvars...)
-    outargs = outvars
-
-    #args = vcat(inargs, outargs)
-    args = (inargs..., outargs...)
     dtypes = vcat(indtypes, outdtypes)
 
-    ###### Need Opt
-    #launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
-    #                        outdtypes, outsizes))[1:4])
     io = IOBuffer()
     ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
@@ -288,17 +292,19 @@ function launch!(kinfo::KernelInfo,
         dlib = kinfo.accel.sharedlibs[launchid]
 
     else
-        build!(kinfo, launchid, libpath, inargs, outargs,
+        build!(kinfo, launchid, libpath, invars, outvars,
                 innames, outnames, compile)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
     end
 
-
     kfunc = dlsym(dlib, :jai_launch)
-    #argtypes = Meta.parse(string(((dtypes...),)))
     local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
     ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
+
+    if _lineno_ isa Int64 && _filepath_ isa String
+        kinfo.launchcache[cachekey] = (kfunc, argtypes)
+    end
 
     @eval return $ccallexpr
 end
@@ -497,6 +503,47 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType,
     end
 
     code
+end
+
+
+macro enterdata(directs...)
+    tmp = Expr(:block)
+    for func in funcs
+        kwexpr = Expr(:kw, :src, __source__)
+        push!(func.args, kwexpr)
+        #dump(func)
+        push!(tmp.args, func)
+    end
+    return(tmp)
+end
+
+macro exitdata(directs...)
+    tmp = Expr(:block)
+    for func in funcs
+        kwexpr = Expr(:kw, :src, __source__)
+        push!(func.args, kwexpr)
+        #dump(func)
+        push!(tmp.args, func)
+    end
+    return(tmp)
+end
+
+macro launch(largs...)
+    tmp = Expr(:call)
+    push!(tmp.args, :launch!)
+
+    for larg in largs
+        push!(tmp.args, esc(larg))
+    end
+
+    kwline = Expr(:kw, :_lineno_, __source__.line)
+    kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+    push!(tmp.args, esc(kwline))
+    push!(tmp.args, esc(kwfile))
+    #dump(tmp)
+
+    return(tmp)
+
 end
 
 end
