@@ -256,7 +256,6 @@ function argsdtypes(ainfo::AccelInfo,
 #        end
 #    end
 
-    println("WWWW", dtypes)
     dtypes, sizes
 end
 
@@ -298,9 +297,7 @@ function launch!(kinfo::KernelInfo,
 
     kfunc = dlsym(dlib, :jai_launch)
     #argtypes = Meta.parse(string(((dtypes...),)))
-    argtypes = Meta.parse(join(dtypes, ","))
-    #tt = Meta.quot(Tuple(d for d in dtypes))
-    #argtypes = @eval $tt
+    local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
     ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
 
     @eval return $ccallexpr
