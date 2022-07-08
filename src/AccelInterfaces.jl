@@ -1,5 +1,7 @@
 module AccelInterfaces
 
+using Serialization
+
 import Libdl.dlopen,
        Libdl.RTLD_LAZY,
        Libdl.RTLD_DEEPBIND,
@@ -58,8 +60,12 @@ struct AccelInfo
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
 
-        accelid = bytes2hex(sha1(string(Sys.STDLIB, JAI_VERSION,
-                        acceltype, constvars, constnames, compile))[1:4])
+        #accelid = bytes2hex(sha1(string(Sys.STDLIB, JAI_VERSION,
+        #                acceltype, constvars, constnames, compile))[1:4])
+
+        io = IOBuffer()
+        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, acceltype, constvars, constnames, compile))
+        accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
         if workdir == nothing
             workdir = joinpath(pwd(), ".jaitmp")
@@ -124,7 +130,10 @@ function accel_method(buildtype::BuildType, accel::AccelInfo,
 
     args = data
 
-    launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
+    #launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
+    io = IOBuffer()
+    ser = serialize(io, (buildtype, accel.accelid, dtypes, sizes))
+    launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
     local libpath = joinpath(accel.workdir, "SL$(launchid).so")
 
@@ -239,23 +248,6 @@ function argsdtypes(ainfo::AccelInfo,
         end
     end
 
-#
-#    for arg in data
-#        push!(args, arg)
-#        push!(sizes, size(args[end]))
-#
-#        if typeof(arg) <: AbstractArray
-#            push!(dtypes, Ptr{typeof(args[end])})
-#
-#        elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
-#            push!(dtypes, typeof(args[end]))
-#
-#        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
-#            push!(dtypes, Ref{typeof(args[end])})
-#
-#        end
-#    end
-
     dtypes, sizes
 end
 
@@ -278,8 +270,11 @@ function launch!(kinfo::KernelInfo,
     dtypes = vcat(indtypes, outdtypes)
 
     ###### Need Opt
-    launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
-                            outdtypes, outsizes))[1:4])
+    #launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
+    #                        outdtypes, outsizes))[1:4])
+    io = IOBuffer()
+    ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
+    launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
     libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
 
