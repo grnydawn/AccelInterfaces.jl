@@ -272,9 +272,8 @@ function launch!(kinfo::KernelInfo,
     dtypes = vcat(indtypes, outdtypes)
 
     ###### Need Opt
-    #launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
-    #                        outdtypes, outsizes))[1:4])
-    launchid = bytes2hex(sha1(join(innames, ", "))[1:4])
+    launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
+                            outdtypes, outsizes))[1:4])
 
     libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
 
@@ -292,11 +291,11 @@ function launch!(kinfo::KernelInfo,
 
     kfunc = dlsym(dlib, :jai_launch)
     argtypes = Meta.parse(string(((dtypes...),)))
+    #tt = Meta.quot(Tuple(d for d in dtypes))
+    #argtypes = @eval $tt
     ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
 
-
     @eval return $ccallexpr
-
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
