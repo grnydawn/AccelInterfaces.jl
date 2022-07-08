@@ -209,7 +209,7 @@ end
 
 function argsdtypes(ainfo::AccelInfo,
             data::Vararg{JaiDataType, N} where {N};
-        ) :: Tuple{Vector{DataType}, Vector{Tuple{T} where T<:Integer}}
+        ) :: Tuple{Vector{DataType}, Vector{NTuple{M, T} where {M, T<:Integer}}}
 
     local N = length(data)
 
