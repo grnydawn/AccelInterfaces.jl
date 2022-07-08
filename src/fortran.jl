@@ -1,3 +1,4 @@
+using Debugger
 
 # Julia type to Fortran type conversion table
 const typemap_j2f = Dict(
@@ -38,18 +39,18 @@ function dimensions(arg)
     join(dimlist, ", ")
 end
 
-function typedef(arg)
+function typedef(arg) :: NTuple{2, String}
 
     dimstr = ""
 
     if arg isa AbstractArray
         typestr = typemap_j2f[eltype(arg)]
+        local dimlist = []
 
-        dimlist = []
         if arg isa OffsetArray
             for (offset, length) in zip(arg.offsets, size(arg))
-                lbound = 1 + offset
-                ubound = length + offset 
+                local lbound = 1 + offset
+                local ubound = length + offset 
                 push!(dimlist, "$lbound:$ubound")
             end
         else
@@ -59,6 +60,10 @@ function typedef(arg)
         end
 
         dimstr = ", DIMENSION(" * join(dimlist, ", ") * ")"
+
+    elseif arg isa Tuple
+        typestr = typemap_j2f[eltype(arg)]
+        dimstr = ", DIMENSION(" * "1:$(length(arg))" * ")"
 
     else
         typestr = typemap_j2f[typeof(arg)]
@@ -74,6 +79,31 @@ function fortran_genparams(kinfo::KernelInfo)
 
 end
 
+function fortran_genvalue(value::JaiConstType) :: String
+
+    local valuelist = String[]
+
+    if value isa NTuple
+        for v in value
+            push!(valuelist, string(v))
+        end
+    elseif value isa AbstractArray
+
+        if ndims(value) == 1
+            for v in value
+                push!(valuelist, string(v))
+            end
+        else
+            error("Multidimensional parameter array is not supported yet.")
+        end
+    else
+        return string(value)
+    end
+
+    return "(/ " * join(valuelist, ", ") * "/)"
+
+end
+
 function fortran_genparams(ainfo::AccelInfo)
 
     typedecls = []
@@ -81,16 +111,21 @@ function fortran_genparams(ainfo::AccelInfo)
     for (name, value) in zip(ainfo.constnames, ainfo.constvars)
 
         typestr, dimstr = typedef(value)
-        push!(typedecls, typestr * dimstr * ", PARAMETER :: " * name * " = " * string(value))
+        push!(typedecls, typestr * dimstr * ", PARAMETER :: " * name * " = " *
+                fortran_genvalue(value))
     end
 
     return join(typedecls, "\n")
 end
 
-function fortran_genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
-                outargs::Vector, innames::NTuple, outnames::NTuple)
+function fortran_genvars(kinfo::KernelInfo, launchid::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                outargs::NTuple{M, JaiDataType} where {M},
+                innames::NTuple{N, String} where {N},
+                outnames::NTuple{M, String} where {M}) :: Tuple{String, String}
 
-    onames = []
+    onames = String[]
+
     for (index, ovar) in enumerate(outargs)
         if !(ovar in inargs)
             push!(onames, outnames[index])
@@ -99,7 +134,7 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
 
     arguments = join((innames...,onames...), ",")
 
-    typedecls = []
+    typedecls = String[]
 
     for (arg, varname) in zip(inargs, innames)
 
@@ -127,7 +162,9 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String, inargs::Vector,
     return arguments, join(typedecls, "\n")
 end
 
-function fortran_typedecls(launchid::String, buildtype::BuildType, inargs::Vector, innames::NTuple)
+function fortran_typedecls(launchid::String, buildtype::BuildType,
+                inargs::NTuple{N, JaiDataType} where {N},
+                innames::NTuple{N, String} where {N}) :: String
 
     typedecls = []
 
@@ -143,8 +180,12 @@ function fortran_typedecls(launchid::String, buildtype::BuildType, inargs::Vecto
 end
 
 
-function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String, kernelbody::String,
-                inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple)
+function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
+                kernelbody::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                outargs::NTuple{M, JaiDataType} where {M},
+                innames::NTuple{N, String} where {N},
+                outnames::NTuple{M, String} where {M}) :: String
 
     params = fortran_genparams(kinfo)
     arguments, typedecls = fortran_genvars(kinfo, launchid, inargs, outargs,

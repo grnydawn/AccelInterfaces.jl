@@ -3,8 +3,8 @@ using Test
 
 import Profile
 
-const constvars = (100,)
-const constnames = ("TEST",)
+const constvars = (100,(1,2))
+const constnames = ("TEST", "TEST2")
 
 const N = 3
 const x = fill(1, N)
@@ -27,9 +27,13 @@ function fortran_tests()
 
     compile = "ftn -fPIC -shared -g"
 
+    allocate!(accel, x, y, z, names=(innames..., outnames...))
+
     launch!(kernel, x, y, outvars=(z,), innames=innames,
             outnames=outnames, compile=compile)
     @test z == res
+
+    deallocate!(accel, x, y, z, names=(innames..., outnames...))
 
 end
 
@@ -65,8 +69,8 @@ end
     # testing AccelInterfaces module loading
     @test JAI_FORTRAN isa AccelType
 
-    #fortran_tests()
-    @time fortran_openacc_tests()
+    fortran_tests()
+    fortran_openacc_tests()
 
 end
 

@@ -1,5 +1,7 @@
 
-function fortran_openacc_directives(buildtype::BuildType, inargs::Vector, innames::NTuple)
+function fortran_openacc_directives(buildtype::BuildType,
+                inargs::NTuple{N, JaiDataType} where {N},
+                innames::NTuple{N, String} where {N}) :: String
 
     directs = []
 
@@ -29,8 +31,10 @@ function fortran_openacc_directives(buildtype::BuildType, inargs::Vector, inname
 
 end
 
-function gencode_fortran_openacc(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
-                inargs::Vector, innames::NTuple)
+function gencode_fortran_openacc(ainfo::AccelInfo, buildtype::BuildType,
+                launchid::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                innames::NTuple{N, String} where {N}) :: String
 
     params = fortran_genparams(ainfo)
     typedecls = fortran_typedecls(launchid, buildtype, inargs, innames)

@@ -18,9 +18,9 @@ export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
        KernelInfo, get_accel!,get_kernel!, allocate!, deallocate!, update!,
        launch!
 
-const TIMEOUT = 10
 
 const JAI_VERSION = "0.0.1"
+const TIMEOUT = 10
 
 @enum DeviceType JAI_HOST JAI_DEVICE
 
@@ -35,21 +35,25 @@ const JAI_VERSION = "0.0.1"
         JAI_HEADER
 end
 
+JaiConstType = Union{Number, NTuple{N, T}, AbstractArray{T, N}} where {N, T<:Number}
+JaiDataType = JaiConstType
 
 struct AccelInfo
 
     accelid::String
     acceltype::AccelType
     ismaster::Bool
-    constvars::Tuple
-    constnames::NTuple
+    constvars::NTuple{N,JaiConstType} where {N}
+    constnames::NTuple{N, String} where {N}
     compile::Union{String, Nothing}
-    sharedlibs::Dict
+    sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
 
     function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
-                    constvars::Tuple=(), compile::Union{String, Nothing}=nothing,
-                    constnames::NTuple=(), workdir::Union{String, Nothing}=nothing)
+                    constvars::NTuple{N,JaiConstType} where {N}=(),
+                    compile::Union{String, Nothing}=nothing,
+                    constnames::NTuple{N, String} where {N}=(),
+                    workdir::Union{String, Nothing}=nothing)
 
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
@@ -66,7 +70,7 @@ struct AccelInfo
         end
 
         new(accelid, acceltype, ismaster, constvars, constnames, compile, 
-            Dict(), workdir)
+            Dict{String, Ptr{Nothing}}(), workdir)
     end
 end
 
@@ -76,12 +80,12 @@ include("./fortran.jl")
 include("./fortran_openacc.jl")
 include("./cpp.jl")
 
-function timeout(libpath::String, duration::Number; waittoexist::Bool=true)
+function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Nothing
 
-    tstart = now()
+    local tstart = now()
 
     while true
-        check = waittoexist ? ispath(libpath) : ~ispath(libpath)
+        local check = waittoexist ? ispath(libpath) : ~ispath(libpath)
 
         if check
             break
@@ -95,30 +99,34 @@ function timeout(libpath::String, duration::Number; waittoexist::Bool=true)
     end
 end
 
-function get_accel!(acceltype::AccelType; ismaster::Bool=true, constvars::Tuple=(),
+function get_accel!(acceltype::AccelType; ismaster::Bool=true,
+                    constvars::NTuple{N,JaiConstType} where {N}=(),
                     compile::Union{String, Nothing}=nothing,
-                    constnames::NTuple=())
+                    constnames::NTuple{N, String} where {N}=()) :: AccelInfo
 
     return AccelInfo(acceltype, ismaster=ismaster, constvars=constvars,
                     compile=compile, constnames=constnames)
 end
 
-function get_kernel!(accel::AccelInfo, path::String)
-
+function get_kernel!(accel::AccelInfo, path::String) :: KernelInfo
     return KernelInfo(accel, path)
 end
 
-function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NTuple=())
+function accel_method(buildtype::BuildType, accel::AccelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
-        return
+        return 0::Int64
     end
 
-    args, dtypes, sizes = argsdtypes(accel, data)
+    dtypes, sizes = argsdtypes(accel, data...)
+
+    args = data
 
     launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
 
-    libpath = joinpath(accel.workdir, "SL$(launchid).so")
+    local libpath = joinpath(accel.workdir, "SL$(launchid).so")
 
     # load shared lib
     if haskey(accel.sharedlibs, launchid)
@@ -131,98 +139,136 @@ function accel_method(buildtype::BuildType, accel::AccelInfo, data...; names::NT
     end
 
     if buildtype == JAI_ALLOCATE
-        dfunc = dlsym(dlib, :jai_allocate)
+        local dfunc = dlsym(dlib, :jai_allocate)
 
     elseif buildtype == JAI_COPYIN
-        dfunc = dlsym(dlib, :jai_copyin)
+        local dfunc = dlsym(dlib, :jai_copyin)
 
     elseif buildtype == JAI_COPYOUT
-        dfunc = dlsym(dlib, :jai_copyout)
+        local dfunc = dlsym(dlib, :jai_copyout)
 
     elseif buildtype == JAI_DEALLOCATE
-        dfunc = dlsym(dlib, :jai_deallocate)
+        local dfunc = dlsym(dlib, :jai_deallocate)
 
     else
         error(string(buildtype) * " is not supported.")
 
     end
 
-    argtypes = Meta.parse(string(((dtypes...),)))
-    ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(args...)))
+    local argtypes = Meta.parse(string(((dtypes...),)))
+    local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(args...)))
 
     @eval return $ccallexpr
 
 end
 
-function allocate!(accel::AccelInfo, data...; names::NTuple=())
-    accel_method(JAI_ALLOCATE, accel, data...; names=names)
+function allocate!(accel::AccelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
+    return accel_method(JAI_ALLOCATE, accel, data...; names=names)
 end
 
-function allocate!(kernel::KernelInfo, data...; names::NTuple=())
+function allocate!(kernel::KernelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
     return allocate!(kernel.accel, data...; names=names)
 end
 
-function deallocate!(accel::AccelInfo, data...; names::NTuple=())
-    accel_method(JAI_DEALLOCATE, accel, data...; names=names)
+function deallocate!(accel::AccelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
+    return accel_method(JAI_DEALLOCATE, accel, data...; names=names)
 end
 
-function deallocate!(kernel::KernelInfo, data...; names::NTuple=())
+function deallocate!(kernel::KernelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
     return deallocate!(kernel.accel, data...; names=names)
 end
 
-function update!(devtype::DeviceType, accel::AccelInfo, data...; names::NTuple=())
+function update!(devtype::DeviceType, accel::AccelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
 
 	if devtype == JAI_HOST
-		accel_method(JAI_COPYOUT, accel, data...; names=names)
+		return accel_method(JAI_COPYOUT, accel, data...; names=names)
 
 	elseif devtype == JAI_DEVICE
-		accel_method(JAI_COPYIN, accel, data...; names=names)
+		return accel_method(JAI_COPYIN, accel, data...; names=names)
 
 	else
 		error(string(devtype) * " is not supported.")
 	end
-
 end
 
-function update!(devtype::DeviceType, kernel::KernelInfo, data...; names::NTuple=())
+function update!(devtype::DeviceType, kernel::KernelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+            names::NTuple{N, String} where {N}=()) :: Int64
     return update!(devtype::DeviceType, kernel.accel, data...; names=names)
 end
 
-function argsdtypes(ainfo::AccelInfo, data)
+function argsdtypes(ainfo::AccelInfo,
+            data::Vararg{JaiDataType, N} where {N};
+        ) :: Tuple{Vector{DataType}, Vector{Tuple{T} where T<:Integer}}
 
-    args = []
-    dtypes = []
-    sizes = []
+    local N = length(data)
 
-    for arg in data
-        push!(args, arg)
-        push!(sizes, size(args[end]))
+    dtypes = Vector{DataType}(undef, N)
+    sizes = Vector{Tuple{T} where T<:Integer}(undef, N)
+
+    for (index, arg) in enumerate(data)
+        local arg = data[index]
+
+        sizes[index] = size(arg)
 
         if typeof(arg) <: AbstractArray
-            push!(dtypes, Ptr{typeof(args[end])})
+            dtypes[index] = Ptr{typeof(arg)}
 
         elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
-            push!(dtypes, typeof(args[end]))
+            dtypes[index] = typeof(arg)
 
         elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
-            push!(dtypes, Ref{typeof(args[end])})
+            dtypes[index] = Ref{typeof(arg)}
 
         end
     end
 
-    args, dtypes, sizes
+#
+#    for arg in data
+#        push!(args, arg)
+#        push!(sizes, size(args[end]))
+#
+#        if typeof(arg) <: AbstractArray
+#            push!(dtypes, Ptr{typeof(args[end])})
+#
+#        elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
+#            push!(dtypes, typeof(args[end]))
+#
+#        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
+#            push!(dtypes, Ref{typeof(args[end])})
+#
+#        end
+#    end
+
+    dtypes, sizes
 end
 
 # kernel launch
-function launch!(kinfo::KernelInfo, invars...;
-                 innames::NTuple=(), outnames=NTuple=(),
-                 outvars::Union{Tuple, Vector}=(),
-                 compile::Union{String, Nothing}=nothing)
+function launch!(kinfo::KernelInfo,
+            invars::Vararg{JaiDataType, N} where {N};
+            innames::NTuple{N, String} where {N}=(),
+            outnames::NTuple{N, String} where {N}=(),
+            outvars::NTuple{N,JaiDataType} where {N}=(),
+            compile::Union{String, Nothing}=nothing)
 
-    inargs, indtypes, insizes = argsdtypes(kinfo.accel, invars)
-    outargs, outdtypes, outsizes = argsdtypes(kinfo.accel, outvars)
+    indtypes, insizes = argsdtypes(kinfo.accel, invars...)
+    inargs = invars
 
-    args = vcat(inargs, outargs)
+    outdtypes, outsizes = argsdtypes(kinfo.accel, outvars...)
+    outargs = outvars
+
+    #args = vcat(inargs, outargs)
+    args = (inargs..., outargs...)
     dtypes = vcat(indtypes, outdtypes)
 
     launchid = bytes2hex(sha1(string(JAI_LAUNCH, kinfo.kernelid, indtypes, insizes,
@@ -245,6 +291,7 @@ function launch!(kinfo::KernelInfo, invars...;
     kfunc = dlsym(dlib, :jai_launch)
     argtypes = Meta.parse(string(((dtypes...),)))
     ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
+
 
     @eval return $ccallexpr
 
@@ -284,8 +331,11 @@ end
 
 # kernel build
 function build!(kinfo::KernelInfo, launchid::String, outpath::String,
-                inargs::Vector, outargs::Vector, innames::NTuple, outnames::NTuple,
-                compile::Union{String, Nothing})
+                inargs::NTuple{N, JaiDataType} where {N},
+                outargs::NTuple{M, JaiDataType} where {M},
+                innames::NTuple{N, String} where {N},
+                outnames::NTuple{M, String} where {M},
+                compile::Union{String, Nothing}=nothing) :: String
 
     if compile == nothing
         compile = kinfo.accel.compile
@@ -346,7 +396,9 @@ end
 
 # non-kernel build
 function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
-                outpath::String, inargs::Vector, innames::NTuple)
+                outpath::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                innames::NTuple{N, String} where {N}) :: String
 
     srcfile, compile = setup_build(ainfo.acceltype, buildtype,
                 launchid, ainfo.compile)
@@ -401,8 +453,11 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
 end
 
 # kernel generate
-function generate!(kinfo::KernelInfo, launchid::String, inargs::Vector,
-                outargs::Vector, innames::NTuple, outnames::NTuple)
+function generate!(kinfo::KernelInfo, launchid::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                outargs::NTuple{M, JaiDataType} where {M},
+                innames::NTuple{N, String} where {N},
+                outnames::NTuple{M, String} where {M}) :: String
 
     body = kinfo.kerneldef.body
 
@@ -422,7 +477,10 @@ end
 
 # accel generate
 function generate!(ainfo::AccelInfo, buildtype::BuildType,
-                    launchid::String, inargs::Vector, innames::NTuple)
+                launchid::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                innames::NTuple{N, String} where {N}) :: String
+
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
         code = gencode_fortran_openacc(ainfo, buildtype, launchid, inargs, innames)
