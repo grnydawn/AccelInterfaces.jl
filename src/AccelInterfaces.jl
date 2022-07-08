@@ -50,6 +50,7 @@ struct AccelInfo
     compile::Union{String, Nothing}
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
+    dtypecache::Dict{T, String} where T<:DataType
 
     function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
                     constvars::NTuple{N,JaiConstType} where {N}=(),
@@ -76,7 +77,8 @@ struct AccelInfo
         end
 
         new(accelid, acceltype, ismaster, constvars, constnames, compile, 
-            Dict{String, Ptr{Nothing}}(), workdir)
+            Dict{String, Ptr{Nothing}}(), workdir,
+            Dict{DataType, String}())
     end
 end
 
@@ -233,18 +235,21 @@ function argsdtypes(ainfo::AccelInfo,
         sizes[index] = size(arg)
 
         if typeof(arg) <: AbstractArray
-            #dtypes[index] = Ptr{typeof(arg)}
-            dtypes[index] = string(Ptr{typeof(arg)})
+            dtype = Ptr{typeof(arg)}
 
         elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
-            #dtypes[index] = typeof(arg)
-            dtypes[index] = string(typeof(arg))
+            dtype = typeof(arg)
 
         elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
-            #dtypes[index] = Ref{typeof(arg)}
-            #dtypes[index] = String(Ref{typeof(arg)})
-            dtypes[index] = string(Ref{typeof(arg)})
+            dtype = Ref{typeof(arg)}
+        end
 
+        if haskey(ainfo.dtypecache, dtype)
+            dtypes[index] = ainfo.dtypecache[dtype]
+
+        else
+            dtypes[index] = string(dtype)
+            ainfo.dtypecache[dtype] = dtypes[index]
         end
     end
 
