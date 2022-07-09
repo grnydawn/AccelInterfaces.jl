@@ -147,6 +147,7 @@ function directive(accel::AccelInfo, buildtype::BuildType,
             dfunc, argtypes = accel.directcache[cachekey]
             ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
             @eval return $ccallexpr
+            return
         end
     end
 
@@ -251,6 +252,7 @@ function launch(kinfo::KernelInfo,
             kfunc, argtypes = kinfo.launchcache[cachekey]
             ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
             @eval return $ccallexpr
+            return
         end
     end
 
