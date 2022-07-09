@@ -162,23 +162,6 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
     return arguments, join(typedecls, "\n")
 end
 
-function fortran_typedecls(launchid::String, buildtype::BuildType,
-                inargs::NTuple{N, JaiDataType} where {N},
-                innames::NTuple{N, String} where {N}) :: String
-
-    typedecls = String[]
-
-    for (arg, varname) in zip(inargs, innames)
-
-        typestr, dimstr = typedef(arg)
-        intent = buildtype in (JAI_DEALLOCATE, JAI_UPDATEFROM) ? "INOUT" : "INOUT"
-
-        push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
-    end
-
-    return join(typedecls, "\n")
-end
-
 
 function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
                 kernelbody::String,

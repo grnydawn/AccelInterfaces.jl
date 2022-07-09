@@ -18,7 +18,7 @@ import OffsetArrays.OffsetArray,
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
        JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo,
        KernelInfo, get_accel, get_kernel, directive,
-       @enterdata, @exitdata, @launch
+       @jenterdata, @jexitdata, @jlaunch, jaccel
 
 
 const JAI_VERSION = "0.0.1"
@@ -53,6 +53,7 @@ struct AccelInfo
     accelid::String
     acceltype::AccelType
     ismaster::Bool
+    device::Int64
     constvars::NTuple{N,JaiConstType} where {N}
     constnames::NTuple{N, String} where {N}
     compile::Union{String, Nothing}
@@ -64,14 +65,12 @@ struct AccelInfo
     function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
                     constvars::NTuple{N,JaiConstType} where {N}=(),
                     compile::Union{String, Nothing}=nothing,
+                    device::Int64=-1,
                     constnames::NTuple{N, String} where {N}=(),
                     workdir::Union{String, Nothing}=nothing)
 
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
-
-        #accelid = bytes2hex(sha1(string(Sys.STDLIB, JAI_VERSION,
-        #                acceltype, constvars, constnames, compile))[1:4])
 
         io = IOBuffer()
         ser = serialize(io, (Sys.STDLIB, JAI_VERSION, acceltype, constvars, constnames, compile))
@@ -85,7 +84,7 @@ struct AccelInfo
             mkdir(workdir)
         end
 
-        new(accelid, acceltype, ismaster, constvars, constnames, compile, 
+        new(accelid, acceltype, ismaster, device, constvars, constnames, compile, 
             Dict{String, Ptr{Nothing}}(), workdir, Dict{DataType, String}(),
             Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
     end
@@ -135,6 +134,9 @@ function directive(accel::AccelInfo, buildtype::BuildType,
             names::NTuple{N, String} where {N}=(),
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
+
+    data = (accel.device, data...)
+    names = ("jai_arg_device_num", names...)
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
         return 0::Int64
@@ -234,16 +236,18 @@ function argsdtypes(ainfo::AccelInfo,
 end
 
 # kernel launch
-function launch(kinfo::KernelInfo,
+function launch_kernel(kinfo::KernelInfo,
             invars::Vararg{JaiDataType, N} where {N};
             innames::NTuple{N, String} where {N}=(),
             outnames::NTuple{N, String} where {N}=(),
-            outvars::NTuple{N,JaiDataType} where {N}=(),
-            compile::Union{String, Nothing}=nothing,
+            output::NTuple{N,JaiDataType} where {N}=(),
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
 
-    args = (invars..., outvars...)
+    invars = (kinfo.accel.device, invars...)
+    innames = ("jai_arg_device_num", innames...)
+
+    args = (invars..., output...)
     cachekey = (_lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
@@ -255,7 +259,7 @@ function launch(kinfo::KernelInfo,
     end
 
     indtypes, insizes = argsdtypes(kinfo.accel, invars...)
-    outdtypes, outsizes = argsdtypes(kinfo.accel, outvars...)
+    outdtypes, outsizes = argsdtypes(kinfo.accel, output...)
     dtypes = vcat(indtypes, outdtypes)
 
     io = IOBuffer()
@@ -269,15 +273,14 @@ function launch(kinfo::KernelInfo,
         dlib = kinfo.accel.sharedlibs[launchid]
 
     else
-        build!(kinfo, launchid, libpath, invars, outvars,
-                innames, outnames, compile)
+        build!(kinfo, launchid, libpath, invars, output, innames, outnames)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
     end
 
     kfunc = dlsym(dlib, :jai_launch)
     local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
-    ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
+    local ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
         kinfo.launchcache[cachekey] = (kfunc, argtypes)
@@ -323,12 +326,9 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
-                outnames::NTuple{M, String} where {M},
-                compile::Union{String, Nothing}=nothing) :: String
+                outnames::NTuple{M, String} where {M}) :: String
 
-    if compile == nothing
-        compile = kinfo.accel.compile
-    end
+    compile = kinfo.accel.compile
 
     srcfile, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid,
                                     compile)
@@ -338,6 +338,7 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
 
     # generate source code
     if !ispath(outpath)
+
         code = generate!(kinfo, launchid, inargs, outargs, innames, outnames)
 
         if !ispath(outpath)
@@ -386,8 +387,8 @@ end
 # non-kernel build
 function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 outpath::String,
-                inargs::NTuple{N, JaiDataType} where {N},
-                innames::NTuple{N, String} where {N}) :: String
+                args::NTuple{N, JaiDataType} where {N},
+                names::NTuple{N, String} where {N}) :: String
 
     srcfile, compile = setup_build(ainfo.acceltype, buildtype,
                 launchid, ainfo.compile)
@@ -397,7 +398,7 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
 
     # generate source code
     if !ispath(outpath)
-        code = generate!(ainfo, buildtype, launchid, inargs, innames)
+        code = generate!(ainfo, buildtype, launchid, args, names)
 
         if !ispath(outpath)
 
@@ -467,12 +468,12 @@ end
 # accel generate
 function generate!(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
-                inargs::NTuple{N, JaiDataType} where {N},
-                innames::NTuple{N, String} where {N}) :: String
+                args::NTuple{N, JaiDataType} where {N},
+                names::NTuple{N, String} where {N}) :: String
 
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_openacc(ainfo, buildtype, launchid, inargs, innames)
+        code = gencode_fortran_openacc(ainfo, buildtype, launchid, args, names)
 
     else
         error(string(ainfo.acceltype) * " is not supported for allocation.")
@@ -483,26 +484,32 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType,
 end
 
 
-macro enterdata(accel, directs...)
+macro jenterdata(accel, directs...)
 
     tmp = Expr(:block)
     allocs = Expr[]
     nonallocs = Expr[]
     alloccount = 1
     updatetocount = 1
-    allocnames = ("x", "y", "z")
-    updatenames = ("x","y")
+    allocnames = String[]
+    updatenames = String[]
 
     for direct in directs
         insert!(direct.args, 2, accel)
 
         if direct.args[1] == :allocate
+            for uvar in direct.args[3:end]
+                push!(allocnames, String(uvar))
+            end
             insert!(direct.args, 3, JAI_ALLOCATE)
             insert!(direct.args, 4, alloccount)
             alloccount += 1
             push!(allocs, direct)
 
         elseif direct.args[1] == :update
+            for dvar in direct.args[3:end]
+                push!(updatenames, String(dvar))
+            end
             insert!(direct.args, 3, JAI_UPDATETO)
             insert!(direct.args, 4, updatetocount)
             updatetocount += 1
@@ -543,26 +550,34 @@ macro enterdata(accel, directs...)
     return(tmp)
 end
 
-macro exitdata(accel, directs...)
+macro jexitdata(accel, directs...)
+
 
     tmp = Expr(:block)
     deallocs = Expr[]
     nondeallocs = Expr[]
     updatefromcount = 1
     dealloccount = 1
-    deallocnames = ("x", "y", "z")
-    updatenames = ("z",)
+    deallocnames = String[]
+    updatenames = String[]
 
     for direct in directs
+
         insert!(direct.args, 2, accel)
 
         if direct.args[1] == :update
+            for uvar in direct.args[3:end]
+                push!(updatenames, String(uvar))
+            end
             insert!(direct.args, 3, JAI_UPDATEFROM)
             insert!(direct.args, 4, updatefromcount)
             updatefromcount += 1
             push!(nondeallocs, direct)
 
         elseif direct.args[1] == :deallocate
+            for dvar in direct.args[3:end]
+                push!(deallocnames, String(dvar))
+            end
             insert!(direct.args, 3, JAI_DEALLOCATE)
             insert!(direct.args, 4, dealloccount)
             dealloccount += 1
@@ -600,21 +615,33 @@ macro exitdata(accel, directs...)
         push!(tmp.args, esc(direct))
     end
 
-    dump(tmp)
+    #dump(tmp)
     return(tmp)
 end
 
-macro launch(largs...)
+macro jlaunch(largs...)
     tmp = Expr(:call)
-    push!(tmp.args, :launch)
-    innames = ("x", "y")
-    outnames = ("z",)
+    push!(tmp.args, :launch_kernel)
+    innames = String[]
+    outnames = String[]
 
     for larg in largs
+        if larg isa Symbol
+            push!(innames, String(larg))
+
+        elseif larg.head == :parameters
+            for param in larg.args
+                if param.head  == :kw && param.args[1] == :output
+                    for ovar in param.args[2].args
+                        push!(outnames, String(ovar))
+                    end
+                end
+            end
+        end
         push!(tmp.args, esc(larg))
     end
 
-    kwinnames = Expr(:kw, :innames, Expr(:tuple, innames...))
+    kwinnames = Expr(:kw, :innames, Expr(:tuple, innames[2:end]...))
     push!(tmp.args, kwinnames)
 
     kwoutnames = Expr(:kw, :outnames, Expr(:tuple, outnames...))
@@ -626,8 +653,19 @@ macro launch(largs...)
     kwfile = Expr(:kw, :_filepath_, string(__source__.file))
     push!(tmp.args, kwfile)
 
+    #dump(tmp)
     return(tmp)
 
 end
+
+#@generated function jaccel(acceltype::AccelType; ismaster::Bool=true,
+#                    const::NTuple{N,JaiConstType} where {N}=(),
+#                    compile::Union{String, Nothing}=nothing,
+#                    workdir::Union{String, Nothing}=nothing) :: AccelInfo
+#
+#    constnames = ("TEST1", "TEST2")
+#    return :(AccelInfo(acceltype, ismaster=ismaster, constvars=const,
+#            constnames=constnames, workdir=workdir))
+#end
 
 end
