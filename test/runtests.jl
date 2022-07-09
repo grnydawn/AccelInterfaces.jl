@@ -27,13 +27,13 @@ function fortran_tests()
 
     compile = "ftn -fPIC -shared -g"
 
-    @enterdata accel allocate(x, y, z, names=(innames..., outnames...))
+    @enterdata accel allocate(x, y, z)
 
-    @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
+    @launch(kernel, x, y; outvars=(z,), compile=compile)
 
     @test z == res
 
-    @exitdata accel deallocate(x, y, z, names=(innames..., outnames...))
+    @exitdata accel deallocate(x, y, z)
 
 end
 
@@ -54,11 +54,14 @@ function fortran_openacc_tests()
 # - any order of allocate, update, deallocate
 # - check allowed directives at enter and exit
 
-    @enterdata accel allocate(x, y, z, names=(innames..., outnames...)) update(x, y, names=innames)
+    @enterdata accel allocate(x, y, z) update(x, y)
+    #@enterdata accel allocate(x, y, z, names=(innames..., outnames...)) update(x, y, names=innames)
 
-    @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
+    #@launch(kernel, x, y, outvars=(z,), innames=innames, outnames=outnames, compile=compile)
+    @launch(kernel, x, y; outvars=(z,), compile=compile)
 
-    @exitdata accel update(z, names=outnames) deallocate(x, y, z, names=(innames..., outnames...))
+    #@exitdata accel update(z, names=outnames) deallocate(x, y, z, names=(innames..., outnames...))
+    @exitdata accel update(z) deallocate(x, y, z)
 
     @test z == res
 

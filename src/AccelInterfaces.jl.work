@@ -234,7 +234,7 @@ function argsdtypes(ainfo::AccelInfo,
 end
 
 # kernel launch
-function launch(kinfo::KernelInfo,
+function launch_kernel(kinfo::KernelInfo,
             invars::Vararg{JaiDataType, N} where {N};
             innames::NTuple{N, String} where {N}=(),
             outnames::NTuple{N, String} where {N}=(),
@@ -490,8 +490,6 @@ macro enterdata(accel, directs...)
     nonallocs = Expr[]
     alloccount = 1
     updatetocount = 1
-    allocnames = ("x", "y", "z")
-    updatenames = ("x","y")
 
     for direct in directs
         insert!(direct.args, 2, accel)
@@ -513,34 +511,20 @@ macro enterdata(accel, directs...)
 
         end
 
+        direct.args[1] = :directive
+
+        kwline = Expr(:kw, :_lineno_, __source__.line)
+        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+        push!(direct.args, kwline)
+        push!(direct.args, kwfile)
     end
 
     for direct in (allocs..., nonallocs...)
-
-        if direct.args[1] == :update
-            kwupdatenames = Expr(:kw, :names, Expr(:tuple, updatenames...))
-            push!(direct.args, kwupdatenames)
-
-        elseif direct.args[1] == :allocate
-
-            kwallocnames = Expr(:kw, :names, Expr(:tuple, allocnames...))
-            push!(direct.args, kwallocnames)
-
-        end
-
-        kwline = Expr(:kw, :_lineno_, __source__.line)
-        push!(direct.args, kwline)
-
-        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
-        push!(direct.args, kwfile)
-
-        direct.args[1] = :directive
-
-        push!(tmp.args, esc(direct))
+        push!(tmp.args, direct)
     end
 
     #dump(tmp)
-    return(tmp)
+    return(esc(tmp))
 end
 
 macro exitdata(accel, directs...)
@@ -550,8 +534,6 @@ macro exitdata(accel, directs...)
     nondeallocs = Expr[]
     updatefromcount = 1
     dealloccount = 1
-    deallocnames = ("x", "y", "z")
-    updatenames = ("z",)
 
     for direct in directs
         insert!(direct.args, 2, accel)
@@ -572,52 +554,66 @@ macro exitdata(accel, directs...)
             error(string(direct.args[1]) * " is not supported.")
 
         end
-    end
-
-    for direct in (nondeallocs..., deallocs...)
-
-        if direct.args[1] == :update
-            kwupdatenames = Expr(:kw, :names, Expr(:tuple, updatenames...))
-            #kwupdatenames = Expr(:kw, :names, :($((updatenames...),)))
-            push!(direct.args, kwupdatenames)
-
-        elseif direct.args[1] == :deallocate
-
-            kwdeallocnames = Expr(:kw, :names, Expr(:tuple, deallocnames...))
-            #kwdeallocnames = Expr(:kw, :names, :($((deallocnames...),)))
-            push!(direct.args, kwdeallocnames)
-
-        end
-
-        kwline = Expr(:kw, :_lineno_, __source__.line)
-        push!(direct.args, kwline)
-
-        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
-        push!(direct.args, kwfile)
 
         direct.args[1] = :directive
 
-        push!(tmp.args, esc(direct))
+        kwline = Expr(:kw, :_lineno_, __source__.line)
+        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+        push!(direct.args, kwline)
+        push!(direct.args, kwfile)
     end
 
-    dump(tmp)
-    return(tmp)
+    for direct in (nondeallocs..., deallocs...)
+        push!(tmp.args, direct)
+    end
+
+    #dump(tmp)
+    return(esc(tmp))
 end
 
-macro launch(largs...)
-    tmp = Expr(:call)
-    push!(tmp.args, :launch)
-    innames = ("x", "y")
-    outnames = ("z",)
+macro launch(arg1, largs...)
 
-    for larg in largs
-        push!(tmp.args, esc(larg))
+    tmp = Expr(:call)
+    innames = Vector{String}()
+    #outnames = Vector{String}()
+    outnames = ["z"]
+
+    push!(tmp.args, :launch_kernel)
+
+    if arg1 isa Symbol
+        push!(tmp.args, esc(arg1))
+
+        for larg in largs
+            if larg isa Symbol
+                push!(innames, String(larg))
+            end
+            push!(tmp.args, esc(larg))
+        end
+    else
+        push!(tmp.args, esc(largs[1]))
+
+        for larg in largs[2:end]
+            if larg isa Symbol
+                push!(innames, String(larg))
+
+            elseif larg isa Expr && larg.args[1] == :outvars
+                for ovar in largs.args[2].args
+                    println("EEE", ovar)
+                    #push!(outnames, String(ovar))
+                end
+            end
+            push!(tmp.args, esc(larg))
+        end
+
+        push!(tmp.args, esc(arg1))
     end
 
-    kwinnames = Expr(:kw, :innames, Expr(:tuple, innames...))
+    dump(outnames)
+
+    kwinnames = Expr(:kw, :innames, innames)
     push!(tmp.args, kwinnames)
 
-    kwoutnames = Expr(:kw, :outnames, Expr(:tuple, outnames...))
+    kwoutnames = Expr(:kw, :outnames, outnames)
     push!(tmp.args, kwoutnames)
 
     kwline = Expr(:kw, :_lineno_, __source__.line)
