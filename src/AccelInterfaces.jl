@@ -16,15 +16,23 @@ import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
-       JAI_ANYACCEL, JAI_CPP_OPENACC, JAI_HOST, JAI_DEVICE, AccelInfo,
-       KernelInfo, get_accel, get_kernel, allocate, deallocate, update,
-       launch!, @enterdata, @exitdata, @launch
+       JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo,
+       KernelInfo, get_accel, get_kernel, directive,
+       @enterdata, @exitdata, @launch
 
 
 const JAI_VERSION = "0.0.1"
 const TIMEOUT = 10
 
-@enum DeviceType JAI_HOST JAI_DEVICE
+#@enum DeviceType JAI_HOST JAI_DEVICE
+
+@enum BuildType::Int64 begin
+    JAI_ALLOCATE    = 10
+    JAI_UPDATETO    = 20
+    JAI_LAUNCH      = 30
+    JAI_UPDATEFROM  = 40
+    JAI_DEALLOCATE  = 50
+end
 
 @enum AccelType begin
         JAI_FORTRAN
@@ -51,6 +59,7 @@ struct AccelInfo
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     dtypecache::Dict{T, String} where T<:DataType
+    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}
 
     function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
                     constvars::NTuple{N,JaiConstType} where {N}=(),
@@ -77,8 +86,8 @@ struct AccelInfo
         end
 
         new(accelid, acceltype, ismaster, constvars, constnames, compile, 
-            Dict{String, Ptr{Nothing}}(), workdir,
-            Dict{DataType, String}())
+            Dict{String, Ptr{Nothing}}(), workdir, Dict{DataType, String}(),
+            Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
     end
 end
 
@@ -120,19 +129,29 @@ function get_kernel(accel::AccelInfo, path::String) :: KernelInfo
     return KernelInfo(accel, path)
 end
 
-function accel_method(buildtype::BuildType, accel::AccelInfo,
+function directive(accel::AccelInfo, buildtype::BuildType,
+            buildtypecount::Int64,
             data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
+            names::NTuple{N, String} where {N}=(),
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing) :: Int64
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
         return 0::Int64
     end
 
+    cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
+
+    if _lineno_ isa Int64 && _filepath_ isa String
+        if haskey(accel.directcache, cachekey)
+            dfunc, argtypes = accel.directcache[cachekey]
+            ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
+            @eval return $ccallexpr
+        end
+    end
+
     dtypes, sizes = argsdtypes(accel, data...)
 
-    args = data
-
-    #launchid = bytes2hex(sha1(string(buildtype, accel.accelid, dtypes, sizes))[1:4])
     io = IOBuffer()
     ser = serialize(io, (buildtype, accel.accelid, dtypes, sizes))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
@@ -144,7 +163,7 @@ function accel_method(buildtype::BuildType, accel::AccelInfo,
         dlib = accel.sharedlibs[launchid]
 
     else
-        build!(accel, buildtype, launchid, libpath, args, names)
+        build!(accel, buildtype, launchid, libpath, data, names)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
     end
@@ -152,11 +171,11 @@ function accel_method(buildtype::BuildType, accel::AccelInfo,
     if buildtype == JAI_ALLOCATE
         local dfunc = dlsym(dlib, :jai_allocate)
 
-    elseif buildtype == JAI_COPYIN
-        local dfunc = dlsym(dlib, :jai_copyin)
+    elseif buildtype == JAI_UPDATETO
+        local dfunc = dlsym(dlib, :jai_updateto)
 
-    elseif buildtype == JAI_COPYOUT
-        local dfunc = dlsym(dlib, :jai_copyout)
+    elseif buildtype == JAI_UPDATEFROM
+        local dfunc = dlsym(dlib, :jai_updatefrom)
 
     elseif buildtype == JAI_DEALLOCATE
         local dfunc = dlsym(dlib, :jai_deallocate)
@@ -166,57 +185,15 @@ function accel_method(buildtype::BuildType, accel::AccelInfo,
 
     end
 
-    #local argtypes = Meta.parse(string(((dtypes...),)))
     local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
-    local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(args...)))
+    local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
+
+    if _lineno_ isa Int64 && _filepath_ isa String
+        accel.directcache[cachekey] = (dfunc, argtypes)
+    end
 
     @eval return $ccallexpr
 
-end
-
-function allocate(accel::AccelInfo,
-            data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
-    return accel_method(JAI_ALLOCATE, accel, data...; names=names)
-end
-
-function allocate(kernel::KernelInfo,
-            data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
-    return allocate(kernel.accel, data...; names=names)
-end
-
-function deallocate(accel::AccelInfo,
-            data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
-    return accel_method(JAI_DEALLOCATE, accel, data...; names=names)
-end
-
-function deallocate(kernel::KernelInfo,
-            data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
-    return deallocate(kernel.accel, data...; names=names)
-end
-
-function update(devtype::DeviceType, accel::AccelInfo,
-            data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
-
-	if devtype == JAI_HOST
-		return accel_method(JAI_COPYOUT, accel, data...; names=names)
-
-	elseif devtype == JAI_DEVICE
-		return accel_method(JAI_COPYIN, accel, data...; names=names)
-
-	else
-		error(string(devtype) * " is not supported.")
-	end
-end
-
-function update(devtype::DeviceType, kernel::KernelInfo,
-            data::Vararg{JaiDataType, N} where {N};
-            names::NTuple{N, String} where {N}=()) :: Int64
-    return update(devtype::DeviceType, kernel.accel, data...; names=names)
 end
 
 function argsdtypes(ainfo::AccelInfo,
@@ -506,35 +483,91 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType,
 end
 
 
-macro enterdata(directs...)
-    tmp = Expr(:block)
-    for direct in directs
-        push!(tmp.args, esc(direct))
-#
-#        kwline = Expr(:kw, :_lineno_, __source__.line)
-#        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
-#        push!(tmp.args, esc(kwline))
-#        push!(tmp.args, esc(kwfile))
+macro enterdata(accel, directs...)
 
-        #dump(direct)
+    tmp = Expr(:block)
+    allocs = Expr[]
+    nonallocs = Expr[]
+    alloccount = 1
+    updatetocount = 1
+
+    for direct in directs
+        insert!(direct.args, 2, accel)
+
+        if direct.args[1] == :allocate
+            insert!(direct.args, 3, JAI_ALLOCATE)
+            insert!(direct.args, 4, alloccount)
+            alloccount += 1
+            push!(allocs, direct)
+
+        elseif direct.args[1] == :update
+            insert!(direct.args, 3, JAI_UPDATETO)
+            insert!(direct.args, 4, updatetocount)
+            updatetocount += 1
+            push!(nonallocs, direct)
+
+        else
+            error(string(direct.args[1]) * " is not supported.")
+
+        end
+
+        direct.args[1] = :directive
+
+        kwline = Expr(:kw, :_lineno_, __source__.line)
+        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+        push!(direct.args, kwline)
+        push!(direct.args, kwfile)
     end
+
+    for direct in (allocs..., nonallocs...)
+        push!(tmp.args, esc(direct))
+    end
+
+    #dump(tmp)
     return(tmp)
 end
 
-macro exitdata(directs...)
+macro exitdata(accel, directs...)
 
     tmp = Expr(:block)
+    deallocs = Expr[]
+    nondeallocs = Expr[]
+    updatefromcount = 1
+    dealloccount = 1
 
     for direct in directs
-        push!(tmp.args, esc(direct))
-#
-#        kwline = Expr(:kw, :_lineno_, __source__.line)
-#        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
-#        push!(tmp.args, esc(kwline))
-#        push!(tmp.args, esc(kwfile))
+        insert!(direct.args, 2, accel)
 
-        #dump(direct)
+        if direct.args[1] == :update
+            insert!(direct.args, 3, JAI_UPDATEFROM)
+            insert!(direct.args, 4, updatefromcount)
+            updatefromcount += 1
+            push!(nondeallocs, direct)
+
+        elseif direct.args[1] == :deallocate
+            insert!(direct.args, 3, JAI_DEALLOCATE)
+            insert!(direct.args, 4, dealloccount)
+            dealloccount += 1
+            push!(deallocs, direct)
+
+        else
+            error(string(direct.args[1]) * " is not supported.")
+
+        end
+
+        direct.args[1] = :directive
+
+        kwline = Expr(:kw, :_lineno_, __source__.line)
+        kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+        push!(direct.args, kwline)
+        push!(direct.args, kwfile)
     end
+
+    for direct in (nondeallocs..., deallocs...)
+        push!(tmp.args, esc(direct))
+    end
+
+    #dump(tmp)
     return(tmp)
 end
 

@@ -1,6 +1,4 @@
 
-@enum BuildType JAI_LAUNCH JAI_ALLOCATE JAI_DEALLOCATE JAI_COPYIN JAI_COPYOUT
-
 const ACCEL_CODE = Dict{AccelType, String}(
     JAI_FORTRAN => "FO",
     JAI_FORTRAN_OPENACC => "FA",
@@ -13,8 +11,8 @@ const ACCEL_CODE = Dict{AccelType, String}(
 const BUILD_CODE = Dict{BuildType, String}(
     JAI_LAUNCH => "L",
     JAI_ALLOCATE => "A",
-    JAI_COPYIN => "I",
-    JAI_COPYOUT => "O",
+    JAI_UPDATETO => "I",
+    JAI_UPDATEFROM => "O",
     JAI_DEALLOCATE => "D"
 )
 
@@ -39,8 +37,8 @@ const LIBFUNC_NAME = Dict{AccelType, Dict}(
     JAI_FORTRAN_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
-        JAI_COPYIN => "jai_copyin",
-        JAI_COPYOUT => "jai_copyout",
+        JAI_UPDATETO => "jai_updateto",
+        JAI_UPDATEFROM => "jai_updatefrom",
         JAI_DEALLOCATE => "jai_deallocate"
     ),
     JAI_CPP => Dict{BuildType, String}(
@@ -49,8 +47,8 @@ const LIBFUNC_NAME = Dict{AccelType, Dict}(
     JAI_CPP_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
-        JAI_COPYIN => "jai_copyin",
-        JAI_COPYOUT => "jai_copyout",
+        JAI_UPDATETO => "jai_updateto",
+        JAI_UPDATEFROM => "jai_updatefrom",
         JAI_DEALLOCATE => "jai_deallocate"
     )
 )

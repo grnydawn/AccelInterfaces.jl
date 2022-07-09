@@ -13,10 +13,10 @@ function fortran_openacc_directives(buildtype::BuildType,
         if buildtype == JAI_ALLOCATE
             push!(directs, "!\$acc enter data create($(varname))\n")
 
-        elseif buildtype == JAI_COPYIN
+        elseif buildtype == JAI_UPDATETO
             push!(directs, "!\$acc update device($(varname))\n")
 
-        elseif buildtype == JAI_COPYOUT
+        elseif buildtype == JAI_UPDATEFROM
             push!(directs, "!\$acc update host($(varname))\n")
 
         elseif buildtype == JAI_DEALLOCATE

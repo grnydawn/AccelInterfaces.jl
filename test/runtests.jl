@@ -27,13 +27,13 @@ function fortran_tests()
 
     compile = "ftn -fPIC -shared -g"
 
-    @enterdata allocate(accel, x, y, z, names=(innames..., outnames...))
+    @enterdata accel allocate(x, y, z, names=(innames..., outnames...))
 
     @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
 
     @test z == res
 
-    @exitdata deallocate(accel, x, y, z, names=(innames..., outnames...))
+    @exitdata accel deallocate(x, y, z, names=(innames..., outnames...))
 
 end
 
@@ -54,13 +54,11 @@ function fortran_openacc_tests()
 # - any order of allocate, update, deallocate
 # - check allowed directives at enter and exit
 
-    @enterdata allocate(accel, x, y, z, names=(innames..., outnames...)) update(JAI_DEVICE, accel, x, y, names=innames)
+    @enterdata accel allocate(x, y, z, names=(innames..., outnames...)) update(x, y, names=innames)
 
     @launch(kernel, x, y; outvars=(z,), innames=innames, outnames=outnames, compile=compile)
 
-    update(JAI_HOST, accel, z, names=outnames)
-
-    @exitdata deallocate(accel, x, y, z, names=(innames..., outnames...))
+    @exitdata accel update(z, names=outnames) deallocate(x, y, z, names=(innames..., outnames...))
 
     @test z == res
 

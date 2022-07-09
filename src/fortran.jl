@@ -171,7 +171,7 @@ function fortran_typedecls(launchid::String, buildtype::BuildType,
     for (arg, varname) in zip(inargs, innames)
 
         typestr, dimstr = typedef(arg)
-        intent = buildtype in (JAI_DEALLOCATE, JAI_COPYOUT) ? "INOUT" : "INOUT"
+        intent = buildtype in (JAI_DEALLOCATE, JAI_UPDATEFROM) ? "INOUT" : "INOUT"
 
         push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
     end
