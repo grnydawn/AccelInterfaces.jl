@@ -15,10 +15,10 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
+        #JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo, KernelInfo, get_accel, get_kernel,
 export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
-       JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo,
-       KernelInfo, get_accel, get_kernel, directive,
-       @jenterdata, @jexitdata, @jlaunch, jaccel
+        jai_directive, jai_accel_init, jai_accel_fini, jai_kernel_init,
+        @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel
 
 
 const JAI_VERSION = "0.0.1"
@@ -45,6 +45,16 @@ end
         JAI_HEADER
 end
 
+const _accelmap = Dict{String, AccelType}(
+    "fortran" => JAI_FORTRAN,
+    "fortran_openacc" => JAI_FORTRAN_OPENACC,
+    "fortran_omptarget" => JAI_FORTRAN_OMPTARGET,
+    "cpp" => JAI_CPP,
+    "cpp_openacc" => JAI_CPP_OPENACC,
+    "cpp_omptarget" => JAI_CPP_OMPTARGET,
+    "any" => JAI_ANYACCEL
+)
+
 const JaiConstType = Union{Number, NTuple{N, T}, AbstractArray{T, N}} where {N, T<:Number}
 const JaiDataType = JaiConstType
 
@@ -53,41 +63,95 @@ struct AccelInfo
     accelid::String
     acceltype::AccelType
     ismaster::Bool
-    device::Int64
-    constvars::NTuple{N,JaiConstType} where {N}
-    constnames::NTuple{N, String} where {N}
+    device_type::Int64
+    device_num::Int64
+    const_vars::NTuple{N,JaiConstType} where {N}
+    const_names::NTuple{N, String} where {N}
     compile::Union{String, Nothing}
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     dtypecache::Dict{T, String} where T<:DataType
     directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}
 
-    function AccelInfo(acceltype::AccelType; ismaster::Bool=true,
-                    constvars::NTuple{N,JaiConstType} where {N}=(),
-                    compile::Union{String, Nothing}=nothing,
-                    device::Int64=-1,
-                    constnames::NTuple{N, String} where {N}=(),
-                    workdir::Union{String, Nothing}=nothing)
+    function AccelInfo(;master::Bool=true,
+            const_vars::NTuple{N,JaiConstType} where {N}=(),
+            const_names::NTuple{N, String} where {N}=(),
+            framework::NTuple{N, String} where {N}=(),
+            device::NTuple{N, Integer} where {N}=(),
+            compile::NTuple{N, String} where {N}=(),
+            workdir::Union{String, Nothing}=nothing,
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
 
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
 
         io = IOBuffer()
-        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, acceltype, constvars, constnames, compile))
+        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, framework, const_vars,
+                        const_names, compile, _lineno_, _filepath_))
         accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
         if workdir == nothing
             workdir = joinpath(pwd(), ".jaitmp")
         end
 
-        if ismaster && !isdir(workdir)
+        if master && !isdir(workdir)
             mkdir(workdir)
         end
 
-        new(accelid, acceltype, ismaster, device, constvars, constnames, compile, 
-            Dict{String, Ptr{Nothing}}(), workdir, Dict{DataType, String}(),
-            Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
+        # TODO: support multiple framework arguments
+        acceltype = _accelmap[lowercase(framework[1])]
+
+        if length(device) == 0
+            device_type = -1
+            device_num = -1
+
+        elseif length(device) == 1
+            device_type = -1
+            device_num = device[1]
+
+        else
+            device_type = device[1]
+            device_num = device[2]
+
+        end
+
+        # TODO: support multiple optional compiler commands
+        compile = length(compile) == 0 ? nothing : compile[1]
+
+        new(accelid, acceltype, master, device_type, device_num, const_vars,
+            const_names, compile, Dict{String, Ptr{Nothing}}(),
+            workdir, Dict{DataType, String}(),
+            Dict{Tuple{BuildType, Int64, Int64, String},
+            Tuple{Ptr{Nothing}, Expr}}())
     end
+end
+
+const _accelcache = Dict{String, AccelInfo}()
+
+function jai_accel_init(name::String; master::Bool=true,
+            const_vars::NTuple{N,JaiConstType} where {N}=(),
+            const_names::NTuple{N, String} where {N}=(),
+            framework::NTuple{N, String} where {N}=(),
+            device::NTuple{N, Integer} where {N}=(),
+            compile::NTuple{N, String} where {N}=(),
+            workdir::Union{String, Nothing}=nothing,
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+    accel = AccelInfo(master=master, const_vars=const_vars, const_names=const_names, 
+                    framework=framework, device=device, compile=compile,
+                    workdir=workdir, _lineno_=_lineno_, _filepath_=_filepath_)
+
+    global _accelcache[name] = accel
+end
+
+function jai_accel_fini(name::String;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing) :: Nothing
+
+
+
 end
 
 # NOTE: keep the order of includes
@@ -116,26 +180,26 @@ function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Not
 end
 
 function get_accel(acceltype::AccelType; ismaster::Bool=true,
-                    constvars::NTuple{N,JaiConstType} where {N}=(),
+                    const_vars::NTuple{N,JaiConstType} where {N}=(),
                     compile::Union{String, Nothing}=nothing,
-                    constnames::NTuple{N, String} where {N}=()) :: AccelInfo
+                    const_names::NTuple{N, String} where {N}=()) :: AccelInfo
 
-    return AccelInfo(acceltype, ismaster=ismaster, constvars=constvars,
-                    compile=compile, constnames=constnames)
+    return AccelInfo(acceltype, ismaster=ismaster, const_vars=const_vars,
+                    compile=compile, const_names=const_names)
 end
 
 function get_kernel(accel::AccelInfo, path::String) :: KernelInfo
     return KernelInfo(accel, path)
 end
 
-function directive(accel::AccelInfo, buildtype::BuildType,
+function jai_directive(accel::AccelInfo, buildtype::BuildType,
             buildtypecount::Int64,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=(),
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
 
-    data = (accel.device, data...)
+    data = (accel.device_num, data...)
     names = ("jai_arg_device_num", names...)
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
@@ -244,7 +308,7 @@ function launch_kernel(kinfo::KernelInfo,
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
 
-    invars = (kinfo.accel.device, invars...)
+    invars = (kinfo.accel.device_num, invars...)
     innames = ("jai_arg_device_num", innames...)
 
     args = (invars..., output...)
@@ -541,7 +605,7 @@ macro jenterdata(accel, directs...)
         kwfile = Expr(:kw, :_filepath_, string(__source__.file))
         push!(direct.args, kwfile)
 
-        direct.args[1] = :directive
+        direct.args[1] = :jai_directive
 
         push!(tmp.args, esc(direct))
     end
@@ -610,7 +674,7 @@ macro jexitdata(accel, directs...)
         kwfile = Expr(:kw, :_filepath_, string(__source__.file))
         push!(direct.args, kwfile)
 
-        direct.args[1] = :directive
+        direct.args[1] = :jai_directive
 
         push!(tmp.args, esc(direct))
     end
@@ -618,6 +682,27 @@ macro jexitdata(accel, directs...)
     #dump(tmp)
     return(tmp)
 end
+
+macro jkernel(kernelname, accelname, kernelspec)
+
+    tmp = Expr(:call)
+    push!(tmp.args, :jai_kernel_init)
+
+    push!(tmp.args, String(kernelname))
+    push!(tmp.args, String(accelname))
+    push!(tmp.args, esc(kernelspec))
+
+    kwline = Expr(:kw, :_lineno_, __source__.line)
+    push!(tmp.args, kwline)
+
+    kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+    push!(tmp.args, kwfile)
+
+    #dump(tmp)
+    return(tmp)
+
+end
+
 
 macro jlaunch(largs...)
     tmp = Expr(:call)
@@ -658,14 +743,110 @@ macro jlaunch(largs...)
 
 end
 
-#@generated function jaccel(acceltype::AccelType; ismaster::Bool=true,
-#                    const::NTuple{N,JaiConstType} where {N}=(),
-#                    compile::Union{String, Nothing}=nothing,
-#                    workdir::Union{String, Nothing}=nothing) :: AccelInfo
-#
-#    constnames = ("TEST1", "TEST2")
-#    return :(AccelInfo(acceltype, ismaster=ismaster, constvars=const,
-#            constnames=constnames, workdir=workdir))
-#end
+macro jaccel(accel, clauses...)
+
+    tmp = Expr(:block)
+
+    eval(quote import AccelInterfaces.jai_directive   end)
+    eval(quote import AccelInterfaces.jai_kernel_init end)
+    eval(quote import AccelInterfaces.jai_accel_init  end)
+    eval(quote import AccelInterfaces.jai_accel_fini  end)
+
+    init = Expr(:call)
+    push!(init.args, :jai_accel_init)
+    push!(init.args, string(accel))
+
+    for clause in clauses
+
+        if clause.args[1] == :constant
+            const_vars = clause.args[2:end]
+            const_names = [String(n) for n in const_vars]
+            const_vars = (esc(c) for c in const_vars)
+
+            push!(init.args, Expr(:kw, :const_vars, Expr(:tuple, const_vars...))) 
+            push!(init.args, Expr(:kw, :const_names, Expr(:tuple, const_names...)))
+
+        elseif clause.args[1] == :device
+            device = (esc(d) for d in clause.args[2:end])
+
+            push!(init.args, Expr(:kw, :device, Expr(:tuple, device...))) 
+
+        elseif clause.args[1] == :framework
+            framework = (String(f) for f in clause.args[2:end])
+
+            push!(init.args, Expr(:kw, :framework, Expr(:tuple, framework...))) 
+
+        elseif clause.args[1] == :compile
+            compile = (esc(c) for c in clause.args[2:end])
+
+            push!(init.args, Expr(:kw, :compile, Expr(:tuple, compile...))) 
+
+        elseif clause.args[1] == :set
+
+#    head: Symbol call
+#    args: Array{Any}((3,))
+#      1: Symbol set
+#      2: Expr
+#        head: Symbol kw
+#        args: Array{Any}((2,))
+#          1: Symbol master
+#          2: Symbol ismaster
+#      3: Expr
+#        head: Symbol kw
+#        args: Array{Any}((2,))
+#          1: Symbol workdir
+#          2: String "/test/dir"
+
+            for kwarg in clause.args[2:end]
+                if kwarg.head == :kw
+                    push!(init.args, Expr(:kw, kwarg.args[1], esc(kwarg.args[2]))) 
+                else
+                    error("set clause allows keyword argument only.")
+                end
+            end
+
+        else
+            error(string(clause.args[1]) * " is not supported.")
+
+        end
+    end
+
+    kwline = Expr(:kw, :_lineno_, __source__.line)
+    push!(init.args, kwline)
+
+    kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+    push!(init.args, kwfile)
+
+    push!(tmp.args, init)
+
+    #dump(tmp)
+    return(tmp)
+end
+
+
+macro jdecel(accel, clauses...)
+
+    tmp = Expr(:block)
+
+    fini = Expr(:call)
+    push!(fini.args, :jai_accel_fini)
+    push!(fini.args, string(accel))
+
+    for clause in clauses
+    end
+
+    kwline = Expr(:kw, :_lineno_, __source__.line)
+    push!(fini.args, kwline)
+
+    kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+    push!(fini.args, kwfile)
+
+    push!(tmp.args, fini)
+
+    #dump(tmp)
+    return(tmp)
+end
+
+
 
 end

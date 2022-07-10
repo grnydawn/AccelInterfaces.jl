@@ -152,7 +152,9 @@ struct KernelInfo
     kerneldef::KernelDef
     launchcache::Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}
 
-    function KernelInfo(accel::AccelInfo, kerneldef::String)
+    function KernelInfo(accel::AccelInfo, kerneldef::String;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
 
         kdef = kerneldef
 
@@ -162,24 +164,42 @@ struct KernelInfo
             end
         end
 
-        kdefobj = KernelDef(accel.acceltype, kdef)
+        KernelInfo(accel, KernelDef(accel.acceltype, kdef),
+            _lineno_=_lineno_, _filepath_=_filepath_)
+    end
+
+    function KernelInfo(accel::AccelInfo, kerneldef::IOStream;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+        KernelInfo(accel, read(kerneldef, String), _lineno_=_lineno_,
+            _filepath_=_filepath_)
+    end
+
+    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
 
         io = IOBuffer()
-        ser = serialize(io, (accel.accelid, kdefobj.specid))
+        ser = serialize(io, (accel.accelid, kerneldef.specid, _lineno_, _filepath_))
         kernelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-        new(kernelid, accel, kdefobj,
+        new(kernelid, accel, kerneldef,
             Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
-    end
-
-    function KernelInfo(accel::AccelInfo, kerneldef::IOStream) :: KernelInfo
-        KernelInfo(accel, read(kerneldef, String))
-    end
-
-    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef) :: KernelInfo
-        new(accel, kerneldef, Dict())
     end
 
 end
 
+const _kernelcache = Dict{String, KernelInfo}()
+
+function jai_kernel_init(kname::String, aname::String,
+            kspec::Union{String, KernelDef};
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+    accel = _accelcache[aname]
+    kernel = KernelInfo(accel, kspec, _lineno_=_lineno_, _filepath_=_filepath_)
+
+    global _kernelcache[kname] = kernel
+end
 
