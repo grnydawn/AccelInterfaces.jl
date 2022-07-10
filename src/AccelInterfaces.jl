@@ -148,10 +148,9 @@ end
 
 function jai_accel_fini(name::String;
             _lineno_::Union{Int64, Nothing}=nothing,
-            _filepath_::Union{String, Nothing}=nothing) :: Nothing
+            _filepath_::Union{String, Nothing}=nothing)
 
-
-
+    delete!(_accelcache, name)
 end
 
 # NOTE: keep the order of includes
@@ -192,12 +191,14 @@ function get_kernel(accel::AccelInfo, path::String) :: KernelInfo
     return KernelInfo(accel, path)
 end
 
-function jai_directive(accel::AccelInfo, buildtype::BuildType,
+function jai_directive(accel::String, buildtype::BuildType,
             buildtypecount::Int64,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=(),
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
+
+    accel = _accelcache[accel]
 
     data = (accel.device_num, data...)
     names = ("jai_arg_device_num", names...)
@@ -300,13 +301,15 @@ function argsdtypes(ainfo::AccelInfo,
 end
 
 # kernel launch
-function launch_kernel(kinfo::KernelInfo,
+function launch_kernel(kname::String,
             invars::Vararg{JaiDataType, N} where {N};
             innames::NTuple{N, String} where {N}=(),
             outnames::NTuple{N, String} where {N}=(),
             output::NTuple{N,JaiDataType} where {N}=(),
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
+
+    kinfo = _kernelcache[kname]
 
     invars = (kinfo.accel.device_num, invars...)
     innames = ("jai_arg_device_num", innames...)
@@ -559,7 +562,7 @@ macro jenterdata(accel, directs...)
     updatenames = String[]
 
     for direct in directs
-        insert!(direct.args, 2, accel)
+        insert!(direct.args, 2, string(accel))
 
         if direct.args[1] == :allocate
             for uvar in direct.args[3:end]
@@ -627,7 +630,7 @@ macro jexitdata(accel, directs...)
 
     for direct in directs
 
-        insert!(direct.args, 2, accel)
+        insert!(direct.args, 2, string(accel))
 
         if direct.args[1] == :update
             for uvar in direct.args[3:end]
@@ -710,9 +713,17 @@ macro jlaunch(largs...)
     innames = String[]
     outnames = String[]
 
+    flag = true
+
     for larg in largs
         if larg isa Symbol
-            push!(innames, String(larg))
+            if flag
+                push!(tmp.args, string(larg))
+                flag = false
+            else
+                push!(innames, String(larg))
+                push!(tmp.args, esc(larg))
+            end
 
         elseif larg.head == :parameters
             for param in larg.args
@@ -722,11 +733,11 @@ macro jlaunch(largs...)
                     end
                 end
             end
+            push!(tmp.args, esc(larg))
         end
-        push!(tmp.args, esc(larg))
     end
 
-    kwinnames = Expr(:kw, :innames, Expr(:tuple, innames[2:end]...))
+    kwinnames = Expr(:kw, :innames, Expr(:tuple, innames...))
     push!(tmp.args, kwinnames)
 
     kwoutnames = Expr(:kw, :outnames, Expr(:tuple, outnames...))

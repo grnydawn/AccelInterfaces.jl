@@ -108,7 +108,7 @@ function fortran_genparams(ainfo::AccelInfo) :: String
 
     typedecls = String[]
 
-    for (name, value) in zip(ainfo.constnames, ainfo.constvars)
+    for (name, value) in zip(ainfo.const_names, ainfo.const_vars)
 
         typestr, dimstr = typedef(value)
         push!(typedecls, typestr * dimstr * ", PARAMETER :: " * name * " = " *

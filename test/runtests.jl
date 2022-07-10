@@ -42,16 +42,11 @@ function fortran_openacc_tests()
 
     z = fill(0, N)
 
-
-    #accel = AccelInfo(JAI_FORTRAN_OPENACC, const_names=constnames,
-    #                const_vars=constvars, compile=acc_compile)
-
     ismaster = true
 
-    @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2) device(1) compile(acc_compile) set(master=ismaster)
+    @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2) compile(acc_compile) set(master=ismaster)
 
 
-    #kernel = KernelInfo(accel, "ex1.knl")
     @jkernel mykernel myaccel "ex1.knl"
 
     @jenterdata myaccel allocate(x, y, z) update(x, y)
