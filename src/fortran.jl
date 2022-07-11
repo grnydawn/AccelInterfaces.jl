@@ -126,9 +126,9 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
 
     onames = String[]
 
-    for (index, ovar) in enumerate(outargs)
-        if !(ovar in inargs)
-            push!(onames, outnames[index])
+    for (index, oname) in enumerate(outnames)
+        if !(oname in innames)
+            push!(onames, oname)
         end
     end
 
@@ -140,7 +140,7 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
 
         typestr, dimstr = typedef(arg)
 
-        if arg in outargs
+        if varname in outnames
             intentstr = ", INTENT(INOUT)"
 
         else
@@ -152,7 +152,7 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
     end
 
     for (arg, varname) in zip(outargs, outnames)
-        if !(arg in inargs)
+        if !(varname in innames)
             typestr, dimstr = typedef(arg)
             intentstr = ", INTENT(OUT)"
             push!(typedecls, typestr * dimstr * intentstr * " :: " * varname)
@@ -161,6 +161,114 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
 
     return arguments, join(typedecls, "\n")
 end
+
+# NEED FIX: output variable same to one of input variable disappears
+#function fortran_genvars(kinfo::KernelInfo, launchid::String,
+#                inargs::NTuple{N, JaiDataType} where {N},
+#                outargs::NTuple{M, JaiDataType} where {M},
+#                innames::NTuple{N, String} where {N},
+#                outnames::NTuple{M, String} where {M}) :: Tuple{String, String}
+#
+#    onames = String[]
+#
+#    for (index, ovar) in enumerate(outargs)
+#        if !(ovar in inargs)
+#            push!(onames, outnames[index])
+#        end
+#    end
+#
+#    arguments = join((innames...,onames...), ",")
+#
+#    typedecls = String[]
+#
+#    for (arg, varname) in zip(inargs, innames)
+#
+#        typestr, dimstr = typedef(arg)
+#
+#        if arg in outargs
+#            intentstr = ", INTENT(INOUT)"
+#
+#        else
+#            intentstr = ", INTENT(IN)"
+#
+#        end
+#
+#        push!(typedecls, typestr * dimstr * intentstr * " :: " * varname)
+#    end
+#
+#    for (arg, varname) in zip(outargs, outnames)
+#        if !(arg in inargs)
+#            typestr, dimstr = typedef(arg)
+#            intentstr = ", INTENT(OUT)"
+#            push!(typedecls, typestr * dimstr * intentstr * " :: " * varname)
+#        end
+#    end
+#
+#    return arguments, join(typedecls, "\n")
+#end
+
+# TODO: need to handle output variable is an alias to an input variable but have a different variable name
+#function fortran_genvars(kinfo::KernelInfo, launchid::String,
+#                inargs::NTuple{N, JaiDataType} where {N},
+#                outargs::NTuple{M, JaiDataType} where {M},
+#                innames::NTuple{N, String} where {N},
+#                outnames::NTuple{M, String} where {M}) :: Tuple{String, String}
+#
+#    onames = String[]
+#    typedecls = String[]
+#    passigns = String[]
+#
+#    for (index, ovar) in enumerate(outargs)
+#        if ovar in inargs
+#            invaridx = findall(v->v==ovar, inargs)[1]
+#            if innames[invaridx] == outnames[index]
+#                innames[invaridx] = innames[invaridx] * "!"
+#            else
+#                innames[invaridx] = innames[invaridx] * "$" * outnames[index]
+#            end
+#        else
+#            push!(onames, outnames[index])
+#        end
+#    end
+#
+#    arguments = join((innames...,onames...), ",")
+#
+#    for (arg, varname) in zip(inargs, innames)
+#
+#        typestr, dimstr = typedef(arg)
+#
+#        if occursin("!", varname)
+#            intentstr = ", INTENT(INOUT)"
+#            varname = replace(varname,"!" => "" )
+#        else
+#            intentstr = ", INTENT(IN)"
+#        end
+#
+#        targetstr = ""
+#
+#        if occursin("$", varname)
+#            snames = split(varname, "$")
+#            varname = snames[1]
+#            targetstr = ", TARGET"
+#            for sname in snames[2:end]
+#                push!(typedecls, typestr * dimstr * ", POINTER :: " * sname)
+#                push!(passigns, sname * " => " * varname)
+#            end
+#        end
+#
+#        push!(typedecls, typestr * dimstr * intentstr * targetstr * " :: " * varname)
+#    end
+#
+#    for (arg, varname) in zip(outargs, outnames)
+#        if !(arg in inargs)
+#            typestr, dimstr = typedef(arg)
+#            intentstr = ", INTENT(OUT)"
+#            push!(typedecls, typestr * dimstr * intentstr * " :: " * varname)
+#        end
+#    end
+#
+#    return arguments, join(typedecls, "\n"), join(passigns, "\n")
+#end
 
 
 function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
