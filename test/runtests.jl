@@ -16,35 +16,35 @@ const y = fill(2, N)
 
 const res = fill(3, N)
 
-#function fortran_tests()
-#
-#    z = fill(0, N)
-#
-#    accel = AccelInfo(JAI_FORTRAN, const_names=constnames, const_vars=constvars, compile=fort_compile)
-#    @test accel isa AccelInfo
-#
-#    kernel = KernelInfo(accel, "ex1.knl")
-#    #knl = @jkernel(accel, "ex1.knl")
-#
-#    @test kernel isa KernelInfo
-#
-#    @jenterdata accel allocate(x, y, z)
-#
-#    @jlaunch(kernel, x, y; output=(z,))
-#
-#    @test z == res
-#
-#    @jexitdata accel deallocate(x, y, z)
-#
-#end
-#
+function fortran_tests()
+
+    z = fill(0, N)
+
+    @jaccel myaccel framework(fortran) constant(TEST1, TEST2
+            ) compile(fort_compile) set(debugdir=".jaitmp")
+
+    @jkernel mykernel myaccel "ex1.knl"
+
+    @jenterdata myaccel allocate(x, y, z) update(x, y)
+
+    @jlaunch(mykernel, x, y; output=(z,))
+
+    @jexitdata myaccel update(z) deallocate(x, y, z)
+
+    @test z == res
+
+
+end
+
 function fortran_openacc_tests()
 
     z = fill(0, N)
 
     ismaster = true
 
-    @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2) compile(acc_compile) set(master=ismaster)
+    @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2
+                    ) compile(acc_compile) set(master=ismaster,
+                    debugdir=".jaitmp")
 
 
     @jkernel mykernel myaccel "ex1.knl"
@@ -63,10 +63,7 @@ end
 
 @testset "AccelInterfaces.jl" begin
 
-    # testing AccelInterfaces module loading
-    @test JAI_FORTRAN isa AccelType
-
-    #fortran_tests()
+    fortran_tests()
     fortran_openacc_tests()
 
 end

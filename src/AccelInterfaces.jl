@@ -70,6 +70,7 @@ struct AccelInfo
     compile::Union{String, Nothing}
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
+    debugdir::Union{String, Nothing}
     dtypecache::Dict{T, String} where T<:DataType
     directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}
 
@@ -80,6 +81,7 @@ struct AccelInfo
             device::NTuple{N, Integer} where {N}=(),
             compile::NTuple{N, String} where {N}=(),
             workdir::Union{String, Nothing}=nothing,
+            debugdir::Union{String, Nothing}=nothing,
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
 
@@ -97,6 +99,13 @@ struct AccelInfo
 
         if master && !isdir(workdir)
             mkdir(workdir)
+        end
+
+        if debugdir != nothing
+            debugdir = abspath(debugdir)
+            if master && !isdir(debugdir)
+                mkdir(debugdir)
+            end
         end
 
         # TODO: support multiple framework arguments
@@ -121,7 +130,7 @@ struct AccelInfo
 
         new(accelid, acceltype, master, device_type, device_num, const_vars,
             const_names, compile, Dict{String, Ptr{Nothing}}(),
-            workdir, Dict{DataType, String}(),
+            workdir, debugdir, Dict{DataType, String}(),
             Dict{Tuple{BuildType, Int64, Int64, String},
             Tuple{Ptr{Nothing}, Expr}}())
     end
@@ -136,12 +145,14 @@ function jai_accel_init(name::String; master::Bool=true,
             device::NTuple{N, Integer} where {N}=(),
             compile::NTuple{N, String} where {N}=(),
             workdir::Union{String, Nothing}=nothing,
+            debugdir::Union{String, Nothing}=nothing,
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
 
     accel = AccelInfo(master=master, const_vars=const_vars, const_names=const_names, 
                     framework=framework, device=device, compile=compile,
-                    workdir=workdir, _lineno_=_lineno_, _filepath_=_filepath_)
+                    workdir=workdir, debugdir=debugdir, _lineno_=_lineno_,
+                    _filepath_=_filepath_)
 
     global _accelcache[name] = accel
 end
@@ -420,6 +431,13 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                     write(io, code)
                 end
 
+                if kinfo.accel.debugdir != nothing
+                    debugfile = joinpath(kinfo.accel.debugdir, srcfile)
+                    open(debugfile, "w") do io
+                        write(io, code)
+                    end
+                end
+
                 outfile = basename(outpath)
 
                 if !ispath(outpath)
@@ -476,7 +494,14 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 cd(procdir)
 
                 open(srcfile, "w") do io
-                       write(io, code)
+                    write(io, code)
+                end
+
+                if ainfo.debugdir != nothing
+                    debugfile = joinpath(ainfo.debugdir, srcfile)
+                    open(debugfile, "w") do io
+                        write(io, code)
+                    end
                 end
 
                 outfile = basename(outpath)
@@ -793,20 +818,6 @@ macro jaccel(accel, clauses...)
             push!(init.args, Expr(:kw, :compile, Expr(:tuple, compile...))) 
 
         elseif clause.args[1] == :set
-
-#    head: Symbol call
-#    args: Array{Any}((3,))
-#      1: Symbol set
-#      2: Expr
-#        head: Symbol kw
-#        args: Array{Any}((2,))
-#          1: Symbol master
-#          2: Symbol ismaster
-#      3: Expr
-#        head: Symbol kw
-#        args: Array{Any}((2,))
-#          1: Symbol workdir
-#          2: String "/test/dir"
 
             for kwarg in clause.args[2:end]
                 if kwarg.head == :kw
