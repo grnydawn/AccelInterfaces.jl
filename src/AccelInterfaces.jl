@@ -357,7 +357,13 @@ function launch_kernel(kname::String,
     end
 
     kfunc = dlsym(dlib, :jai_launch)
-    local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
+
+    println("#####################")
+    dtypestr = "("*join(dtypes, ",")*",)"
+    println(dtypestr)
+    println((innames..., outnames...))
+
+    local argtypes = Meta.parse(dtypestr)
     local ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
