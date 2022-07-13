@@ -266,10 +266,10 @@ function jai_directive(accel::String, buildtype::BuildType,
     local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
     local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
 
-    println("************************")
-    dtypestr = "("*join(dtypes, ",")*",)"
-    println(dtypestr)
-    println(names)
+    #println("************************")
+    #dtypestr = "("*join(dtypes, ",")*",)"
+    #println(dtypestr)
+    #println(names)
 
     if _lineno_ isa Int64 && _filepath_ isa String
         accel.directcache[cachekey] = (dfunc, argtypes)
@@ -363,10 +363,10 @@ function launch_kernel(kname::String,
 
     kfunc = dlsym(dlib, :jai_launch)
 
-    println("#####################")
-    dtypestr = "("*join(dtypes, ",")*",)"
-    println(dtypestr)
-    println((innames..., outnames...))
+    #println("#####################")
+    #dtypestr = "("*join(dtypes, ",")*",)"
+    #println(dtypestr)
+    #println((innames..., outnames...))
 
     local argtypes = Meta.parse(dtypestr)
     local ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
