@@ -266,6 +266,11 @@ function jai_directive(accel::String, buildtype::BuildType,
     local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
     local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
 
+    println("************************
+    dtypestr = "("*join(dtypes, ",")*",)"
+    println(dtypestr)
+    println(names)
+
     if _lineno_ isa Int64 && _filepath_ isa String
         accel.directcache[cachekey] = (dfunc, argtypes)
     end
