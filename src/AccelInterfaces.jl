@@ -362,9 +362,9 @@ function launch_kernel(kname::String,
     end
 
     kfunc = dlsym(dlib, :jai_launch)
+    dtypestr = "("*join(dtypes, ",")*",)"
 
     #println("#####################")
-    #dtypestr = "("*join(dtypes, ",")*",)"
     #println(dtypestr)
     #println((innames..., outnames...))
 
