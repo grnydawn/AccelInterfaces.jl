@@ -266,7 +266,7 @@ function jai_directive(accel::String, buildtype::BuildType,
     local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
     local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
 
-    println("************************
+    println("************************")
     dtypestr = "("*join(dtypes, ",")*",)"
     println(dtypestr)
     println(names)
