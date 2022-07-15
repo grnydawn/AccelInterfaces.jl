@@ -24,8 +24,6 @@ export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
 const JAI_VERSION = "0.0.1"
 const TIMEOUT = 10
 
-#@enum DeviceType JAI_HOST JAI_DEVICE
-
 @enum BuildType::Int64 begin
     JAI_ALLOCATE    = 10
     JAI_UPDATETO    = 20
@@ -587,6 +585,25 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType,
 end
 
 
+"""
+    @jenter accel directs...
+
+Initialize accelerator task
+
+A more detailed explanation can go here, although I guess it is not needed in this case
+
+# Arguments
+* `accel`: a literal string to identify jai accelerator task
+* `directs`: one or more jenterdata clauses
+
+# Notes
+* Notes can go here
+
+# Examples
+```julia
+julia> @jenterdata myaccel framework(fortran_openacc)
+```
+"""
 macro jenterdata(accel, directs...)
 
     tmp = Expr(:block)
