@@ -3,8 +3,12 @@ using Test
 
 import Profile
 
+const fort_compile = "ftn -fPIC -shared -g"
+const acc_compile = "ftn -shared -fPIC -h acc,noomp"
 const constvars = (100,(1,2))
 const constnames = ("TEST", "TEST2")
+const TEST1 = 100
+const TEST2 = (1, 2)
 
 const N = 3
 const x = fill(1, N)
@@ -12,28 +16,23 @@ const y = fill(2, N)
 
 const res = fill(3, N)
 
-innames = ("x", "y")
-outnames = ("z",)
-
 function fortran_tests()
 
     z = fill(0, N)
 
-    accel = AccelInfo(JAI_FORTRAN, constnames=constnames, constvars=constvars)
-    @test accel isa AccelInfo
+    @jaccel myaccel framework(fortran) constant(TEST1, TEST2
+            ) compile(fort_compile) set(debugdir=".jaitmp")
 
-    kernel = KernelInfo(accel, "ex1.knl")
-    @test kernel isa KernelInfo
+    @jkernel mykernel myaccel "ex1.knl"
 
-    compile = "ftn -fPIC -shared -g"
+    @jenterdata myaccel allocate(x, y, z) update(x, y)
 
-    allocate!(accel, x, y, z, names=(innames..., outnames...))
+    @jlaunch(mykernel, x, y; output=(z,))
 
-    launch!(kernel, x, y, outvars=(z,), innames=innames,
-            outnames=outnames, compile=compile)
+    @jexitdata myaccel update(z) deallocate(x, y, z)
+
     @test z == res
 
-    deallocate!(accel, x, y, z, names=(innames..., outnames...))
 
 end
 
@@ -41,33 +40,28 @@ function fortran_openacc_tests()
 
     z = fill(0, N)
 
-    compile = "ftn -shared -fPIC -h acc,noomp"
+    ismaster = true
 
-    accel = AccelInfo(JAI_FORTRAN_OPENACC, constnames=constnames,
-                    constvars=constvars, compile=compile)
+    @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2
+                    ) compile(acc_compile) set(master=ismaster,
+                    debugdir=".jaitmp")
 
-    kernel = KernelInfo(accel, "ex1.knl")
 
+    @jkernel mykernel myaccel "ex1.knl"
 
-    allocate!(accel, x, y, z, names=(innames..., outnames...))
-    #allocate!(accel, z, names=outnames)
-    update!(JAI_DEVICE, accel, x, y, names=innames)
+    @jenterdata myaccel allocate(x, y, z) update(x, y)
 
-    launch!(kernel, x, y, outvars=(z,), innames=innames,
-            outnames=outnames, compile=compile)
+    @jlaunch(mykernel, x, y; output=(z,))
 
-    update!(JAI_HOST, accel, z, names=outnames)
-    deallocate!(accel, x, y, z, names=(innames..., outnames...))
-    #deallocate!(accel, x, y, names=innames)
+    @jexitdata myaccel update(z) deallocate(x, y, z)
+
+    @jdecel myaccel
 
     @test z == res
 
 end
 
 @testset "AccelInterfaces.jl" begin
-
-    # testing AccelInterfaces module loading
-    @test JAI_FORTRAN isa AccelType
 
     fortran_tests()
     fortran_openacc_tests()

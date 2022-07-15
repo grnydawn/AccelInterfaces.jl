@@ -1,22 +1,38 @@
 
+function fortran_openacc_typedecls(launchid::String, buildtype::BuildType,
+                args::NTuple{N, JaiDataType} where {N},
+                names::NTuple{N, String} where {N}) :: String
+
+    typedecls = String[]
+
+    for (arg, varname) in zip(args, names)
+
+        typestr, dimstr = typedef(arg)
+        intent = buildtype in (JAI_DEALLOCATE, JAI_UPDATEFROM) ? "IN" : "IN"
+
+        push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
+    end
+
+    return join(typedecls, "\n")
+end
+
 function fortran_openacc_directives(buildtype::BuildType,
                 inargs::NTuple{N, JaiDataType} where {N},
                 innames::NTuple{N, String} where {N}) :: String
 
-    directs = []
+    directs = String[]
 
     for (arg, varname) in zip(inargs, innames)
 
         # for debug
-        #push!(directs, "print *, \"LOC " * string(buildtype) * " of " * varname * " = \", LOC(" * varname * ")\n")
 
         if buildtype == JAI_ALLOCATE
             push!(directs, "!\$acc enter data create($(varname))\n")
 
-        elseif buildtype == JAI_COPYIN
+        elseif buildtype == JAI_UPDATETO
             push!(directs, "!\$acc update device($(varname))\n")
 
-        elseif buildtype == JAI_COPYOUT
+        elseif buildtype == JAI_UPDATEFROM
             push!(directs, "!\$acc update host($(varname))\n")
 
         elseif buildtype == JAI_DEALLOCATE
@@ -33,18 +49,19 @@ end
 
 function gencode_fortran_openacc(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
-                inargs::NTuple{N, JaiDataType} where {N},
-                innames::NTuple{N, String} where {N}) :: String
+                args::NTuple{N, JaiDataType} where {N},
+                names::NTuple{N, String} where {N}) :: String
 
     params = fortran_genparams(ainfo)
-    typedecls = fortran_typedecls(launchid, buildtype, inargs, innames)
-    directives = fortran_openacc_directives(buildtype, inargs, innames)
-    arguments = join((innames...,), ",")
+    typedecls = fortran_openacc_typedecls(launchid, buildtype, args, names)
+    directives = fortran_openacc_directives(buildtype, args[2:end], names[2:end])
+    arguments = join(names, ",")
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
  
     return """
 module mod$(launchid)
 USE, INTRINSIC :: ISO_C_BINDING
+USE OPENACC
 
 $(params)
 
@@ -57,9 +74,22 @@ USE, INTRINSIC :: ISO_C_BINDING
 
 $(typedecls)
 
+INTEGER :: jai_devnum
+INTEGER(ACC_DEVICE_KIND) :: jai_devtype
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
+jai_devtype = acc_get_device_type()
+jai_devnum = acc_get_device_num(jai_devtype)
+
+IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
+    CALL acc_set_device_num(INT(jai_arg_device_num, KIND(jai_devnum)), jai_devtype)
+END IF
+
 $(directives)
+
+IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
+    CALL acc_set_device_num(jai_devnum, jai_devtype)
+END IF
 
 $(funcname) = JAI_ERRORCODE
 

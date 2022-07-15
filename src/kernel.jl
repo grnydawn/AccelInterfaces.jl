@@ -1,7 +1,5 @@
 
-@enum BuildType JAI_LAUNCH JAI_ALLOCATE JAI_DEALLOCATE JAI_COPYIN JAI_COPYOUT
-
-const ACCEL_CODE = Dict(
+const ACCEL_CODE = Dict{AccelType, String}(
     JAI_FORTRAN => "FO",
     JAI_FORTRAN_OPENACC => "FA",
     JAI_FORTRAN_OMPTARGET => "FM",
@@ -10,16 +8,16 @@ const ACCEL_CODE = Dict(
     JAI_CPP_OMPTARGET => "FM"
 )
 
-const BUILD_CODE = Dict(
+const BUILD_CODE = Dict{BuildType, String}(
     JAI_LAUNCH => "L",
     JAI_ALLOCATE => "A",
-    JAI_COPYIN => "I",
-    JAI_COPYOUT => "O",
+    JAI_UPDATETO => "I",
+    JAI_UPDATEFROM => "O",
     JAI_DEALLOCATE => "D"
 )
 
 # accel string to AccelType conversion
-const acceltypemap = Dict(
+const acceltypemap = Dict{String, AccelType}(
     "fortran" => JAI_FORTRAN,
     "fortran_openacc" => JAI_FORTRAN_OPENACC,
     "cpp"   => JAI_CPP,
@@ -28,40 +26,40 @@ const acceltypemap = Dict(
 
 struct KernelSection
     acceltype::AccelType
-    params::Dict
+    params::Dict{String, String}
     body::String
 end
 
-const LIBFUNC_NAME = Dict(
-    JAI_FORTRAN => Dict(
+const LIBFUNC_NAME = Dict{AccelType, Dict}(
+    JAI_FORTRAN => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
     ),
-    JAI_FORTRAN_OPENACC => Dict(
+    JAI_FORTRAN_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
-        JAI_COPYIN => "jai_copyin",
-        JAI_COPYOUT => "jai_copyout",
+        JAI_UPDATETO => "jai_updateto",
+        JAI_UPDATEFROM => "jai_updatefrom",
         JAI_DEALLOCATE => "jai_deallocate"
     ),
-    JAI_CPP => Dict(
+    JAI_CPP => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
     ),
-    JAI_CPP_OPENACC => Dict(
+    JAI_CPP_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
-        JAI_COPYIN => "jai_copyin",
-        JAI_COPYOUT => "jai_copyout",
+        JAI_UPDATETO => "jai_updateto",
+        JAI_UPDATEFROM => "jai_updatefrom",
         JAI_DEALLOCATE => "jai_deallocate"
     )
 )
 
 
-function _parse_header(hdr)
+function _parse_header(hdr) :: Tuple{Vector{AccelType}, Dict{String, String}}
 
     acctypes = Vector{AccelType}()
-    params = Dict()
+    params = Dict{String, String}()
 
-    pos = findfirst(isequal(':'), hdr)
+    local pos = findfirst(isequal(':'), hdr)
     if pos == nothing
         hdrtype = hdr
         hdrparam = ""
@@ -77,9 +75,10 @@ function _parse_header(hdr)
     # TODO: eval params in a custom environment
     #@getparams params $hdrparam
 
-    return (acctypes, params)
+    acctypes, params
 end
 
+# keep the only matching section
 struct KernelDef
 
     specid::String
@@ -88,11 +87,11 @@ struct KernelDef
 
     function KernelDef(acceltype::AccelType, kerneldef::String)
 
-        sections = []
+        sections = KernelSection[]
 
-        acctypes = [JAI_HEADER]
-        params = Dict()
-        body = []
+        acctypes = AccelType[JAI_HEADER]
+        params = Dict{String, String}()
+        body = String[]
 
         for line in split(kerneldef, "\n")
 
@@ -113,13 +112,14 @@ struct KernelDef
                 end
                     
                 acctypes, params = _parse_header(s[2:end-1])
-                body = []
+                body = String[]
 
             else
                 push!(body, s)
             end
         end
 
+        # activate the only matching section
         if length(acctypes) > 0
             bodystr = join(body, "\n")
             for acctype in acctypes
@@ -131,7 +131,11 @@ struct KernelDef
 
         if length(sections) > 0
             section = sections[end]
-            specid = bytes2hex(sha1(string(section.body, section.params))[1:4])
+            #specid = bytes2hex(sha1(string(section.body, section.params))[1:4])
+
+            io = IOBuffer()
+            ser = serialize(io, (section.body, section.params))
+            specid = bytes2hex(sha1(String(take!(io)))[1:4])
 
             new(specid, section.params, section.body)
         else
@@ -146,8 +150,11 @@ struct KernelInfo
     kernelid::String
     accel::AccelInfo
     kerneldef::KernelDef
+    launchcache::Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}
 
-    function KernelInfo(accel::AccelInfo, kerneldef::String)
+    function KernelInfo(accel::AccelInfo, kerneldef::String;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
 
         kdef = kerneldef
 
@@ -157,20 +164,42 @@ struct KernelInfo
             end
         end
 
-        kdefobj = KernelDef(accel.acceltype, kdef)
-        kernelid = bytes2hex(sha1(string(accel.accelid, kdefobj.specid))[1:4])
-
-        new(kernelid, accel, kdefobj)
+        KernelInfo(accel, KernelDef(accel.acceltype, kdef),
+            _lineno_=_lineno_, _filepath_=_filepath_)
     end
 
-    function KernelInfo(accel::AccelInfo, kerneldef::IOStream)
-        KernelInfo(accel, read(kerneldef, String))
+    function KernelInfo(accel::AccelInfo, kerneldef::IOStream;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+        KernelInfo(accel, read(kerneldef, String), _lineno_=_lineno_,
+            _filepath_=_filepath_)
     end
 
-    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef)
-        new(accel, kerneldef, Dict())
+    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+        io = IOBuffer()
+        ser = serialize(io, (accel.accelid, kerneldef.specid, _lineno_, _filepath_))
+        kernelid = bytes2hex(sha1(String(take!(io)))[1:4])
+
+        new(kernelid, accel, kerneldef,
+            Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
     end
 
 end
 
+const _kernelcache = Dict{String, KernelInfo}()
+
+function jai_kernel_init(kname::String, aname::String,
+            kspec::Union{String, KernelDef};
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+    accel = _accelcache[aname]
+    kernel = KernelInfo(accel, kspec, _lineno_=_lineno_, _filepath_=_filepath_)
+
+    global _kernelcache[kname] = kernel
+end
 
