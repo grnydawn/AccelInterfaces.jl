@@ -3,10 +3,10 @@ using Test
 
 import Profile
 
-const fort_compile = "ftn -fPIC -shared -g"
+#const fort_compile = "ftn -fPIC -shared -g"
+const fort_compile = "gfortran -fPIC -shared -g"
 const acc_compile = "ftn -shared -fPIC -h acc,noomp"
-const constvars = (100,(1,2))
-const constnames = ("TEST", "TEST2")
+
 const TEST1 = 100
 const TEST2 = (1, 2)
 
@@ -16,7 +16,30 @@ const y = fill(2, N)
 
 const res = fill(3, N)
 
-function fortran_tests()
+function fortran_test_string()
+
+    kernel_text = """
+[fortran]
+INTEGER i
+
+DO i=LBOUND(x, 1), UBOUND(x, 1)
+    z(i) = x(i) + y(i)
+END DO
+"""
+
+    z = fill(0, N)
+
+    @jaccel myaccel framework(fortran) compile("gfortran -fPIC -shared")
+
+    @jkernel mykernel myaccel kernel_text
+
+    @jlaunch(mykernel, x, y; output=(z,))
+
+    @test z == res
+
+end
+
+function fortran_test_file()
 
     z = fill(0, N)
 
@@ -25,11 +48,7 @@ function fortran_tests()
 
     @jkernel mykernel myaccel "ex1.knl"
 
-    @jenterdata myaccel allocate(x, y, z) update(x, y)
-
     @jlaunch(mykernel, x, y; output=(z,))
-
-    @jexitdata myaccel update(z) deallocate(x, y, z)
 
     @test z == res
 
@@ -63,7 +82,8 @@ end
 
 @testset "AccelInterfaces.jl" begin
 
-    fortran_tests()
+    fortran_test_string()
+    fortran_test_file()
     fortran_openacc_tests()
 
 end
