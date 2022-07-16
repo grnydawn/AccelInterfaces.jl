@@ -64,15 +64,15 @@ const answer = fill(3, N)
 @assert z == answer
 ```
 
-"kernel_text" string variable contains a Fortran DO loop that actually calculates the vector sum. There are two version of DO loops: Fortran and Fortran_OpenAcc. User can select one of them using "framework" clause of "@jaccel" Jai directive explained next.
+"kernel_text" string variable contains a Fortran DO loop that actually calculates the vector sum. There are two versions of DO loop: Fortran and Fortran_OpenAcc. User can select one of them using "framework" clause of "@jaccel" Jai directive explained below.
 
-"@jaccel" creates a Jai acceleration context. To identify the context, here we uses the literal name of "myaccel". "framework" clause specifies the kind of acceleration(fortran in this example). With compile clause, user can provides the actual command line for generating a shared library. The command line should include compiler and all compiler flags except the name of output file and the name of input source file.
+"@jaccel" creates a Jai acceleration context. To identify the context, here we uses the literal name of "myaccel". "framework" clause specifies the kind of acceleration(fortran in this example). With compile clause, user can provides Jai with the actual compiler command line for generating a shared library. The command line should include compiler and all compiler flags except "-o" flag with the name of output file and the path to a input source file.
 
 "@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel". The last clause is the kernel program written in Fortran or C/C++. Uesr can provide Jai with the kernel program in Julia string or external file path.
 
 "@jlaunch" uses syntax similar to function call with a pair of parentheses. Note that there should not be a space between "@jlaunch" and "(mykernel...". The first argument is the name of kernel context. All the variable names righ before the semicolon are input variables to the kernel. "output" keyword argument specifies the names of output variables in a Julia Tuple.
 
-Please note that you should use only simple variable names for inputs and outputs to/from kernel a "@jlaunch". For example, you can not write like this: "@jlaunch(mykernel, x+1, func(y); output=(z::Vector,))."
+Please note that you should use only simple variable names for inputs and outputs to/from kernel in "@jlaunch". For example, you can not write like this: "@jlaunch(mykernel, x+1, func(y); output=(z::Vector,))."
 
 
 To use GPU, you need to add additional Jai directives such as "@jenterdata", "@jexitdata", and "@jdecel". 
@@ -97,13 +97,13 @@ fill!(z, 0)
 
 @assert z == answer
 ```
-First of all, please note that the sequence of "@j*" directives is the same to the above example when we wanted to use Fortran framework. Here we uses "fortran_openacc" for "framework" clause which let Jai to choose the content under "[fortran_openacc]" instead of "[fortran]". Actually, user can use the same "@j*" directives when they uses Fortran "framework". Jai silently ignore Jai directives not relavant to Fortran.
+First of all, please note that the sequence of "@j*" directives is similar to the above example when we wanted to use Fortran framework. Here we uses "fortran_openacc" for "framework" clause which let Jai to choose the content under "[fortran_openacc]" instead of "[fortran]" of kernel_text variable.
 
 The first clause to "@jenterdata" is the literal name defined in "@jaccel" in above Fortran example. "allocate" clause allocate device memory for the variables of "x", "y", and "z". "update" clause copy the content of "x" and "y" to the allocated corresponding device variables.
 
 In "@jexitdata", user can copy back data from device using "update" clause. "deallocate" clause deallocate device moemory allocated for "x", "y", and "z".
 
-"@jdecel" directive notify Jai that user will not use "myaccel" context anymore.
+"@jdecel" directive notifies Jai that user will not use "myaccel" context anymore.
 
 
 
