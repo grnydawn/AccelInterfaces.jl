@@ -10,8 +10,8 @@ This package is still in early phase of development. Only a subset of mentioned 
 
 ## Package features
 
-- Creates a shared library from pre-existing Fortran/C/C++ code
-- Generates arguments for [ccall](https://docs.julialang.org/en/v1/base/c/#ccall) function that uses the crated shared library
+- Creates a shared library from pre-existing Fortran/C/C++ code(C/C++ is not supported yet)
+- Generates arguments for [ccall](https://docs.julialang.org/en/v1/base/c/#ccall) function that uses the created shared library
 - User interface is simplied by using Julia macros
 
 ## Installation
@@ -22,7 +22,7 @@ Pkg.add("AccelInterfaces")
 
 ## Quickstart
 
-The following Julia code calculates a vector sum that is written in Fortran.
+The following Julia code calculates a vector sum whose main algorithm is written in Fortran.
 
 ```julia
 using AccelInterfaces
@@ -64,9 +64,9 @@ const answer = fill(3, N)
 @assert z == answer
 ```
 
-"kernel_text" string variable contains a Fortran DO loop that actually calculates the vector sum. There are two versions of DO loop: Fortran and Fortran_OpenAcc. User can select one of them using "framework" clause of "@jaccel" Jai directive explained below.
+"kernel_text" variable contains a Fortran DO loop that actually calculates the vector sum. There are two versions of DO loop: Fortran and Fortran_OpenAcc. User can select one of them using "framework" clause of "@jaccel" Jai directive explained below.
 
-"@jaccel" creates a Jai acceleration context. To identify the context, here we uses the literal name of "myaccel". "framework" clause specifies the kind of acceleration(fortran in this example). With compile clause, user can provides Jai with the actual compiler command line for generating a shared library. The command line should include compiler and all compiler flags except "-o" flag with the name of output file and the path to a input source file.
+"@jaccel" creates a Jai acceleration context. To identify the context, here we uses the literal name of "myaccel". "framework" clause specifies the kind of acceleration(fortran in this example). With compile clause, user can provides Jai with the actual compiler command line to generate a shared library. The command line should include compiler and all compiler flags except "-o" flag with the name of output file and the path to a input source file.
 
 "@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel". The last clause is the kernel program written in Fortran or C/C++. Uesr can provide Jai with the kernel program in Julia string or external file path.
 
@@ -97,16 +97,10 @@ fill!(z, 0)
 
 @assert z == answer
 ```
-First of all, please note that the sequence of "@j*" directives is similar to the above example when we wanted to use Fortran framework. Here we uses "fortran_openacc" for "framework" clause which let Jai to choose the content under "[fortran_openacc]" instead of "[fortran]" of kernel_text variable.
+First of all, please note that the sequence of "@j*" directives is similar to the above example when we use Fortran framework. Here we uses "fortran_openacc" for "framework" clause which let Jai to choose the content under "[fortran_openacc]" instead of "[fortran]" of kernel_text text.
 
 The first clause to "@jenterdata" is the literal name defined in "@jaccel" in above Fortran example. "allocate" clause allocate device memory for the variables of "x", "y", and "z". "update" clause copy the content of "x" and "y" to the allocated corresponding device variables.
 
 In "@jexitdata", user can copy back data from device using "update" clause. "deallocate" clause deallocate device moemory allocated for "x", "y", and "z".
 
 "@jdecel" directive notifies Jai that user will not use "myaccel" context anymore.
-
-
-
-## Documentation
-
-T.B.D.
