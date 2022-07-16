@@ -28,6 +28,7 @@ The following Julia code calculates a vector sum that is written in Fortran.
 using AccelInterfaces
 
 kernel_text = """
+
 [fortran]
 
 INTEGER i
@@ -35,6 +36,17 @@ INTEGER i
 DO i=LBOUND(x, 1), UBOUND(x, 1)
 z(i) = x(i) + y(i)
 END DO
+
+[fortran_openacc]
+
+INTEGER i
+
+!\$acc parallel loop present(x, y, z)
+DO i=LBOUND(x, 1), UBOUND(x, 1)
+z(i) = x(i) + y(i)
+END DO
+!\$acc end parallel loop
+
 """
 
 const N = 10
@@ -45,22 +57,22 @@ const answer = fill(3, N)
 
 @jaccel myaccel framework(fortran) compile("gfortran -fPIC -shared") 
 
-@jkernel mykernel myaccel kernel_text
+@jkernel mykernel1 myaccel kernel_text
 
-@jlaunch(mykernel, x, y; output=(z,))
+@jlaunch(mykernel1, x, y; output=(z,))
 
 @assert z == answer
 ```
 
-"kernel_text" String variable contains a Fortran DO loop that actually calculates the vector sum.
+"kernel_text" string variable contains a Fortran DO loop that actually calculates the vector sum. There are two version of DO loops: Fortran and Fortran_OpenAcc. User can select one of them using "framework" clause of "@jaccel" Jai directive explained next.
 
-"@jaccel" creates a Jai acceleration context. To identify the context, here we uses "myaccel". framework clause specifies the kind of acceleration(fortran in this example). With compile clause, user can provides the actual command line for generating a shared library. The command line should include all compiler flags except the name of output file and the name of input source file.
+"@jaccel" creates a Jai acceleration context. To identify the context, here we uses the literal name of "myaccel". "framework" clause specifies the kind of acceleration(fortran in this example). With compile clause, user can provides the actual command line for generating a shared library. The command line should include compiler and all compiler flags except the name of output file and the name of input source file.
 
-"@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses "mykernel". The last clause is the external program written in Fortran or C/C++. Uesr can provide Jai with the external program in Julia String or external file path.
+"@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel". The last clause is the kernel program written in Fortran or C/C++. Uesr can provide Jai with the kernel program in Julia string or external file path.
 
-"@jlaunch" uses syntax similar to function call with a pair of parentheses. Note that there should not be a space between "@jlaunch" and "(mykernel...". The first argument is the name of kernel context. All the variable names righ before the semicolon are input variables to the kernel. "output" keyword argument should be a Julia Tuple.
+"@jlaunch" uses syntax similar to function call with a pair of parentheses. Note that there should not be a space between "@jlaunch" and "(mykernel...". The first argument is the name of kernel context. All the variable names righ before the semicolon are input variables to the kernel. "output" keyword argument specifies the names of output variables in a Julia Tuple.
 
-Please note that you can not use Julia expression other than the names of variables when using "@jlaunch". For example, you can not write like this: "@jlaunch(mykernel, x+1, func(y); output=(z::Vector,))."
+Please note that you should use only simple variable names for inputs and outputs to/from kernel a "@jlaunch". For example, you can not write like this: "@jlaunch(mykernel, x+1, func(y); output=(z::Vector,))."
 
 
 To use GPU, you need to add additional Jai directives such as "@jenterdata", "@jexitdata", and "@jdecel". 
@@ -69,28 +81,15 @@ To use GPU, you need to add additional Jai directives such as "@jenterdata", "@j
 using AccelInterfaces
 
 kernel_text = """
-[fortran]
-
-INTEGER i
-
-!$acc parallel loop present(x, y, z)
-DO i=LBOUND(x, 1), UBOUND(x, 1)
-z(i) = x(i) + y(i)
-END DO
-!$acc end parallel loop
 """
 
-const N = 10
-const x = fill(1, N)
-const y = fill(2, N)
-const z = fill(0, N)
-const answer = fill(3, N)
+fill!(z, 0)
 
-@jkernel mykernel myaccel kernel_text
+@jkernel mykernel2 myaccel kernel_text
 
 @jenterdata myaccel allocate(x, y, z) update(x, y)
 
-@jlaunch(mykernel, x, y; output=(z,))
+@jlaunch(mykernel2, x, y; output=(z,))
 
 @jexitdata myaccel update(z) deallocate(x, y, z)
 
@@ -98,6 +97,15 @@ const answer = fill(3, N)
 
 @assert z == answer
 ```
+First of all, please note that the sequence of "@j*" directives is the same to the above example when we wanted to use Fortran framework. Here we uses "fortran_openacc" for "framework" clause which let Jai to choose the content under "[fortran_openacc]" instead of "[fortran]". Actually, user can use the same "@j*" directives when they uses Fortran "framework". Jai silently ignore Jai directives not relavant to Fortran.
+
+The first clause to "@jenterdata" is the literal name defined in "@jaccel" in above Fortran example. "allocate" clause allocate device memory for the variables of "x", "y", and "z". "update" clause copy the content of "x" and "y" to the allocated corresponding device variables.
+
+In "@jexitdata", user can copy back data from device using "update" clause. "deallocate" clause deallocate device moemory allocated for "x", "y", and "z".
+
+"@jdecel" directive notify Jai that user will not use "myaccel" context anymore.
+
+
 
 ## Documentation
 
