@@ -4,7 +4,7 @@
 
 **Jai** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
 
-**Jai**, or JAI(Julia Accelerator Interfaces), focuses on reusing legacy Fortran and C/C++(under development) applications. The legacy application may include directive based GPU programming such as OpenAcc.
+**Jai** focuses on reusing legacy Fortran and C/C++(under development) applications. The legacy application may include directive based GPU programming such as OpenAcc.
 
 This package is still in the early phase of development. Only a subset of mentioned features are developed. Please use this package at your own risk.
 
