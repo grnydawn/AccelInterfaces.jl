@@ -2,9 +2,9 @@
 
 [![Build Status](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-**AccelInterfaces** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
+**Jai** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
 
-**AccelInterfaces**, or JAI(Julia Accelerator Interfaces), focuses on reusing legacy Fortran and C/C++(under development) applications. The legacy application may include directive based GPU programming such as OpenAcc.
+**Jai**, or JAI(Julia Accelerator Interfaces), focuses on reusing legacy Fortran and C/C++(under development) applications. The legacy application may include directive based GPU programming such as OpenAcc.
 
 This package is still in the early phase of development. Only a subset of mentioned features are developed. Please use this package at your own risk.
 
