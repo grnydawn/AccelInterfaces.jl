@@ -68,7 +68,7 @@ const answer = fill(3, N)
 
 "@jaccel" creates a Jai acceleration context. To identify the context, here we use the literal name of "myaccel1". "framework" clause specifies the kind of acceleration(fortran in this example). With a compile clause, the user can provide Jai with the actual compiler command line to generate a shared library. The command line should include the compiler and all compiler flags except the "-o" flag with the name of an output file and the path to an input source file.
 
-"@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel1". The last clause is the kernel program written in Fortran or C/C++. User can provide Jai with the kernel program in Julia string or external file path.
+"@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel1". The last clause is the kernel program written in Fortran. User can provide Jai with the kernel program in Julia string or external file path.
 
 "@jlaunch" uses syntax similar to function calls with a pair of parentheses. Note that there should not be a space between "@jlaunch" and "(mykernel1...". The first argument is the name of kernel context. All the variable names right before the semicolon are input variables to the kernel. "output" keyword argument specifies the names of output variables in a Julia Tuple.
 
