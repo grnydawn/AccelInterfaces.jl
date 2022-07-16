@@ -4,14 +4,14 @@
 
 **AccelInterfaces** is a GPU and CPU programming interfaces for [Julia](http://julialang.org/) programmers.
 
-**AccelInterfaces**, or JAI(Julia Accelerator Interfaces) focus on reusing legacy Fortran and C/C++(under development) applications which may already ported to GPU using compiler-based frameworks such as Cuda, Hip, OpenAcc, OpenMP target, OpenCL, and so on.
+**AccelInterfaces**, or JAI(Julia Accelerator Interfaces), focus on reusing legacy Fortran and C/C++(under development) applications which may already ported to GPU using compiler-based frameworks such as Cuda, Hip, OpenAcc, OpenMP target, OpenCL, and so on.
 
-This package is still in early phase of development. Only a subset of mentioned features are developed. Please use this at your own risk.
+This package is still in early phase of development. Only a subset of mentioned features are developed. Please use this package at your own risk.
 
 ## Package features
 
-- Creates a shared library from user's Fortran/C/C++ code
-- Generates ccall arguments to use the crated shared library
+- Creates a shared library from pre-existing Fortran/C/C++ code
+- Generates arguments for [ccall](https://docs.julialang.org/en/v1/base/c/#ccall) function that uses the crated shared library
 - User interface is simplied by using Julia macros
 
 ## Installation
