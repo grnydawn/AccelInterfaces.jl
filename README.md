@@ -78,11 +78,6 @@ Please note that you should use only simple variable names for inputs and output
 To use GPU, you need to add additional Jai directives such as "@jenterdata", "@jexitdata", and "@jdecel". 
 
 ```julia
-using AccelInterfaces
-
-kernel_text = """
-"""
-
 fill!(z, 0)
 
 @jkernel mykernel2 myaccel kernel_text
