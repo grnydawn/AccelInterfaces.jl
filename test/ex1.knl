@@ -16,6 +16,20 @@ DO i=LBOUND(x, 1), UBOUND(x, 1)
 END DO
 !$acc end parallel loop
 
+[fortran_omptarget]
+
+INTEGER i, start, stop
+
+start = LBOUND(x, 1)
+stop  = UBOUND(x, 1)
+
+!$omp target teams distribute num_teams(stop-start+1)
+DO i=start, stop
+    z(i) = x(i) + y(i)
+END DO
+!$omp end target teams distribute
+
+
 [cpp, cpp_openacc]
 
 #pragma acc parallel loop

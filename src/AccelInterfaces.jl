@@ -166,6 +166,7 @@ end
 include("./kernel.jl")
 include("./fortran.jl")
 include("./fortran_openacc.jl")
+include("./fortran_omptarget.jl")
 include("./cpp.jl")
 
 function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Nothing
@@ -298,7 +299,8 @@ function argsdtypes(ainfo::AccelInfo,
         elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC)
             dtype = typeof(arg)
 
-        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC)
+        elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC,
+                    JAI_FORTRAN_OMPTARGET)
             dtype = Ref{typeof(arg)}
         end
 
@@ -397,6 +399,12 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
         ext = ".F90"
         if compile == nothing
             compile = "gfortran -fPIC -shared -fopenacc -g -ffree-line-length-none"
+        end
+
+    elseif  acceltype == JAI_FORTRAN_OMPTARGET
+        ext = ".F90"
+        if compile == nothing
+            compile = "gfortran -fPIC -shared -fopenmp -g -ffree-line-length-none"
         end
 
     else
@@ -561,6 +569,9 @@ function generate!(kinfo::KernelInfo, launchid::String,
     elseif kinfo.accel.acceltype == JAI_FORTRAN_OPENACC
         code = gencode_fortran_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
 
+    elseif kinfo.accel.acceltype == JAI_FORTRAN_OMPTARGET
+        code = gencode_fortran_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
+
     end
 
     code
@@ -575,6 +586,9 @@ function generate!(ainfo::AccelInfo, buildtype::BuildType,
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
         code = gencode_fortran_openacc(ainfo, buildtype, launchid, args, names)
+
+    elseif ainfo.acceltype == JAI_FORTRAN_OMPTARGET
+        code = gencode_fortran_omptarget(ainfo, buildtype, launchid, args, names)
 
     else
         error(string(ainfo.acceltype) * " is not supported for allocation.")

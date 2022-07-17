@@ -3,9 +3,10 @@ using Test
 
 import Profile
 
-#const fort_compile = "ftn -fPIC -shared -g"
-const fort_compile = "gfortran -fPIC -shared -g"
+const fort_compile = "ftn -fPIC -shared -g"
+#const fort_compile = "gfortran -fPIC -shared -g"
 const acc_compile = "ftn -shared -fPIC -h acc,noomp"
+const omp_compile = "ftn -shared -fPIC -h omp,noacc"
 
 const TEST1 = 100
 const TEST2 = (1, 2)
@@ -80,11 +81,37 @@ function fortran_openacc_tests()
 
 end
 
+function fortran_omptarget_tests()
+
+    z = fill(0, N)
+
+    ismaster = true
+
+    @jaccel myaccel framework(fortran_omptarget) constant(TEST1, TEST2
+                    ) compile(omp_compile) set(master=ismaster,
+                    debugdir=".jaitmp")
+
+
+    @jkernel mykernel myaccel "ex1.knl"
+
+    @jenterdata myaccel allocate(x, y, z) update(x, y)
+
+    @jlaunch(mykernel, x, y; output=(z,))
+
+    @jexitdata myaccel update(z) deallocate(x, y, z)
+
+    @jdecel myaccel
+
+    @test z == res
+
+end
+
 @testset "AccelInterfaces.jl" begin
 
-    fortran_test_string()
-    fortran_test_file()
-    fortran_openacc_tests()
+    #fortran_test_string()
+    #fortran_test_file()
+    #fortran_openacc_tests()
+    fortran_omptarget_tests()
 
 end
 

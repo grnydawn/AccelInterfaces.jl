@@ -20,6 +20,7 @@ const BUILD_CODE = Dict{BuildType, String}(
 const acceltypemap = Dict{String, AccelType}(
     "fortran" => JAI_FORTRAN,
     "fortran_openacc" => JAI_FORTRAN_OPENACC,
+    "fortran_omptarget" => JAI_FORTRAN_OMPTARGET,
     "cpp"   => JAI_CPP,
     "cpp_openacc" => JAI_CPP_OPENACC
 )
@@ -41,6 +42,14 @@ const LIBFUNC_NAME = Dict{AccelType, Dict}(
         JAI_UPDATEFROM => "jai_updatefrom",
         JAI_DEALLOCATE => "jai_deallocate"
     ),
+    JAI_FORTRAN_OMPTARGET => Dict{BuildType, String}(
+        JAI_LAUNCH => "jai_launch",
+        JAI_ALLOCATE => "jai_allocate",
+        JAI_UPDATETO => "jai_updateto",
+        JAI_UPDATEFROM => "jai_updatefrom",
+        JAI_DEALLOCATE => "jai_deallocate"
+    ),
+
     JAI_CPP => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
     ),

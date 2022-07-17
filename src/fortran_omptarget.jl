@@ -1,5 +1,5 @@
 
-function fortran_openacc_directives(buildtype::BuildType,
+function fortran_omptarget_directives(buildtype::BuildType,
                 inargs::NTuple{N, JaiDataType} where {N},
                 innames::NTuple{N, String} where {N}) :: String
 
@@ -10,16 +10,16 @@ function fortran_openacc_directives(buildtype::BuildType,
         # for debug
 
         if buildtype == JAI_ALLOCATE
-            push!(directs, "!\$acc enter data create($(varname))\n")
+            push!(directs, "!\$omp target enter data map(alloc: $(varname))\n")
 
         elseif buildtype == JAI_UPDATETO
-            push!(directs, "!\$acc update device($(varname))\n")
+            push!(directs, "!\$omp target update to($(varname))\n")
 
         elseif buildtype == JAI_UPDATEFROM
-            push!(directs, "!\$acc update host($(varname))\n")
+            push!(directs, "!\$omp target update from($(varname))\n")
 
         elseif buildtype == JAI_DEALLOCATE
-            push!(directs, "!\$acc exit data delete($(varname))\n")
+            push!(directs, "!\$omp target exit data map(delete: $(varname))\n")
 
         else
             error(string(buildtype) * " is not supported.")
@@ -30,14 +30,14 @@ function fortran_openacc_directives(buildtype::BuildType,
 
 end
 
-function gencode_fortran_openacc(ainfo::AccelInfo, buildtype::BuildType,
+function gencode_fortran_omptarget(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N}) :: String
 
     params = fortran_genparams(ainfo)
     typedecls = fortran_directive_typedecls(launchid, buildtype, args, names)
-    directives = fortran_openacc_directives(buildtype, args[2:end], names[2:end])
+    directives = fortran_omptarget_directives(buildtype, args[2:end], names[2:end])
     arguments = join(names, ",")
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
  
