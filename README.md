@@ -20,13 +20,6 @@ This package is still in the early phase of development. Only a subset of mentio
 Pkg.add("AccelInterfaces")
 ```
 
-You can try the latest Jai by installing from this Github repository.
-
-```julia
-Pkg.add("https://github.com/grnydawn/AccelInterfaces.jl")
-```
-
-
 ## Quickstart
 
 The following Julia code calculates a vector sum whose main algorithm is written in Fortran.
