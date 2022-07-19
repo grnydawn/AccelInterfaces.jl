@@ -108,9 +108,9 @@ end
 
 @testset "AccelInterfaces.jl" begin
 
-    #fortran_test_string()
-    #fortran_test_file()
-    #fortran_openacc_tests()
+    fortran_test_string()
+    fortran_test_file()
+    fortran_openacc_tests()
     fortran_omptarget_tests()
 
 end
