@@ -233,7 +233,8 @@ function jai_directive(accel::String, buildtype::BuildType,
     ser = serialize(io, (buildtype, accel.accelid, dtypes, sizes))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-    local libpath = joinpath(accel.workdir, "SL$(launchid).so")
+    #local libpath = joinpath(accel.workdir, "SL$(launchid).so")
+    local libpath = joinpath(accel.workdir, "SL$(launchid)")
 
     # load shared lib
     if haskey(accel.sharedlibs, launchid)
@@ -349,7 +350,8 @@ function launch_kernel(kname::String,
     ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-    libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
+    #libpath = joinpath(kinfo.accel.workdir, "SL$(launchid).so")
+    libpath = joinpath(kinfo.accel.workdir, "SL$(launchid)")
 
     # load shared lib
     if haskey(kinfo.accel.sharedlibs, launchid)
