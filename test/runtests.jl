@@ -3,8 +3,8 @@ using Test
 
 import Profile
 
-#const fort_compile = "ftn -fPIC -shared -g"
-const fort_compile = "gfortran -fPIC -shared -g"
+const fort_compile = "ftn -fPIC -shared -g"
+#const fort_compile = "gfortran -fPIC -shared -g"
 const acc_compile = "ftn -shared -fPIC -h acc,noomp"
 const omp_compile = "ftn -shared -fPIC -h omp,noacc"
 
@@ -110,8 +110,8 @@ end
 
     fortran_test_string()
     fortran_test_file()
-    #fortran_openacc_tests()
-    #fortran_omptarget_tests()
+    fortran_openacc_tests()
+    fortran_omptarget_tests()
 
 end
 
