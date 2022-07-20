@@ -573,6 +573,8 @@ function generate!(kinfo::KernelInfo, launchid::String,
     elseif kinfo.accel.acceltype == JAI_FORTRAN_OMPTARGET
         code = gencode_fortran_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
 
+    else
+        error(string(kinfo.accel.acceltype) * " is not supported yet.")
     end
 
     code
