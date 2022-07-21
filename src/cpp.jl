@@ -104,7 +104,6 @@ function cpp_genvars(kinfo::KernelInfo, macros::Vector{String},
         end
     end
 
-    #arguments = join((innames...,onames...), ",")
     arguments = String[]
 
     for (arg, varname) in zip(inargs, innames)
