@@ -39,7 +39,7 @@ function dimensions(arg::JaiDataType) :: String
     join(dimlist, ", ")
 end
 
-function typedef(arg::JaiDataType) :: Tuple{String, String}
+function fortran_typedef(arg::JaiDataType) :: Tuple{String, String}
 
     dimstr = ""
 
@@ -74,11 +74,6 @@ function typedef(arg::JaiDataType) :: Tuple{String, String}
 end
 
 
-function fortran_genparams(kinfo::KernelInfo) :: String
-    return fortran_genparams(kinfo.accel)
-
-end
-
 function fortran_genvalue(value::JaiConstType) :: String
 
     local valuelist = String[]
@@ -110,7 +105,7 @@ function fortran_genparams(ainfo::AccelInfo) :: String
 
     for (name, value) in zip(ainfo.const_names, ainfo.const_vars)
 
-        typestr, dimstr = typedef(value)
+        typestr, dimstr = fortran_typedef(value)
         push!(typedecls, typestr * dimstr * ", PARAMETER :: " * name * " = " *
                 fortran_genvalue(value))
     end
@@ -138,7 +133,7 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
 
     for (arg, varname) in zip(inargs, innames)
 
-        typestr, dimstr = typedef(arg)
+        typestr, dimstr = fortran_typedef(arg)
 
         if varname in outnames || arg in outargs
             intentstr = ", INTENT(INOUT)"
@@ -153,7 +148,7 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
 
     for (arg, varname) in zip(outargs, outnames)
         if !(varname in innames)
-            typestr, dimstr = typedef(arg)
+            typestr, dimstr = fortran_typedef(arg)
 
             if arg in inargs
                 intentstr = ", INTENT(INOUT)"
@@ -176,7 +171,7 @@ function fortran_directive_typedecls(launchid::String, buildtype::BuildType,
 
     for (arg, varname) in zip(args, names)
 
-        typestr, dimstr = typedef(arg)
+        typestr, dimstr = fortran_typedef(arg)
         intent = buildtype in (JAI_DEALLOCATE, JAI_UPDATEFROM) ? "IN" : "IN"
 
         push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
@@ -192,7 +187,7 @@ function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
                 innames::NTuple{N, String} where {N},
                 outnames::NTuple{M, String} where {M}) :: String
 
-    params = fortran_genparams(kinfo)
+    params = fortran_genparams(kinfo.accel)
     arguments, typedecls = fortran_genvars(kinfo, launchid, inargs, outargs,
                                 innames, outnames)
 
