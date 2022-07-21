@@ -4,13 +4,13 @@
 
 **Jai** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
 
-**Jai** focuses on reusing Fortran and C/C++(under development) application codes. The codes may include directive based GPU programming such as OpenAcc and OpenMP Target.
+**Jai** focuses on reusing Fortran and C/C++ application codes. The codes may include directive based GPU programming such as OpenAcc and OpenMP Target.
 
 This package is still in the early phase of development. Only a subset of mentioned features are developed. Please use this package at your own risk.
 
 ## Package features
 
-- Creates a shared library from pre-existing Fortran/C/C++ code(C/C++ is not supported yet)
+- Creates a shared library from pre-existing Fortran/C/C++ code
 - Generates arguments for [ccall](https://docs.julialang.org/en/v1/base/c/#ccall) function that uses the created shared library
 - User interface is simplified by using Julia macros
 
