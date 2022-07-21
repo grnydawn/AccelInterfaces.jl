@@ -44,7 +44,7 @@ function gencode_fortran_omptarget(ainfo::AccelInfo, buildtype::BuildType,
     return """
 module mod$(launchid)
 USE, INTRINSIC :: ISO_C_BINDING
-USE OPENACC
+USE OMP_LIB
 
 $(params)
 
@@ -57,22 +57,22 @@ USE, INTRINSIC :: ISO_C_BINDING
 
 $(typedecls)
 
-INTEGER :: jai_devnum
-INTEGER(ACC_DEVICE_KIND) :: jai_devtype
+!INTEGER :: jai_devnum
+!INTEGER(ACC_DEVICE_KIND) :: jai_devtype
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-jai_devtype = acc_get_device_type()
-jai_devnum = acc_get_device_num(jai_devtype)
+!jai_devtype = acc_get_device_type()
+!jai_devnum = acc_get_device_num(jai_devtype)
 
-IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
-    CALL acc_set_device_num(INT(jai_arg_device_num, KIND(jai_devnum)), jai_devtype)
-END IF
+!IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
+!    CALL acc_set_device_num(INT(jai_arg_device_num, KIND(jai_devnum)), jai_devtype)
+!END IF
 
 $(directives)
 
-IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
-    CALL acc_set_device_num(jai_devnum, jai_devtype)
-END IF
+!IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
+!    CALL acc_set_device_num(jai_devnum, jai_devtype)
+!END IF
 
 $(funcname) = JAI_ERRORCODE
 

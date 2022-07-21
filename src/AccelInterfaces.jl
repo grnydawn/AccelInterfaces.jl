@@ -459,6 +459,7 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
                 outfile = basename(outpath)
 
                 if !ispath(outpath)
+                    println("WWW", "$(split(compile)) -o $outfile $(srcfile)")
                     compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
                     if !ispath(outpath)
