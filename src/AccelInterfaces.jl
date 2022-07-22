@@ -334,6 +334,7 @@ function launch_kernel(kname::String,
     args = (invars..., output...)
     cachekey = (_lineno_, _filepath_)
 
+    println("XXX", cachekey)
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.launchcache, cachekey)
             println("EEEE", cachekey)
