@@ -1,5 +1,3 @@
-using Debugger
-
 # Julia type to Fortran type conversion table
 const typemap_j2f = Dict{DataType, String}(
     Int8    => "INTEGER (C_INT8_T  )",
