@@ -104,3 +104,17 @@ The first clause to "@jenterdata" is the literal name defined in "@jaccel" direc
 In "@jexitdata", users can copy back data from the device using "update" clause. "deallocate" clause deallocates device memory allocated for "x", "y", and "z".
 
 "@jdecel" directive notifies Jai that the user will not use "myaccel2" context anymore.
+
+You may notice that the Jai usage for fortran_openacc framework has similarity to fortran framework usage shown above. In fact, you can use the same code in fortran_openacc case for supporting not only fortran_openacc but also fortran if you switch "@jaccel" with proper information of framework and compile as shown below.
+
+To use fortran_openacc
+```julia
+@jaccel myaccel2 framework(fortran_openacc) compile("ftn -h acc,noomp -fPIC -shared")
+```
+
+To use fortran
+```julia
+@jaccel myaccel2 framework(fortran) compile("gfortran -fPIC -shared")
+```
+
+In case of fortram framework, "@jenterdata" and "@jexitdata" do nothing.
