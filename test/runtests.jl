@@ -145,9 +145,16 @@ function cpp_test_string()
 
     @jkernel mykernel myaccel kernel_text
 
-    @jlaunch(mykernel, X, Y; output=(Z,))
+    #Profile.@profile @jlaunch(mykernel, X, Y; output=(Z,))
+    #@time for i in range(1, stop=10)
+        @jlaunch(mykernel, X, Y; output=(Z,))
+    #end
 
     @test Z[:,:,1] == ANS[:,:,1]
+
+    #open(".jaitmp/profile.txt", "w") do s
+    #    Profile.print(s, format=:flat, sortedby=:count)
+    #end
 
 end
 

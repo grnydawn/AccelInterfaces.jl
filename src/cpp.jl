@@ -134,7 +134,7 @@ function gencode_cpp_kernel(kinfo::KernelInfo, launchid::String,
     macros = String[]
 
     push!(macros, "#define JSHAPE(varname, dim) jai_shape_##varname##dim")
-    push!(macros, "#define JSIZE(varname, dim) jai_size_##varname")
+    push!(macros, "#define JSIZE(varname) jai_size_##varname")
 
     params = cpp_genparams(kinfo.accel, macros)
     kernelargs = cpp_genvars(kinfo, macros, inargs, outargs, innames, outnames)
