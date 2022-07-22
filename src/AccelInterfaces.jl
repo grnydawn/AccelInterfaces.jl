@@ -378,8 +378,7 @@ function launch_kernel(kname::String,
         kinfo.launchcache[cachekey] = (kfunc, argtypes)
     end
 
-    println("YYY", cachekey)
-    @time @eval return $ccallexpr
+    retval = @eval $ccallexpr
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
