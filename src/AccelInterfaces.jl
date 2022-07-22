@@ -336,6 +336,7 @@ function launch_kernel(kname::String,
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.launchcache, cachekey)
+            println("EEEE", cachekey)
             kfunc, argtypes = kinfo.launchcache[cachekey]
             ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
             @time @eval return $ccallexpr
@@ -376,7 +377,7 @@ function launch_kernel(kname::String,
         kinfo.launchcache[cachekey] = (kfunc, argtypes)
     end
 
-    @eval return $ccallexpr
+    @time @eval return $ccallexpr
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
