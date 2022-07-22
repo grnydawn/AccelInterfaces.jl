@@ -1,7 +1,7 @@
 using AccelInterfaces
 using Test
 
-import Profile
+#import Profile
 
 if Sys.islinux()
     const fort_compile = "ftn -fPIC -shared -g"
