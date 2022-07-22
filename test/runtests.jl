@@ -5,10 +5,10 @@ import Profile
 
 if Sys.islinux()
     const fort_compile = "ftn -fPIC -shared -g"
-    #const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
-    #const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
-    const acc_compile  = "ftn -shared -fPIC -fopenacc"
-    const omp_compile  = "ftn -shared -fPIC -fopenmp"
+    const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
+    const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
+    #const acc_compile  = "ftn -shared -fPIC -fopenacc"
+    #const omp_compile  = "ftn -shared -fPIC -fopenmp"
 
     const cpp_compile  = "CC -fPIC -shared -g"
 
@@ -161,10 +161,10 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if Sys.islinux()
-        #fortran_test_string()
-        #fortran_test_file()
-        #fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_test_string()
+        fortran_test_file()
+        fortran_openacc_tests()
+        fortran_omptarget_tests()
         cpp_test_string()
 
     elseif Sys.isapple()

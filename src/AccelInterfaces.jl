@@ -224,7 +224,8 @@ function jai_directive(accel::String, buildtype::BuildType,
         if haskey(accel.directcache, cachekey)
             dfunc, argtypes = accel.directcache[cachekey]
             ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
-            @eval return $ccallexpr
+            retval = @eval $ccallexpr
+            return retval
         end
     end
 
@@ -275,7 +276,7 @@ function jai_directive(accel::String, buildtype::BuildType,
         accel.directcache[cachekey] = (dfunc, argtypes)
     end
 
-    @eval return $ccallexpr
+    retval = @eval $ccallexpr
 
 end
 
@@ -338,7 +339,9 @@ function launch_kernel(kname::String,
         if haskey(kinfo.launchcache, cachekey)
             kfunc, argtypes = kinfo.launchcache[cachekey]
             ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
-            @eval return $ccallexpr
+            #@time retval = @eval $ccallexpr
+            retval = @eval $ccallexpr
+            return retval
         end
     end
 
@@ -376,7 +379,7 @@ function launch_kernel(kname::String,
         kinfo.launchcache[cachekey] = (kfunc, argtypes)
     end
 
-    @eval return $ccallexpr
+    retval = @eval $ccallexpr
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
