@@ -340,7 +340,8 @@ function launch_kernel(kname::String,
             println("EEEE", cachekey)
             kfunc, argtypes = kinfo.launchcache[cachekey]
             ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
-            @time @eval return $ccallexpr
+            @time retval = @eval $ccallexpr
+            return retval
         end
     end
 
