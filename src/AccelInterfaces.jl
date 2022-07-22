@@ -224,7 +224,8 @@ function jai_directive(accel::String, buildtype::BuildType,
         if haskey(accel.directcache, cachekey)
             dfunc, argtypes = accel.directcache[cachekey]
             ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
-            @eval return $ccallexpr
+            retval = @eval $ccallexpr
+            return retval
         end
     end
 
@@ -275,7 +276,7 @@ function jai_directive(accel::String, buildtype::BuildType,
         accel.directcache[cachekey] = (dfunc, argtypes)
     end
 
-    @eval return $ccallexpr
+    retval = @eval $ccallexpr
 
 end
 
