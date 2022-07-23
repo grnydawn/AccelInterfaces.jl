@@ -117,4 +117,8 @@ To use fortran
 @jaccel myaccel2 framework(fortran) compile("gfortran -fPIC -shared")
 ```
 
-In case of fortram framework, "@jenterdata" and "@jexitdata" do nothing.
+In case of fortram framework, "@jenterdata" and "@jexitdata" silently exit without doing any work. Therefore, user can maintain the same Jai code for supporting multiple acceleration frameworks.
+
+## Questions and Suggestions
+
+Usage questions and suggestions can be posted on the [issue](https://github.com/grnydawn/AccelInterfaces.jl/issues).
