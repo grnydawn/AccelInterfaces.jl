@@ -71,7 +71,8 @@ struct AccelInfo
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
     dtypecache::Dict{T, String} where T<:DataType
-    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}
+    #directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}
+    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Expr}
 
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
@@ -222,8 +223,9 @@ function jai_directive(accel::String, buildtype::BuildType,
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.directcache, cachekey)
-            dfunc, dtypes = accel.directcache[cachekey]
-            ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
+            ccallexpr = accel.directcache[cachekey]
+            #dfunc, dtypes = accel.directcache[cachekey]
+            #ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
             retval = @eval $ccallexpr
             return retval
         end
@@ -264,10 +266,11 @@ function jai_directive(accel::String, buildtype::BuildType,
 
     end
 
-    local ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
+    ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        accel.directcache[cachekey] = (dfunc, dtypes)
+        #accel.directcache[cachekey] = (dfunc, dtypes)
+        accel.directcache[cachekey] = ccallexpr 
     end
 
     retval = @eval $ccallexpr
@@ -331,8 +334,9 @@ function launch_kernel(kname::String,
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.launchcache, cachekey)
-            kfunc, ddtypes = kinfo.launchcache[cachekey]
-            ccallexpr = :(ccall($kfunc, Int64, ($(ddtypes...),), $(args...)))
+            ccallexpr = kinfo.launchcache[cachekey]
+            #kfunc, ddtypes = kinfo.launchcache[cachekey]
+            #ccallexpr = :(ccall($kfunc, Int64, ($(ddtypes...),), $(args...)))
             retval = @eval $ccallexpr
             return retval
         end
@@ -359,10 +363,11 @@ function launch_kernel(kname::String,
     end
 
     kfunc = dlsym(dlib, :jai_launch)
-    local ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
+    ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.launchcache[cachekey] = (kfunc, dtypes)
+        #kinfo.launchcache[cachekey] = (kfunc, dtypes)
+        kinfo.launchcache[cachekey] = ccallexpr
     end
 
     retval = @eval $ccallexpr
