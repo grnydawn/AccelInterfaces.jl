@@ -71,7 +71,7 @@ struct AccelInfo
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
     dtypecache::Dict{T, String} where T<:DataType
-    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Expr}}
+    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Vector{DataType}}}
 
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
