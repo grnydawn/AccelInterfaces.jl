@@ -222,8 +222,8 @@ function jai_directive(accel::String, buildtype::BuildType,
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.directcache, cachekey)
-            dfunc, argtypes = accel.directcache[cachekey]
-            ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
+            dfunc, dtypes = accel.directcache[cachekey]
+            ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
             retval = @eval $ccallexpr
             return retval
         end
@@ -264,16 +264,10 @@ function jai_directive(accel::String, buildtype::BuildType,
 
     end
 
-    local argtypes = Meta.parse("("*join(dtypes, ",")*",)")
-    local ccallexpr = :(ccall($dfunc, Int64, $argtypes, $(data...)))
-
-    #println("************************")
-    #dtypestr = "("*join(dtypes, ",")*",)"
-    #println(dtypestr)
-    #println(names)
+    local ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        accel.directcache[cachekey] = (dfunc, argtypes)
+        accel.directcache[cachekey] = (dfunc, dtypes)
     end
 
     retval = @eval $ccallexpr
@@ -282,12 +276,11 @@ end
 
 function argsdtypes(ainfo::AccelInfo,
             data::Vararg{JaiDataType, N} where {N};
-        ) :: Tuple{Vector{String}, Vector{NTuple{M, T} where {M, T<:Integer}}}
-        #) :: Tuple{Vector{DataType}, Vector{NTuple{M, T} where {M, T<:Integer}}}
+            ) :: Tuple{Vector{DataType}, Vector{NTuple{M, T} where {M, T<:Integer}}}
 
     local N = length(data)
 
-    dtypes = Vector{String}(undef, N)
+    dtypes = Vector{DataType}(undef, N)
     sizes = Vector{NTuple{M, T} where {M, T<:Integer}}(undef, N)
 
     for (index, arg) in enumerate(data)
@@ -306,13 +299,14 @@ function argsdtypes(ainfo::AccelInfo,
             dtype = Ref{typeof(arg)}
         end
 
-        if haskey(ainfo.dtypecache, dtype)
-            dtypes[index] = ainfo.dtypecache[dtype]
-
-        else
-            dtypes[index] = string(dtype)
-            ainfo.dtypecache[dtype] = dtypes[index]
-        end
+        dtypes[index] = dtype
+#        if haskey(ainfo.dtypecache, dtype)
+#            dtypes[index] = ainfo.dtypecache[dtype]
+#
+#        else
+#            dtypes[index] = string(dtype)
+#            ainfo.dtypecache[dtype] = dtypes[index]
+#        end
     end
 
     dtypes, sizes
@@ -337,9 +331,8 @@ function launch_kernel(kname::String,
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.launchcache, cachekey)
-            kfunc, argtypes = kinfo.launchcache[cachekey]
-            ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
-            #@time retval = @eval $ccallexpr
+            kfunc, ddtypes = kinfo.launchcache[cachekey]
+            ccallexpr = :(ccall($kfunc, Int64, ($(ddtypes...),), $(args...)))
             retval = @eval $ccallexpr
             return retval
         end
@@ -366,20 +359,14 @@ function launch_kernel(kname::String,
     end
 
     kfunc = dlsym(dlib, :jai_launch)
-    dtypestr = "("*join(dtypes, ",")*",)"
-
-    #println("#####################")
-    #println(dtypestr)
-    #println((innames..., outnames...))
-
-    local argtypes = Meta.parse(dtypestr)
-    local ccallexpr = :(ccall($kfunc, Int64, $argtypes, $(args...)))
+    local ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.launchcache[cachekey] = (kfunc, argtypes)
+        kinfo.launchcache[cachekey] = (kfunc, dtypes)
     end
 
     retval = @eval $ccallexpr
+
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
