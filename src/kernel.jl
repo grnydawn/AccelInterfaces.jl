@@ -159,8 +159,8 @@ struct KernelInfo
     kernelid::String
     accel::AccelInfo
     kerneldef::KernelDef
-    #launchcache::Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Vector{DataType}}}
-    launchcache::Dict{Tuple{Int64, String}, Expr}
+    launchcache::Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Vector{DataType}}}
+    #launchcache::Dict{Tuple{Int64, String}, Expr}
 
     function KernelInfo(accel::AccelInfo, kerneldef::String;
             _lineno_::Union{Int64, Nothing}=nothing,
