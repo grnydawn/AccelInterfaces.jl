@@ -2,6 +2,8 @@ module AccelInterfaces
 
 using Serialization
 
+import Pkg.TOML
+
 import Libdl.dlopen,
        Libdl.RTLD_LAZY,
        Libdl.RTLD_DEEPBIND,
@@ -16,13 +18,13 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-        #JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo, KernelInfo, get_accel, get_kernel,
-export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
+export AccelType, JAI_VERSION,
         jai_directive, jai_accel_init, jai_accel_fini, jai_kernel_init,
         @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel
 
 
-const JAI_VERSION = "0.0.1"
+        
+const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 const TIMEOUT = 10
 
 @enum BuildType::Int64 begin
