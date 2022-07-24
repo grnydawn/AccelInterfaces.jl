@@ -90,10 +90,6 @@ struct AccelInfo
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
 
-        io = IOBuffer()
-        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, framework, const_vars,
-                        const_names, compile, _lineno_, _filepath_))
-        accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
         if workdir == nothing
             workdir = joinpath(pwd(), ".jaitmp")
@@ -129,6 +125,14 @@ struct AccelInfo
 
         # TODO: support multiple optional compiler commands
         compile = length(compile) == 0 ? nothing : compile[1]
+
+        io = IOBuffer()
+        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, acceltype, const_vars,
+                        const_names, compile, _lineno_, _filepath_))
+        accelid = bytes2hex(sha1(String(take!(io)))[1:4])
+
+        # TODO: generate shared library for this accelinfo
+            
 
         new(accelid, acceltype, master, device_type, device_num, const_vars,
             const_names, compile, Dict{String, Ptr{Nothing}}(),
