@@ -164,3 +164,23 @@ int64_t jai_launch($(kernelargs)) {
 """
 end
 
+function gencode_cpp_accel() :: String
+
+    return code = """
+#include <stdint.h>
+
+extern "C" {
+
+int64_t dummy() {
+    int64_t res;
+
+    res = 0;
+
+    return res;
+
+}
+
+}
+"""
+end
+

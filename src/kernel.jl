@@ -9,6 +9,7 @@ const ACCEL_CODE = Dict{AccelType, String}(
 )
 
 const BUILD_CODE = Dict{BuildType, String}(
+    JAI_ACCEL => "C",
     JAI_LAUNCH => "L",
     JAI_ALLOCATE => "A",
     JAI_UPDATETO => "I",

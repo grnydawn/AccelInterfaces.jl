@@ -18,6 +18,11 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
+# TODO: simplified user interface
+# [myaccel1] = @jaccel
+# [mykernel1] = @jkernel kernel_text
+# retval = @jlaunch([mykernel1,] x, y; output=(z,))
+
 export AccelType, JAI_VERSION,
         jai_directive, jai_accel_init, jai_accel_fini, jai_kernel_init,
         @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel
@@ -28,11 +33,12 @@ const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["ve
 const TIMEOUT = 10
 
 @enum BuildType::Int64 begin
-    JAI_ALLOCATE    = 10
-    JAI_UPDATETO    = 20
-    JAI_LAUNCH      = 30
-    JAI_UPDATEFROM  = 40
-    JAI_DEALLOCATE  = 50
+    JAI_ACCEL       = 10
+    JAI_ALLOCATE    = 20
+    JAI_UPDATETO    = 30
+    JAI_LAUNCH      = 40
+    JAI_UPDATEFROM  = 50
+    JAI_DEALLOCATE  = 60
 end
 
 @enum AccelType begin
@@ -134,11 +140,10 @@ struct AccelInfo
         sharedlibs = Dict{String, Ptr{Nothing}}()
 
         # TODO: generate shared library for this accelinfo
-#        if !haskey(accel.sharedlibs, accelid)
-#            build_accelshared!(accel, buildtype, launchid, libpath, data, names)
-#            dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
-#            sharedlibs[launchid] = dlib
-#        end
+        libpath = joinpath(workdir, "SL$(accelid)." * dlext)
+        build_accel!(workdir, debugdir, acceltype, compile, accelid, libpath)
+        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+        sharedlibs[accelid] = dlib
                
 
         new(accelid, acceltype, master, device_type, device_num, const_vars,
@@ -460,6 +465,29 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
     end
 end
 
+# accel build
+function build_accel!(workdir::String, debugdir::Union{String, Nothing}, acceltype::AccelType,
+    compile::Union{String, Nothing}, accelid::String, outpath::String) :: String
+
+    srcfile, compile = setup_build(acceltype, JAI_ACCEL, accelid, compile)
+
+    srcpath = joinpath(workdir, srcfile)
+    pidfile = outpath * ".pid"
+
+    # generate source code
+    if !ispath(outpath)
+
+        code = generate_accel!(workdir, acceltype, compile, accelid)
+
+        _gensrcfile(outpath, srcfile, code, debugdir, compile, pidfile)
+    end
+
+    timeout(pidfile, TIMEOUT, waittoexist=false)
+
+    outpath
+
+end
+
 # kernel build
 function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
                 inargs::NTuple{N, JaiDataType} where {N},
@@ -511,6 +539,30 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
     timeout(pidfile, TIMEOUT, waittoexist=false)
 
     outpath
+end
+
+# accel generate
+function generate_accel!(workdir::String, acceltype::AccelType,
+        compile::Union{String, Nothing}, accelid::String) :: String
+
+    if acceltype == JAI_FORTRAN
+        code = gencode_fortran_accel(accelid)
+
+    elseif acceltype == JAI_CPP
+        code = gencode_cpp_accel()
+
+    elseif acceltype == JAI_FORTRAN_OPENACC
+        code = gencode_fortran_accel(workdir, compile, accelid)
+
+    elseif acceltype == JAI_FORTRAN_OMPTARGET
+        code = gencode_fortran_accel(workdir, compile, accelid)
+
+    else
+        error(string(acceltype) * " is not supported yet.")
+    end
+
+    code
+
 end
 
 # kernel generate
