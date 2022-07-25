@@ -72,9 +72,8 @@ struct AccelInfo
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
-    dtypecache::Dict{T, String} where T<:DataType
-    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Vector{DataType}}}
-    #directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Expr}
+    ccallcache::Dict{Tuple{BuildType, Int64, Int64, String},
+                    Tuple{Ptr{Nothing}, Vector{DataType}}}
 
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
@@ -131,13 +130,20 @@ struct AccelInfo
                         const_names, compile, _lineno_, _filepath_))
         accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
+     
+        sharedlibs = Dict{String, Ptr{Nothing}}()
+
         # TODO: generate shared library for this accelinfo
-            
+#        if !haskey(accel.sharedlibs, accelid)
+#            build_accelshared!(accel, buildtype, launchid, libpath, data, names)
+#            dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+#            sharedlibs[launchid] = dlib
+#        end
+               
 
         new(accelid, acceltype, master, device_type, device_num, const_vars,
-            const_names, compile, Dict{String, Ptr{Nothing}}(),
-            workdir, debugdir, Dict{DataType, String}(),
-            Dict{Tuple{BuildType, Int64, Int64, String},
+            const_names, compile, sharedlibs,
+            workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
             Tuple{Ptr{Nothing}, Expr}}())
     end
 end
@@ -228,9 +234,8 @@ function jai_directive(accel::String, buildtype::BuildType,
     cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        if haskey(accel.directcache, cachekey)
-            #ccallexpr = accel.directcache[cachekey]
-            dfunc, dtypes = accel.directcache[cachekey]
+        if haskey(accel.ccallcache, cachekey)
+            dfunc, dtypes = accel.ccallcache[cachekey]
             ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
             retval = @eval $ccallexpr
             return retval
@@ -250,7 +255,7 @@ function jai_directive(accel::String, buildtype::BuildType,
         dlib = accel.sharedlibs[launchid]
 
     else
-        build!(accel, buildtype, launchid, libpath, data, names)
+        build_directive!(accel, buildtype, launchid, libpath, data, names)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
     end
@@ -275,8 +280,7 @@ function jai_directive(accel::String, buildtype::BuildType,
     ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        accel.directcache[cachekey] = (dfunc, dtypes)
-        #accel.directcache[cachekey] = ccallexpr 
+        accel.ccallcache[cachekey] = (dfunc, dtypes)
     end
 
     retval = @eval $ccallexpr
@@ -309,13 +313,6 @@ function argsdtypes(ainfo::AccelInfo,
         end
 
         dtypes[index] = dtype
-#        if haskey(ainfo.dtypecache, dtype)
-#            dtypes[index] = ainfo.dtypecache[dtype]
-#
-#        else
-#            dtypes[index] = string(dtype)
-#            ainfo.dtypecache[dtype] = dtypes[index]
-#        end
     end
 
     dtypes, sizes
@@ -336,12 +333,11 @@ function launch_kernel(kname::String,
     innames = ("jai_arg_device_num", innames...)
 
     args = (invars..., output...)
-    cachekey = (_lineno_, _filepath_)
+    cachekey = (JAI_LAUNCH, 0::Int64, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        if haskey(kinfo.launchcache, cachekey)
-            #ccallexpr = kinfo.launchcache[cachekey]
-            kfunc, ddtypes = kinfo.launchcache[cachekey]
+        if haskey(kinfo.accel.ccallcache, cachekey)
+            kfunc, ddtypes = kinfo.accel.ccallcache[cachekey]
             ccallexpr = :(ccall($kfunc, Int64, ($(ddtypes...),), $(args...)))
             retval = @eval $ccallexpr
             return retval
@@ -363,7 +359,7 @@ function launch_kernel(kname::String,
         dlib = kinfo.accel.sharedlibs[launchid]
 
     else
-        build!(kinfo, launchid, libpath, invars, output, innames, outnames)
+        build_kernel!(kinfo, launchid, libpath, invars, output, innames, outnames)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
     end
@@ -372,8 +368,7 @@ function launch_kernel(kname::String,
     ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.launchcache[cachekey] = (kfunc, dtypes)
-        #kinfo.launchcache[cachekey] = ccallexpr
+        kinfo.accel.ccallcache[cachekey] = (kfunc, dtypes)
     end
 
     retval = @eval $ccallexpr
@@ -418,8 +413,55 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
 end
 
 
+function _gensrcfile(outpath::String, srcfile::String, code::String,
+    debugdir::Union{String, Nothing}, compile::String, pidfile::String)
+
+    if !ispath(outpath)
+
+        curdir = pwd()
+
+        try
+            procdir = mktempdir()
+            cd(procdir)
+
+            open(srcfile, "w") do io
+                write(io, code)
+            end
+
+            if debugdir != nothing
+                debugfile = joinpath(debugdir, srcfile)
+                open(debugfile, "w") do io
+                    write(io, code)
+                end
+            end
+
+            outfile = basename(outpath)
+
+            if !ispath(outpath)
+                compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
+
+                if !ispath(outpath)
+                    open(pidfile, "w") do io
+                        write(io, string(getpid()))
+                    end
+
+                    if !ispath(outpath)
+                        cp(outfile, outpath)
+                    end
+
+                    rm(pidfile)
+                end
+            end
+        catch err
+
+        finally
+            cd(curdir)
+        end
+    end
+end
+
 # kernel build
-function build!(kinfo::KernelInfo, launchid::String, outpath::String,
+function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
@@ -436,50 +478,9 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
     # generate source code
     if !ispath(outpath)
 
-        code = generate!(kinfo, launchid, inargs, outargs, innames, outnames)
+        code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
 
-        if !ispath(outpath)
-
-            curdir = pwd()
-
-            try
-                procdir = mktempdir()
-                cd(procdir)
-
-                open(srcfile, "w") do io
-                    write(io, code)
-                end
-
-                if kinfo.accel.debugdir != nothing
-                    debugfile = joinpath(kinfo.accel.debugdir, srcfile)
-                    open(debugfile, "w") do io
-                        write(io, code)
-                    end
-                end
-
-                outfile = basename(outpath)
-
-                if !ispath(outpath)
-                    compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
-
-                    if !ispath(outpath)
-                        open(pidfile, "w") do io
-                            write(io, string(getpid()))
-                        end
-
-                        if !ispath(outpath)
-                            cp(outfile, outpath)
-                        end
-
-                        rm(pidfile)
-                    end
-                end
-            catch err
-
-            finally
-                cd(curdir)
-            end
-        end
+        _gensrcfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
     end
 
     timeout(pidfile, TIMEOUT, waittoexist=false)
@@ -488,8 +489,8 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
 end
 
 
-# non-kernel build
-function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
+# directive build
+function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 outpath::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N}) :: String
@@ -502,50 +503,9 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
 
     # generate source code
     if !ispath(outpath)
-        code = generate!(ainfo, buildtype, launchid, args, names)
+        code = generate_directive!(ainfo, buildtype, launchid, args, names)
 
-        if !ispath(outpath)
-
-            curdir = pwd()
-
-            try
-                procdir = mktempdir()
-                cd(procdir)
-
-                open(srcfile, "w") do io
-                    write(io, code)
-                end
-
-                if ainfo.debugdir != nothing
-                    debugfile = joinpath(ainfo.debugdir, srcfile)
-                    open(debugfile, "w") do io
-                        write(io, code)
-                    end
-                end
-
-                outfile = basename(outpath)
-
-                if !ispath(outpath)
-                    compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
-
-                    if !ispath(outpath)
-                        open(pidfile, "w") do io
-                            write(io, string(getpid()))
-                        end
-
-                        if !ispath(outpath)
-                            cp(outfile, outpath)
-                        end
-
-                        rm(pidfile)
-                    end
-                end
-            catch err
-
-            finally
-                cd(curdir)
-            end
-        end
+        _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
     end
 
     timeout(pidfile, TIMEOUT, waittoexist=false)
@@ -554,7 +514,7 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
 end
 
 # kernel generate
-function generate!(kinfo::KernelInfo, launchid::String,
+function generate_kernel!(kinfo::KernelInfo, launchid::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
@@ -582,7 +542,7 @@ function generate!(kinfo::KernelInfo, launchid::String,
 end
 
 # accel generate
-function generate!(ainfo::AccelInfo, buildtype::BuildType,
+function generate_directive!(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N}) :: String
