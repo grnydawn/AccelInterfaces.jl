@@ -82,3 +82,26 @@ end module
 
 """
 end
+
+
+function gencode_fortran_omptarget_accel(accelid::String) :: String
+
+    return code = """
+module mod$(accelid)
+USE, INTRINSIC :: ISO_C_BINDING
+
+contains
+
+INTEGER (C_INT64_T) FUNCTION dummy() BIND(C, name="dummy")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+dummy = JAI_ERRORCODE
+
+END FUNCTION
+
+end module
+
+"""
+end

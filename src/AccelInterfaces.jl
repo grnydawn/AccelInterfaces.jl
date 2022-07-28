@@ -112,21 +112,8 @@ struct AccelInfo
         end
 
         # TODO: support multiple framework arguments
-        acceltype = _accelmap[lowercase(framework[1])]
-
-        if length(device) == 0
-            device_type = -1
-            device_num = -1
-
-        elseif length(device) == 1
-            device_type = -1
-            device_num = device[1]
-
-        else
-            device_type = device[1]
-            device_num = device[2]
-
-        end
+        frameworkname = lowercase(framework[1])
+        acceltype = _accelmap[frameworkname]
 
         # TODO: support multiple optional compiler commands
         compile = length(compile) == 0 ? nothing : compile[1]
@@ -140,12 +127,47 @@ struct AccelInfo
         sharedlibs = Dict{String, Ptr{Nothing}}()
 
         # TODO: generate shared library for this accelinfo
-        libpath = joinpath(workdir, "SL$(accelid)." * dlext)
-        build_accel!(workdir, debugdir, acceltype, compile, accelid, libpath)
+        libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
+        build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+
+        buf = fill(-1, 1)
+
+        dfunc = dlsym(dlib, :jai_get_num_devices)
+        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+        if buf[1] < 1
+            error("The number of devices is less than 1.")
+        end
+
+        if length(device) == 1
+            buf[1] = device[1]
+            dfunc = dlsym(dlib, :jai_set_device_num)
+            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+            device_type = buf[1]
+
+        elseif length(device) == 2
+            buf[1] = device[1]
+            dfunc = dlsym(dlib, :jai_set_device_num)
+            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+
+            buf[1] = device[2]
+            dfunc = dlsym(dlib, :jai_set_device_type)
+            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+
+        end
+
+        buf[1] = -1
+        dfunc = dlsym(dlib, :jai_get_device_type)
+        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+        device_type = buf[1]
+
+        buf[1] = -1
+        dfunc = dlsym(dlib, :jai_get_device_num)
+        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+        device_num = buf[1]
+
         sharedlibs[accelid] = dlib
                
-
         new(accelid, acceltype, master, device_type, device_num, const_vars,
             const_names, compile, sharedlibs,
             workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
@@ -224,6 +246,7 @@ function jai_directive(accel::String, buildtype::BuildType,
             buildtypecount::Int64,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=(),
+            control::Vector{String},
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
 
@@ -260,7 +283,7 @@ function jai_directive(accel::String, buildtype::BuildType,
         dlib = accel.sharedlibs[launchid]
 
     else
-        build_directive!(accel, buildtype, launchid, libpath, data, names)
+        build_directive!(accel, buildtype, launchid, libpath, data, names, control)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
     end
@@ -521,7 +544,8 @@ end
 function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 outpath::String,
                 args::NTuple{N, JaiDataType} where {N},
-                names::NTuple{N, String} where {N}) :: String
+                names::NTuple{N, String} where {N},
+                control::Vector{String}) :: String
 
     srcfile, compile = setup_build(ainfo.acceltype, buildtype,
                 launchid, ainfo.compile)
@@ -531,7 +555,7 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
 
     # generate source code
     if !ispath(outpath)
-        code = generate_directive!(ainfo, buildtype, launchid, args, names)
+        code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
 
         _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
     end
@@ -552,10 +576,10 @@ function generate_accel!(workdir::String, acceltype::AccelType,
         code = gencode_cpp_accel()
 
     elseif acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_accel(workdir, compile, accelid)
+        code = gencode_fortran_openacc_accel(accelid)
 
     elseif acceltype == JAI_FORTRAN_OMPTARGET
-        code = gencode_fortran_accel(workdir, compile, accelid)
+        code = gencode_fortran_omptarget_accel(accelid)
 
     else
         error(string(acceltype) * " is not supported yet.")
@@ -597,14 +621,15 @@ end
 function generate_directive!(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
-                names::NTuple{N, String} where {N}) :: String
+                names::NTuple{N, String} where {N},
+                control::Vector{String}) :: String
 
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_openacc(ainfo, buildtype, launchid, args, names)
+        code = gencode_fortran_openacc(ainfo, buildtype, launchid, args, names, control)
 
     elseif ainfo.acceltype == JAI_FORTRAN_OMPTARGET
-        code = gencode_fortran_omptarget(ainfo, buildtype, launchid, args, names)
+        code = gencode_fortran_omptarget(ainfo, buildtype, launchid, args, names, control)
 
     else
         error(string(ainfo.acceltype) * " is not supported for allocation.")
@@ -643,11 +668,18 @@ macro jenterdata(accel, directs...)
     updatetocount = 1
     allocnames = String[]
     updatenames = String[]
+    control = String[]
+
+    stracc = string(accel)
 
     for direct in directs
-        insert!(direct.args, 2, string(accel))
 
-        if direct.args[1] == :allocate
+        if direct isa Symbol
+            push!(control, string(direct))
+
+        elseif direct.args[1] == :allocate
+            insert!(direct.args, 2, stracc)
+
             for uvar in direct.args[3:end]
                 push!(allocnames, String(uvar))
             end
@@ -657,6 +689,8 @@ macro jenterdata(accel, directs...)
             push!(allocs, direct)
 
         elseif direct.args[1] == :update
+            insert!(direct.args, 2, stracc)
+
             for dvar in direct.args[3:end]
                 push!(updatenames, String(dvar))
             end
@@ -664,6 +698,9 @@ macro jenterdata(accel, directs...)
             insert!(direct.args, 4, updatetocount)
             updatetocount += 1
             push!(nonallocs, direct)
+
+        elseif direct.args[1] in (:async,)
+            push!(control, string(direct.args[1]))
 
         else
             error(string(direct.args[1]) * " is not supported.")
@@ -684,6 +721,9 @@ macro jenterdata(accel, directs...)
             push!(direct.args, kwallocnames)
 
         end
+
+        kwcontrol = Expr(:kw, :control, control)
+        push!(direct.args, kwcontrol)
 
         kwline = Expr(:kw, :_lineno_, __source__.line)
         push!(direct.args, kwline)
@@ -710,12 +750,18 @@ macro jexitdata(accel, directs...)
     dealloccount = 1
     deallocnames = String[]
     updatenames = String[]
+    control = String[]
+
+    accstr = string(accel)
 
     for direct in directs
 
-        insert!(direct.args, 2, string(accel))
+        if direct isa Symbol
+            push!(control, string(direct))
 
-        if direct.args[1] == :update
+        elseif direct.args[1] == :update
+            insert!(direct.args, 2, accstr)
+
             for uvar in direct.args[3:end]
                 push!(updatenames, String(uvar))
             end
@@ -725,6 +771,8 @@ macro jexitdata(accel, directs...)
             push!(nondeallocs, direct)
 
         elseif direct.args[1] == :deallocate
+            insert!(direct.args, 2, accstr)
+
             for dvar in direct.args[3:end]
                 push!(deallocnames, String(dvar))
             end
@@ -732,6 +780,9 @@ macro jexitdata(accel, directs...)
             insert!(direct.args, 4, dealloccount)
             dealloccount += 1
             push!(deallocs, direct)
+
+        elseif direct.args[1] in (:async,)
+            push!(control, string(direct.args[1]))
 
         else
             error(string(direct.args[1]) * " is not supported.")
@@ -753,6 +804,9 @@ macro jexitdata(accel, directs...)
             push!(direct.args, kwdeallocnames)
 
         end
+
+        kwcontrol = Expr(:kw, :control, control)
+        push!(direct.args, kwcontrol)
 
         kwline = Expr(:kw, :_lineno_, __source__.line)
         push!(direct.args, kwline)

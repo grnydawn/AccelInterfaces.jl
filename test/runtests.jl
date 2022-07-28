@@ -91,11 +91,12 @@ function fortran_openacc_tests()
 
     @jlaunch(mykernel, X, Y; output=(Z,))
 
-    @jexitdata myaccel update(Z) deallocate(X, Y, Z)
+    @jexitdata myaccel update(Z) deallocate(X, Y, Z) async
+    @test Z == ANS
+    #println("TTTTT", Z)
 
     @jdecel myaccel
 
-    @test Z == ANS
 
 end
 
@@ -162,10 +163,10 @@ end
 
     if Sys.islinux()
         fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        fortran_omptarget_tests()
-        cpp_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #fortran_omptarget_tests()
+        #cpp_test_string()
 
     elseif Sys.isapple()
         fortran_test_string()
