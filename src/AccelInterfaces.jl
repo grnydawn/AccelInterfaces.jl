@@ -2,6 +2,8 @@ module AccelInterfaces
 
 using Serialization
 
+import Pkg.TOML
+
 import Libdl.dlopen,
        Libdl.RTLD_LAZY,
        Libdl.RTLD_DEEPBIND,
@@ -16,21 +18,27 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-        #JAI_ANYACCEL, JAI_CPP_OPENACC, AccelInfo, KernelInfo, get_accel, get_kernel,
-export AccelType, JAI_VERSION, JAI_FORTRAN, JAI_CPP, JAI_FORTRAN_OPENACC,
+# TODO: simplified user interface
+# [myaccel1] = @jaccel
+# [mykernel1] = @jkernel kernel_text
+# retval = @jlaunch([mykernel1,] x, y; output=(z,))
+
+export AccelType, JAI_VERSION,
         jai_directive, jai_accel_init, jai_accel_fini, jai_kernel_init,
         @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel
 
 
-const JAI_VERSION = "0.0.1"
+        
+const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 const TIMEOUT = 10
 
 @enum BuildType::Int64 begin
-    JAI_ALLOCATE    = 10
-    JAI_UPDATETO    = 20
-    JAI_LAUNCH      = 30
-    JAI_UPDATEFROM  = 40
-    JAI_DEALLOCATE  = 50
+    JAI_ACCEL       = 10
+    JAI_ALLOCATE    = 20
+    JAI_UPDATETO    = 30
+    JAI_LAUNCH      = 40
+    JAI_UPDATEFROM  = 50
+    JAI_DEALLOCATE  = 60
 end
 
 @enum AccelType begin
@@ -62,7 +70,6 @@ struct AccelInfo
     accelid::String
     acceltype::AccelType
     ismaster::Bool
-    device_type::Int64
     device_num::Int64
     const_vars::NTuple{N,JaiConstType} where {N}
     const_names::NTuple{N, String} where {N}
@@ -70,8 +77,8 @@ struct AccelInfo
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
-    dtypecache::Dict{T, String} where T<:DataType
-    directcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, Vector{DataType}}}
+    ccallcache::Dict{Tuple{BuildType, Int64, Int64, String},
+                    Tuple{Ptr{Nothing}, Vector{DataType}}}
 
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
@@ -87,10 +94,6 @@ struct AccelInfo
         # TODO: check if acceltype is supported in this system(h/w, compiler, ...)
         #     : detect available acceltypes according to h/w, compiler, flags, ...
 
-        io = IOBuffer()
-        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, framework, const_vars,
-                        const_names, compile, _lineno_, _filepath_))
-        accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
         if workdir == nothing
             workdir = joinpath(pwd(), ".jaitmp")
@@ -108,29 +111,52 @@ struct AccelInfo
         end
 
         # TODO: support multiple framework arguments
-        acceltype = _accelmap[lowercase(framework[1])]
-
-        if length(device) == 0
-            device_type = -1
-            device_num = -1
-
-        elseif length(device) == 1
-            device_type = -1
-            device_num = device[1]
-
-        else
-            device_type = device[1]
-            device_num = device[2]
-
-        end
+        frameworkname = lowercase(framework[1])
+        acceltype = _accelmap[frameworkname]
 
         # TODO: support multiple optional compiler commands
         compile = length(compile) == 0 ? nothing : compile[1]
 
-        new(accelid, acceltype, master, device_type, device_num, const_vars,
-            const_names, compile, Dict{String, Ptr{Nothing}}(),
-            workdir, debugdir, Dict{DataType, String}(),
-            Dict{Tuple{BuildType, Int64, Int64, String},
+        io = IOBuffer()
+        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, acceltype, const_vars,
+                        const_names, compile, _lineno_, _filepath_))
+        accelid = bytes2hex(sha1(String(take!(io)))[1:4])
+
+     
+        sharedlibs = Dict{String, Ptr{Nothing}}()
+
+        # TODO: generate shared library for this accelinfo
+        libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
+        build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
+        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+
+        buf = fill(-1, 1)
+
+        dfunc = dlsym(dlib, :jai_get_num_devices)
+        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+        if buf[1] < 1
+            error("The number of devices is less than 1.")
+        end
+
+        if length(device) == 1
+            buf[1] = device[1]
+            dfunc = dlsym(dlib, :jai_set_device_num)
+            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+            device_num = device[1]
+
+        else
+            buf[1] = -1
+            dfunc = dlsym(dlib, :jai_get_device_num)
+            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+            device_num = buf[1]
+
+        end
+
+        sharedlibs[accelid] = dlib
+               
+        new(accelid, acceltype, master, device_num, const_vars,
+            const_names, compile, sharedlibs,
+            workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
             Tuple{Ptr{Nothing}, Expr}}())
     end
 end
@@ -206,6 +232,7 @@ function jai_directive(accel::String, buildtype::BuildType,
             buildtypecount::Int64,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=(),
+            control::Vector{String},
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
 
@@ -221,8 +248,8 @@ function jai_directive(accel::String, buildtype::BuildType,
     cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        if haskey(accel.directcache, cachekey)
-            dfunc, dtypes = accel.directcache[cachekey]
+        if haskey(accel.ccallcache, cachekey)
+            dfunc, dtypes = accel.ccallcache[cachekey]
             ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
             retval = @eval $ccallexpr
             return retval
@@ -242,7 +269,7 @@ function jai_directive(accel::String, buildtype::BuildType,
         dlib = accel.sharedlibs[launchid]
 
     else
-        build!(accel, buildtype, launchid, libpath, data, names)
+        build_directive!(accel, buildtype, launchid, libpath, data, names, control)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
     end
@@ -264,10 +291,10 @@ function jai_directive(accel::String, buildtype::BuildType,
 
     end
 
-    local ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
+    ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        accel.directcache[cachekey] = (dfunc, dtypes)
+        accel.ccallcache[cachekey] = (dfunc, dtypes)
     end
 
     retval = @eval $ccallexpr
@@ -300,13 +327,6 @@ function argsdtypes(ainfo::AccelInfo,
         end
 
         dtypes[index] = dtype
-#        if haskey(ainfo.dtypecache, dtype)
-#            dtypes[index] = ainfo.dtypecache[dtype]
-#
-#        else
-#            dtypes[index] = string(dtype)
-#            ainfo.dtypecache[dtype] = dtypes[index]
-#        end
     end
 
     dtypes, sizes
@@ -327,11 +347,11 @@ function launch_kernel(kname::String,
     innames = ("jai_arg_device_num", innames...)
 
     args = (invars..., output...)
-    cachekey = (_lineno_, _filepath_)
+    cachekey = (JAI_LAUNCH, 0::Int64, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        if haskey(kinfo.launchcache, cachekey)
-            kfunc, ddtypes = kinfo.launchcache[cachekey]
+        if haskey(kinfo.accel.ccallcache, cachekey)
+            kfunc, ddtypes = kinfo.accel.ccallcache[cachekey]
             ccallexpr = :(ccall($kfunc, Int64, ($(ddtypes...),), $(args...)))
             retval = @eval $ccallexpr
             return retval
@@ -353,16 +373,16 @@ function launch_kernel(kname::String,
         dlib = kinfo.accel.sharedlibs[launchid]
 
     else
-        build!(kinfo, launchid, libpath, invars, output, innames, outnames)
+        build_kernel!(kinfo, launchid, libpath, invars, output, innames, outnames)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         kinfo.accel.sharedlibs[launchid] = dlib
     end
 
     kfunc = dlsym(dlib, :jai_launch)
-    local ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
+    ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.launchcache[cachekey] = (kfunc, dtypes)
+        kinfo.accel.ccallcache[cachekey] = (kfunc, dtypes)
     end
 
     retval = @eval $ccallexpr
@@ -407,8 +427,78 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
 end
 
 
+function _gensrcfile(outpath::String, srcfile::String, code::String,
+    debugdir::Union{String, Nothing}, compile::String, pidfile::String)
+
+    if !ispath(outpath)
+
+        curdir = pwd()
+
+        try
+            procdir = mktempdir()
+            cd(procdir)
+
+            open(srcfile, "w") do io
+                write(io, code)
+            end
+
+            if debugdir != nothing
+                debugfile = joinpath(debugdir, srcfile)
+                open(debugfile, "w") do io
+                    write(io, code)
+                end
+            end
+
+            outfile = basename(outpath)
+
+            if !ispath(outpath)
+                compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
+
+                if !ispath(outpath)
+                    open(pidfile, "w") do io
+                        write(io, string(getpid()))
+                    end
+
+                    if !ispath(outpath)
+                        cp(outfile, outpath)
+                    end
+
+                    rm(pidfile)
+                end
+            end
+        catch err
+
+        finally
+            cd(curdir)
+        end
+    end
+end
+
+# accel build
+function build_accel!(workdir::String, debugdir::Union{String, Nothing}, acceltype::AccelType,
+    compile::Union{String, Nothing}, accelid::String, outpath::String) :: String
+
+    srcfile, compile = setup_build(acceltype, JAI_ACCEL, accelid, compile)
+
+    srcpath = joinpath(workdir, srcfile)
+    pidfile = outpath * ".pid"
+
+    # generate source code
+    if !ispath(outpath)
+
+        code = generate_accel!(workdir, acceltype, compile, accelid)
+
+        _gensrcfile(outpath, srcfile, code, debugdir, compile, pidfile)
+    end
+
+    timeout(pidfile, TIMEOUT, waittoexist=false)
+
+    outpath
+
+end
+
 # kernel build
-function build!(kinfo::KernelInfo, launchid::String, outpath::String,
+function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
@@ -425,50 +515,9 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
     # generate source code
     if !ispath(outpath)
 
-        code = generate!(kinfo, launchid, inargs, outargs, innames, outnames)
+        code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
 
-        if !ispath(outpath)
-
-            curdir = pwd()
-
-            try
-                procdir = mktempdir()
-                cd(procdir)
-
-                open(srcfile, "w") do io
-                    write(io, code)
-                end
-
-                if kinfo.accel.debugdir != nothing
-                    debugfile = joinpath(kinfo.accel.debugdir, srcfile)
-                    open(debugfile, "w") do io
-                        write(io, code)
-                    end
-                end
-
-                outfile = basename(outpath)
-
-                if !ispath(outpath)
-                    compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
-
-                    if !ispath(outpath)
-                        open(pidfile, "w") do io
-                            write(io, string(getpid()))
-                        end
-
-                        if !ispath(outpath)
-                            cp(outfile, outpath)
-                        end
-
-                        rm(pidfile)
-                    end
-                end
-            catch err
-
-            finally
-                cd(curdir)
-            end
-        end
+        _gensrcfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
     end
 
     timeout(pidfile, TIMEOUT, waittoexist=false)
@@ -477,11 +526,12 @@ function build!(kinfo::KernelInfo, launchid::String, outpath::String,
 end
 
 
-# non-kernel build
-function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
+# directive build
+function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
                 outpath::String,
                 args::NTuple{N, JaiDataType} where {N},
-                names::NTuple{N, String} where {N}) :: String
+                names::NTuple{N, String} where {N},
+                control::Vector{String}) :: String
 
     srcfile, compile = setup_build(ainfo.acceltype, buildtype,
                 launchid, ainfo.compile)
@@ -491,50 +541,9 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
 
     # generate source code
     if !ispath(outpath)
-        code = generate!(ainfo, buildtype, launchid, args, names)
+        code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
 
-        if !ispath(outpath)
-
-            curdir = pwd()
-
-            try
-                procdir = mktempdir()
-                cd(procdir)
-
-                open(srcfile, "w") do io
-                    write(io, code)
-                end
-
-                if ainfo.debugdir != nothing
-                    debugfile = joinpath(ainfo.debugdir, srcfile)
-                    open(debugfile, "w") do io
-                        write(io, code)
-                    end
-                end
-
-                outfile = basename(outpath)
-
-                if !ispath(outpath)
-                    compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
-
-                    if !ispath(outpath)
-                        open(pidfile, "w") do io
-                            write(io, string(getpid()))
-                        end
-
-                        if !ispath(outpath)
-                            cp(outfile, outpath)
-                        end
-
-                        rm(pidfile)
-                    end
-                end
-            catch err
-
-            finally
-                cd(curdir)
-            end
-        end
+        _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
     end
 
     timeout(pidfile, TIMEOUT, waittoexist=false)
@@ -542,8 +551,32 @@ function build!(ainfo::AccelInfo, buildtype::BuildType, launchid::String,
     outpath
 end
 
+# accel generate
+function generate_accel!(workdir::String, acceltype::AccelType,
+        compile::Union{String, Nothing}, accelid::String) :: String
+
+    if acceltype == JAI_FORTRAN
+        code = gencode_fortran_accel(accelid)
+
+    elseif acceltype == JAI_CPP
+        code = gencode_cpp_accel()
+
+    elseif acceltype == JAI_FORTRAN_OPENACC
+        code = gencode_fortran_openacc_accel(accelid)
+
+    elseif acceltype == JAI_FORTRAN_OMPTARGET
+        code = gencode_fortran_omptarget_accel(accelid)
+
+    else
+        error(string(acceltype) * " is not supported yet.")
+    end
+
+    code
+
+end
+
 # kernel generate
-function generate!(kinfo::KernelInfo, launchid::String,
+function generate_kernel!(kinfo::KernelInfo, launchid::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
@@ -571,17 +604,18 @@ function generate!(kinfo::KernelInfo, launchid::String,
 end
 
 # accel generate
-function generate!(ainfo::AccelInfo, buildtype::BuildType,
+function generate_directive!(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
-                names::NTuple{N, String} where {N}) :: String
+                names::NTuple{N, String} where {N},
+                control::Vector{String}) :: String
 
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_openacc(ainfo, buildtype, launchid, args, names)
+        code = gencode_fortran_openacc(ainfo, buildtype, launchid, args, names, control)
 
     elseif ainfo.acceltype == JAI_FORTRAN_OMPTARGET
-        code = gencode_fortran_omptarget(ainfo, buildtype, launchid, args, names)
+        code = gencode_fortran_omptarget(ainfo, buildtype, launchid, args, names, control)
 
     else
         error(string(ainfo.acceltype) * " is not supported for allocation.")
@@ -620,11 +654,18 @@ macro jenterdata(accel, directs...)
     updatetocount = 1
     allocnames = String[]
     updatenames = String[]
+    control = String[]
+
+    stracc = string(accel)
 
     for direct in directs
-        insert!(direct.args, 2, string(accel))
 
-        if direct.args[1] == :allocate
+        if direct isa Symbol
+            push!(control, string(direct))
+
+        elseif direct.args[1] == :allocate
+            insert!(direct.args, 2, stracc)
+
             for uvar in direct.args[3:end]
                 push!(allocnames, String(uvar))
             end
@@ -634,6 +675,8 @@ macro jenterdata(accel, directs...)
             push!(allocs, direct)
 
         elseif direct.args[1] == :update
+            insert!(direct.args, 2, stracc)
+
             for dvar in direct.args[3:end]
                 push!(updatenames, String(dvar))
             end
@@ -641,6 +684,9 @@ macro jenterdata(accel, directs...)
             insert!(direct.args, 4, updatetocount)
             updatetocount += 1
             push!(nonallocs, direct)
+
+        elseif direct.args[1] in (:async,)
+            push!(control, string(direct.args[1]))
 
         else
             error(string(direct.args[1]) * " is not supported.")
@@ -661,6 +707,9 @@ macro jenterdata(accel, directs...)
             push!(direct.args, kwallocnames)
 
         end
+
+        kwcontrol = Expr(:kw, :control, control)
+        push!(direct.args, kwcontrol)
 
         kwline = Expr(:kw, :_lineno_, __source__.line)
         push!(direct.args, kwline)
@@ -687,12 +736,18 @@ macro jexitdata(accel, directs...)
     dealloccount = 1
     deallocnames = String[]
     updatenames = String[]
+    control = String[]
+
+    accstr = string(accel)
 
     for direct in directs
 
-        insert!(direct.args, 2, string(accel))
+        if direct isa Symbol
+            push!(control, string(direct))
 
-        if direct.args[1] == :update
+        elseif direct.args[1] == :update
+            insert!(direct.args, 2, accstr)
+
             for uvar in direct.args[3:end]
                 push!(updatenames, String(uvar))
             end
@@ -702,6 +757,8 @@ macro jexitdata(accel, directs...)
             push!(nondeallocs, direct)
 
         elseif direct.args[1] == :deallocate
+            insert!(direct.args, 2, accstr)
+
             for dvar in direct.args[3:end]
                 push!(deallocnames, String(dvar))
             end
@@ -709,6 +766,9 @@ macro jexitdata(accel, directs...)
             insert!(direct.args, 4, dealloccount)
             dealloccount += 1
             push!(deallocs, direct)
+
+        elseif direct.args[1] in (:async,)
+            push!(control, string(direct.args[1]))
 
         else
             error(string(direct.args[1]) * " is not supported.")
@@ -730,6 +790,9 @@ macro jexitdata(accel, directs...)
             push!(direct.args, kwdeallocnames)
 
         end
+
+        kwcontrol = Expr(:kw, :control, control)
+        push!(direct.args, kwcontrol)
 
         kwline = Expr(:kw, :_lineno_, __source__.line)
         push!(direct.args, kwline)

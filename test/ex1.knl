@@ -12,7 +12,7 @@ END DO
 [fortran_openacc]
 INTEGER i, j, k
 
-!$acc parallel loop collapse(3) present(X, Y, Z)
+!$acc parallel loop collapse(3) present(X, Y, Z) async
 DO k=LBOUND(X, 3), UBOUND(X, 3)
     DO j=LBOUND(X, 2), UBOUND(X, 2)
         DO i=LBOUND(X, 1), UBOUND(X, 1)

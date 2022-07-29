@@ -9,6 +9,7 @@ const ACCEL_CODE = Dict{AccelType, String}(
 )
 
 const BUILD_CODE = Dict{BuildType, String}(
+    JAI_ACCEL => "C",
     JAI_LAUNCH => "L",
     JAI_ALLOCATE => "A",
     JAI_UPDATETO => "I",
@@ -159,7 +160,6 @@ struct KernelInfo
     kernelid::String
     accel::AccelInfo
     kerneldef::KernelDef
-    launchcache::Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Vector{DataType}}}
 
     function KernelInfo(accel::AccelInfo, kerneldef::String;
             _lineno_::Union{Int64, Nothing}=nothing,
@@ -193,8 +193,7 @@ struct KernelInfo
         ser = serialize(io, (accel.accelid, kerneldef.specid, _lineno_, _filepath_))
         kernelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-        new(kernelid, accel, kerneldef,
-            Dict{Tuple{Int64, String}, Tuple{Ptr{Nothing}, Expr}}())
+        new(kernelid, accel, kerneldef)
     end
 
 end
