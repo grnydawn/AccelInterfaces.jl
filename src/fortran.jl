@@ -188,11 +188,13 @@ function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
     params = fortran_genparams(kinfo.accel)
     arguments, typedecls = fortran_genvars(kinfo, launchid, inargs, outargs,
                                 innames, outnames)
+    devnum = kinfo.accel.device_num
 
     return code = """
 module mod$(launchid)
 USE, INTRINSIC :: ISO_C_BINDING
 
+INTEGER, PARAMETER :: JAI_DEVICE_NUM = $(devnum)
 $(params)
 
 public jai_launch
@@ -224,8 +226,7 @@ function gencode_fortran_accel(accelid::String) :: String
 module mod_$(accelid)_accel
 USE, INTRINSIC :: ISO_C_BINDING
 
-public jai_get_num_devices, jai_get_device_num, jai_get_device_type
-public jai_set_device_num, jai_set_device_type
+public jai_get_num_devices, jai_get_device_num, jai_set_device_num
 
 contains
 
@@ -253,18 +254,6 @@ jai_get_device_num = JAI_ERRORCODE
 
 END FUNCTION
 
-INTEGER (C_INT64_T) FUNCTION jai_get_device_type(buf) BIND(C, name="jai_get_device_type")
-USE, INTRINSIC :: ISO_C_BINDING
-
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-buf(1) = 1
-
-jai_get_device_type = JAI_ERRORCODE
-
-END FUNCTION
-
 INTEGER (C_INT64_T) FUNCTION jai_set_device_num(buf) BIND(C, name="jai_set_device_num")
 USE, INTRINSIC :: ISO_C_BINDING
 
@@ -272,16 +261,6 @@ INTEGER (C_INT64_T), DIMENSION(1), INTENT(IN) :: buf
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 jai_set_device_num = JAI_ERRORCODE
-
-END FUNCTION
-
-INTEGER (C_INT64_T) FUNCTION jai_set_device_type(buf) BIND(C, name="jai_set_device_type")
-USE, INTRINSIC :: ISO_C_BINDING
-
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(IN) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-jai_set_device_type = JAI_ERRORCODE
 
 END FUNCTION
 

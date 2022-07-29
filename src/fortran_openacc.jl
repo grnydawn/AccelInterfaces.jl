@@ -86,20 +86,53 @@ end module
 """
 end
 
+
 function gencode_fortran_openacc_accel(accelid::String) :: String
 
     return code = """
-module mod$(accelid)
+module mod_$(accelid)_accel
 USE, INTRINSIC :: ISO_C_BINDING
+USE OPENACC
+
+public jai_get_num_devices, jai_get_device_num, jai_set_device_num
 
 contains
 
-INTEGER (C_INT64_T) FUNCTION dummy() BIND(C, name="dummy")
+INTEGER (C_INT64_T) FUNCTION jai_get_num_devices(buf) BIND(C, name="jai_get_num_devices")
 USE, INTRINSIC :: ISO_C_BINDING
 
+INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-dummy = JAI_ERRORCODE
+buf(1) = acc_get_num_devices(acc_get_device_type())
+
+jai_get_num_devices = JAI_ERRORCODE
+
+END FUNCTION
+
+INTEGER (C_INT64_T) FUNCTION jai_get_device_num(buf) BIND(C, name="jai_get_device_num")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+buf(1) = acc_get_device_num(acc_get_device_type())
+
+jai_get_device_num = JAI_ERRORCODE
+
+END FUNCTION
+
+INTEGER (C_INT64_T) FUNCTION jai_set_device_num(buf) BIND(C, name="jai_set_device_num")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T), DIMENSION(1), INTENT(IN) :: buf
+INTEGER :: device_number
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+device_number = buf(1)
+CALL acc_set_device_num(device_number, acc_get_device_type())
+
+jai_set_device_num = JAI_ERRORCODE
 
 END FUNCTION
 

@@ -70,7 +70,6 @@ struct AccelInfo
     accelid::String
     acceltype::AccelType
     ismaster::Bool
-    device_type::Int64
     device_num::Int64
     const_vars::NTuple{N,JaiConstType} where {N}
     const_names::NTuple{N, String} where {N}
@@ -143,32 +142,19 @@ struct AccelInfo
             buf[1] = device[1]
             dfunc = dlsym(dlib, :jai_set_device_num)
             ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
-            device_type = buf[1]
+            device_num = device[1]
 
-        elseif length(device) == 2
-            buf[1] = device[1]
-            dfunc = dlsym(dlib, :jai_set_device_num)
+        else
+            buf[1] = -1
+            dfunc = dlsym(dlib, :jai_get_device_num)
             ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
-
-            buf[1] = device[2]
-            dfunc = dlsym(dlib, :jai_set_device_type)
-            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+            device_num = buf[1]
 
         end
 
-        buf[1] = -1
-        dfunc = dlsym(dlib, :jai_get_device_type)
-        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
-        device_type = buf[1]
-
-        buf[1] = -1
-        dfunc = dlsym(dlib, :jai_get_device_num)
-        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
-        device_num = buf[1]
-
         sharedlibs[accelid] = dlib
                
-        new(accelid, acceltype, master, device_type, device_num, const_vars,
+        new(accelid, acceltype, master, device_num, const_vars,
             const_names, compile, sharedlibs,
             workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
             Tuple{Ptr{Nothing}, Expr}}())

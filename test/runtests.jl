@@ -5,10 +5,10 @@ using Test
 
 if Sys.islinux()
     const fort_compile = "ftn -fPIC -shared -g"
-    const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
-    const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
-    #const acc_compile  = "ftn -shared -fPIC -fopenacc"
-    #const omp_compile  = "ftn -shared -fPIC -fopenmp"
+    #const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
+    #const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
+    const acc_compile  = "ftn -shared -fPIC -fopenacc"
+    const omp_compile  = "ftn -shared -fPIC -fopenmp"
 
     const cpp_compile  = "CC -fPIC -shared -g"
 
@@ -81,7 +81,7 @@ function fortran_openacc_tests()
     ismaster = true
 
     @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2
-                    ) compile(acc_compile) set(master=ismaster,
+                    ) compile(acc_compile) device(1) set(master=ismaster,
                     debugdir=".jaitmp")
 
 
@@ -107,7 +107,7 @@ function fortran_omptarget_tests()
     ismaster = true
 
     @jaccel myaccel framework(fortran_omptarget) constant(TEST1, TEST2
-                    ) compile(omp_compile) set(master=ismaster,
+                    ) compile(omp_compile) device(1) set(master=ismaster,
                     debugdir=".jaitmp")
 
 
@@ -162,10 +162,10 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if Sys.islinux()
-        fortran_test_string()
+        #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_omptarget_tests()
         #cpp_test_string()
 
     elseif Sys.isapple()

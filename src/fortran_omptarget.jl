@@ -1,9 +1,11 @@
 
 function fortran_omptarget_directives(buildtype::BuildType,
                 inargs::NTuple{N, JaiDataType} where {N},
-                innames::NTuple{N, String} where {N}) :: String
+                innames::NTuple{N, String} where {N},
+                control::Vector{String}) :: String
 
     directs = String[]
+    clauses = join([c for c in control if c in ("async",)], " ")
 
     for (arg, varname) in zip(inargs, innames)
 
@@ -33,11 +35,12 @@ end
 function gencode_fortran_omptarget(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
-                names::NTuple{N, String} where {N}) :: String
+                names::NTuple{N, String} where {N},
+                control::Vector{String}) :: String
 
     params = fortran_genparams(ainfo)
     typedecls = fortran_directive_typedecls(launchid, buildtype, args, names)
-    directives = fortran_omptarget_directives(buildtype, args[2:end], names[2:end])
+    directives = fortran_omptarget_directives(buildtype, args[2:end], names[2:end], control)
     arguments = join(names, ",")
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
  
@@ -57,22 +60,9 @@ USE, INTRINSIC :: ISO_C_BINDING
 
 $(typedecls)
 
-!INTEGER :: jai_devnum
-!INTEGER(ACC_DEVICE_KIND) :: jai_devtype
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-!jai_devtype = acc_get_device_type()
-!jai_devnum = acc_get_device_num(jai_devtype)
-
-!IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
-!    CALL acc_set_device_num(INT(jai_arg_device_num, KIND(jai_devnum)), jai_devtype)
-!END IF
-
 $(directives)
-
-!IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
-!    CALL acc_set_device_num(jai_devnum, jai_devtype)
-!END IF
 
 $(funcname) = JAI_ERRORCODE
 
@@ -83,21 +73,51 @@ end module
 """
 end
 
-
 function gencode_fortran_omptarget_accel(accelid::String) :: String
 
     return code = """
-module mod$(accelid)
+module mod_$(accelid)_accel
 USE, INTRINSIC :: ISO_C_BINDING
+USE OMP_LIB
+
+public jai_get_num_devices, jai_get_device_num, jai_set_device_num
 
 contains
 
-INTEGER (C_INT64_T) FUNCTION dummy() BIND(C, name="dummy")
+INTEGER (C_INT64_T) FUNCTION jai_get_num_devices(buf) BIND(C, name="jai_get_num_devices")
 USE, INTRINSIC :: ISO_C_BINDING
 
+INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-dummy = JAI_ERRORCODE
+buf(1) = omp_get_num_devices()
+
+jai_get_num_devices = JAI_ERRORCODE
+
+END FUNCTION
+
+INTEGER (C_INT64_T) FUNCTION jai_get_device_num(buf) BIND(C, name="jai_get_device_num")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+buf(1) = omp_get_device_num()
+
+jai_get_device_num = JAI_ERRORCODE
+
+END FUNCTION
+
+INTEGER (C_INT64_T) FUNCTION jai_set_device_num(buf) BIND(C, name="jai_set_device_num")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T), DIMENSION(1), INTENT(IN) :: buf
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+! this is not supported by spec.
+!CALL omp_set_device_num(buf(1))
+
+jai_set_device_num = JAI_ERRORCODE
 
 END FUNCTION
 
