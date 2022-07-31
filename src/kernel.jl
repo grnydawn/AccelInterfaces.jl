@@ -30,6 +30,27 @@ struct KernelSection
     acceltype::AccelType
     params::Dict{String, String}
     body::String
+    secenv::Module
+
+    function KernelSection(acceltype::AccelType, accelid::String,
+                    params::Dict{String, String}, body::String, secnum::Int)
+
+        modsym = Symbol("ksmod_$(accelid)_$(length(_kernelcache))_$(secnum)")
+
+        if acceltype == JAI_HEADER
+
+            bodyexpr = Meta.parse(body) 
+
+            mod = @eval module $modsym
+                        $bodyexpr
+                        end
+        else
+            mod = @eval module $modsym
+                        end
+        end
+
+        new(acceltype, params, body, mod)
+    end
 end
 
 const LIBFUNC_NAME = Dict{AccelType, Dict}(
@@ -95,11 +116,15 @@ struct KernelDef
     params::Dict
     body::String
 
-    function KernelDef(acceltype::AccelType, kerneldef::String)
+    function KernelDef(accel::AccelInfo, kerneldef::String)
 
         sections = KernelSection[]
+        acceltype = accel.acceltype
+        accelid = accel.accelid
 
-        acctypes = AccelType[JAI_HEADER]
+        acctypes = Vector{AccelType}()
+        push!(acctypes, JAI_HEADER)
+        #acctypes = AccelType[JAI_HEADER]
         params = Dict{String, String}()
         body = String[]
 
@@ -115,9 +140,9 @@ struct KernelDef
 
                 bodystr = join(body, "\n")
 
-                for acctype in acctypes
-                    if acctype == acceltype
-                        push!(sections, KernelSection(acctype, params, bodystr))
+                for atype in acctypes
+                    if atype == acceltype || atype == JAI_HEADER
+                        push!(sections, KernelSection(atype, accelid, params, bodystr, length(sections)))
                     end
                 end
                     
@@ -132,9 +157,9 @@ struct KernelDef
         # activate the only matching section
         if length(acctypes) > 0
             bodystr = join(body, "\n")
-            for acctype in acctypes
-                if acctype == acceltype
-                    push!(sections, KernelSection(acctype, params, bodystr))
+            for atype in acctypes
+                if atype == acceltype || atype == JAI_HEADER
+                    push!(sections, KernelSection(atype, accelid, params, bodystr, length(sections)))
                 end
             end
         end
@@ -161,30 +186,6 @@ struct KernelInfo
     accel::AccelInfo
     kerneldef::KernelDef
 
-    function KernelInfo(accel::AccelInfo, kerneldef::String;
-            _lineno_::Union{Int64, Nothing}=nothing,
-            _filepath_::Union{String, Nothing}=nothing)
-
-        kdef = kerneldef
-
-        if isfile(kerneldef)
-            open(kerneldef, "r") do io
-                kdef = read(io, String)
-            end
-        end
-
-        KernelInfo(accel, KernelDef(accel.acceltype, kdef),
-            _lineno_=_lineno_, _filepath_=_filepath_)
-    end
-
-    function KernelInfo(accel::AccelInfo, kerneldef::IOStream;
-            _lineno_::Union{Int64, Nothing}=nothing,
-            _filepath_::Union{String, Nothing}=nothing)
-
-        KernelInfo(accel, read(kerneldef, String), _lineno_=_lineno_,
-            _filepath_=_filepath_)
-    end
-
     function KernelInfo(accel::AccelInfo, kerneldef::KernelDef;
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
@@ -206,7 +207,20 @@ function jai_kernel_init(kname::String, aname::String,
             _filepath_::Union{String, Nothing}=nothing)
 
     accel = _accelcache[aname]
-    kernel = KernelInfo(accel, kspec, _lineno_=_lineno_, _filepath_=_filepath_)
+
+    if kspec isa String
+
+        kdef = kspec
+
+        if isfile(kspec)
+            open(kspec, "r") do io
+                kdef = read(io, String)
+            end
+        end
+    end
+
+    kernel = KernelInfo(accel, KernelDef(accel, kdef),
+                    _lineno_=_lineno_, _filepath_=_filepath_)
 
     global _kernelcache[kname] = kernel
 end

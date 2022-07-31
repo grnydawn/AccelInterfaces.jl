@@ -125,7 +125,6 @@ struct AccelInfo
      
         sharedlibs = Dict{String, Ptr{Nothing}}()
 
-        # TODO: generate shared library for this accelinfo
         libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
         build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
@@ -290,6 +289,9 @@ function jai_directive(accel::String, buildtype::BuildType,
         error(string(buildtype) * " is not supported.")
 
     end
+
+    # TODO: find out how to avoid @eval every time
+    # TODO: find out how to avoid "ccall($dfunc, Int64, ($(dtypes...),)" part evert time
 
     ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
 
@@ -459,11 +461,13 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
                         write(io, string(getpid()))
                     end
 
-                    if !ispath(outpath)
+                    if !ispath(outpath) && ispath(pidfile)
                         cp(outfile, outpath)
                     end
 
-                    rm(pidfile)
+                    if ispath(pidfile)
+                        rm(pidfile)
+                    end
                 end
             end
         catch err

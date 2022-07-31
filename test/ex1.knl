@@ -1,3 +1,5 @@
+myval = 10
+
 [fortran]
 INTEGER i, j, k
 

@@ -5,17 +5,18 @@ using Test
 
 if Sys.islinux()
     const fort_compile = "ftn -fPIC -shared -g"
-    #const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
-    #const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
-    const acc_compile  = "ftn -shared -fPIC -fopenacc"
-    const omp_compile  = "ftn -shared -fPIC -fopenmp"
+    const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
+    const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
+    #const acc_compile  = "ftn -shared -fPIC -fopenacc"
+    #const omp_compile  = "ftn -shared -fPIC -fopenmp"
 
     const cpp_compile  = "CC -fPIC -shared -g"
-
+    const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
 elseif Sys.isapple()
     const fort_compile = "gfortran -fPIC -shared -g"
     const cpp_compile  = "g++ -fPIC -shared -g"
+    const workdir = ".jaitmp"
 
 else
     error("Current OS is not supported yet.")
@@ -33,7 +34,11 @@ const ANS = X .+ Y
 
 function fortran_test_string()
 
+
     kernel_text = """
+
+test = 1
+
 [fortran]
 INTEGER i, j, k
 
@@ -48,7 +53,7 @@ END DO
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework(fortran) compile(fort_compile)
+    @jaccel myaccel framework(fortran) compile(fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel myaccel kernel_text
 
@@ -63,7 +68,7 @@ function fortran_test_file()
     Z = fill(0.::Float64, SHAPE)
 
     @jaccel myaccel framework(fortran) constant(TEST1, TEST2
-            ) compile(fort_compile) set(debugdir=".jaitmp")
+            ) compile(fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel myaccel "ex1.knl"
 
@@ -81,8 +86,8 @@ function fortran_openacc_tests()
     ismaster = true
 
     @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2
-                    ) compile(acc_compile) device(1) set(master=ismaster,
-                    debugdir=".jaitmp")
+                    ) compile(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
+                    workdir=workdir)
 
 
     @jkernel mykernel myaccel "ex1.knl"
@@ -108,7 +113,7 @@ function fortran_omptarget_tests()
 
     @jaccel myaccel framework(fortran_omptarget) constant(TEST1, TEST2
                     ) compile(omp_compile) device(1) set(master=ismaster,
-                    debugdir=".jaitmp")
+                    debugdir=workdir, workdir=workdir)
 
 
     @jkernel mykernel myaccel "ex1.knl"
@@ -142,7 +147,7 @@ function cpp_test_string()
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework(cpp) compile(cpp_compile) set(debugdir=".jaitmp")
+    @jaccel myaccel framework(cpp) compile(cpp_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel myaccel kernel_text
 
@@ -162,11 +167,11 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if Sys.islinux()
-        #fortran_test_string()
-        #fortran_test_file()
-        #fortran_openacc_tests()
-        fortran_omptarget_tests()
-        #cpp_test_string()
+        fortran_test_string()
+        fortran_test_file()
+        fortran_openacc_tests()
+        #fortran_omptarget_tests()
+        cpp_test_string()
 
     elseif Sys.isapple()
         fortran_test_string()
