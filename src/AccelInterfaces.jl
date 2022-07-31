@@ -48,6 +48,8 @@ end
         JAI_CPP
         JAI_CPP_OPENACC
         JAI_CPP_OMPTARGET
+        JAI_HIP
+        JAI_CUDA
         JAI_ANYACCEL
         JAI_HEADER
 end
@@ -59,6 +61,8 @@ const _accelmap = Dict{String, AccelType}(
     "cpp" => JAI_CPP,
     "cpp_openacc" => JAI_CPP_OPENACC,
     "cpp_omptarget" => JAI_CPP_OMPTARGET,
+    "hip" => JAI_HIP,
+    "cuda" => JAI_CUDA,
     "any" => JAI_ANYACCEL
 )
 
@@ -188,12 +192,13 @@ function jai_accel_fini(name::String;
     delete!(_accelcache, name)
 end
 
-# NOTE: keep the order of includes
+# NOTE: keep the order of the following includes
 include("./kernel.jl")
 include("./fortran.jl")
 include("./fortran_openacc.jl")
 include("./fortran_omptarget.jl")
 include("./cpp.jl")
+include("./hip.jl")
 
 function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Nothing
 
@@ -599,6 +604,9 @@ function generate_kernel!(kinfo::KernelInfo, launchid::String,
 
     elseif kinfo.accel.acceltype == JAI_FORTRAN_OMPTARGET
         code = gencode_fortran_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
+
+    elseif kinfo.accel.acceltype == JAI_HIP
+        code = gencode_cpp_kernel(kinfo, launchid, body, inargs, outargs, innames, outnames)
 
     else
         error(string(kinfo.accel.acceltype) * " is not supported yet.")
