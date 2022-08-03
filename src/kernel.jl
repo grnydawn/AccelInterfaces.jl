@@ -62,14 +62,16 @@ const LIBFUNC_NAME = Dict{AccelType, Dict}(
         JAI_ALLOCATE => "jai_allocate",
         JAI_UPDATETO => "jai_updateto",
         JAI_UPDATEFROM => "jai_updatefrom",
-        JAI_DEALLOCATE => "jai_deallocate"
+        JAI_DEALLOCATE => "jai_deallocate",
+        JAI_WAIT => "jai_wait"
     ),
     JAI_FORTRAN_OMPTARGET => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
         JAI_ALLOCATE => "jai_allocate",
         JAI_UPDATETO => "jai_updateto",
         JAI_UPDATEFROM => "jai_updatefrom",
-        JAI_DEALLOCATE => "jai_deallocate"
+        JAI_DEALLOCATE => "jai_deallocate",
+        JAI_WAIT => "jai_wait"
     ),
 
     JAI_CPP => Dict{BuildType, String}(
@@ -80,7 +82,8 @@ const LIBFUNC_NAME = Dict{AccelType, Dict}(
         JAI_ALLOCATE => "jai_allocate",
         JAI_UPDATETO => "jai_updateto",
         JAI_UPDATEFROM => "jai_updatefrom",
-        JAI_DEALLOCATE => "jai_deallocate"
+        JAI_DEALLOCATE => "jai_deallocate",
+        JAI_WAIT => "jai_wait"
     )
 )
 

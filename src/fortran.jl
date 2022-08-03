@@ -227,6 +227,7 @@ module mod_$(accelid)_accel
 USE, INTRINSIC :: ISO_C_BINDING
 
 public jai_get_num_devices, jai_get_device_num, jai_set_device_num
+public jai_wait
 
 contains
 
@@ -261,6 +262,15 @@ INTEGER (C_INT64_T), DIMENSION(1), INTENT(IN) :: buf
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 jai_set_device_num = JAI_ERRORCODE
+
+END FUNCTION
+
+INTEGER (C_INT64_T) FUNCTION jai_wait() BIND(C, name="jai_wait")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+jai_wait = JAI_ERRORCODE
 
 END FUNCTION
 

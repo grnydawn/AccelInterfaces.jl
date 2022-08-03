@@ -60,22 +60,9 @@ USE, INTRINSIC :: ISO_C_BINDING
 
 $(typedecls)
 
-!INTEGER :: jai_devnum
-!INTEGER(ACC_DEVICE_KIND) :: jai_devtype
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-!jai_devtype = acc_get_device_type()
-!jai_devnum = acc_get_device_num(jai_devtype)
-
-!IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
-!    CALL acc_set_device_num(INT(jai_arg_device_num, KIND(jai_devnum)), jai_devtype)
-!END IF
-
 $(directives)
-
-!IF (jai_arg_device_num .GE. 0 .AND. jai_devnum .NE. jai_arg_device_num) THEN
-!    CALL acc_set_device_num(jai_devnum, jai_devtype)
-!END IF
 
 $(funcname) = JAI_ERRORCODE
 
@@ -133,6 +120,18 @@ device_number = buf(1)
 CALL acc_set_device_num(device_number, acc_get_device_type())
 
 jai_set_device_num = JAI_ERRORCODE
+
+END FUNCTION
+
+INTEGER (C_INT64_T) FUNCTION jai_wait() BIND(C, name="jai_wait")
+USE, INTRINSIC :: ISO_C_BINDING
+
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+!CALL acc_wait(INTEGER(acc_get_default_async()))
+CALL acc_wait(0)
+
+jai_wait = JAI_ERRORCODE
 
 END FUNCTION
 

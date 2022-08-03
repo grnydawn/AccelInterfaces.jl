@@ -100,6 +100,8 @@ function fortran_openacc_tests()
     @test Z == ANS
     #println("TTTTT", Z)
 
+    @jwait myaccel
+
     @jdecel myaccel
 
 

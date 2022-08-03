@@ -25,7 +25,7 @@ import OffsetArrays.OffsetArray,
 
 export AccelType, JAI_VERSION,
         jai_directive, jai_accel_init, jai_accel_fini, jai_kernel_init,
-        @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel
+        @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel, @jwait
 
 
         
@@ -39,6 +39,7 @@ const TIMEOUT = 10
     JAI_LAUNCH      = 40
     JAI_UPDATEFROM  = 50
     JAI_DEALLOCATE  = 60
+    JAI_WAIT        = 70
 end
 
 @enum AccelType begin
@@ -192,6 +193,25 @@ function jai_accel_fini(name::String;
     delete!(_accelcache, name)
 end
 
+function jai_accel_wait(name::String;
+            _lineno_::Union{Int64, Nothing}=nothing,
+            _filepath_::Union{String, Nothing}=nothing)
+
+    accel = _accelcache[name]
+
+    if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
+        return 0::Int64
+    end
+
+    # load shared lib
+    dlib = accel.sharedlibs[accel.accelid]
+    local dfunc = dlsym(dlib, :jai_wait)
+
+    ccallexpr = :(ccall($dfunc, Int64, ()))
+    retval = @eval $ccallexpr
+
+end
+
 # NOTE: keep the order of the following includes
 include("./kernel.jl")
 include("./fortran.jl")
@@ -219,18 +239,18 @@ function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Not
     end
 end
 
-function get_accel(acceltype::AccelType; ismaster::Bool=true,
-                    const_vars::NTuple{N,JaiConstType} where {N}=(),
-                    compile::Union{String, Nothing}=nothing,
-                    const_names::NTuple{N, String} where {N}=()) :: AccelInfo
-
-    return AccelInfo(acceltype, ismaster=ismaster, const_vars=const_vars,
-                    compile=compile, const_names=const_names)
-end
-
-function get_kernel(accel::AccelInfo, path::String) :: KernelInfo
-    return KernelInfo(accel, path)
-end
+#function get_accel(acceltype::AccelType; ismaster::Bool=true,
+#                    const_vars::NTuple{N,JaiConstType} where {N}=(),
+#                    compile::Union{String, Nothing}=nothing,
+#                    const_names::NTuple{N, String} where {N}=()) :: AccelInfo
+#
+#    return AccelInfo(acceltype, ismaster=ismaster, const_vars=const_vars,
+#                    compile=compile, const_names=const_names)
+#end
+#
+#function get_kernel(accel::AccelInfo, path::String) :: KernelInfo
+#    return KernelInfo(accel, path)
+#end
 
 function jai_directive(accel::String, buildtype::BuildType,
             buildtypecount::Int64,
@@ -897,6 +917,7 @@ macro jaccel(accel, clauses...)
     eval(quote import AccelInterfaces.jai_kernel_init end)
     eval(quote import AccelInterfaces.jai_accel_init  end)
     eval(quote import AccelInterfaces.jai_accel_fini  end)
+    eval(quote import AccelInterfaces.jai_accel_wait  end)
 
     init = Expr(:call)
     push!(init.args, :jai_accel_init)
@@ -979,6 +1000,24 @@ macro jdecel(accel, clauses...)
     return(tmp)
 end
 
+macro jwait(accel)
+
+    tmp = Expr(:block)
+
+    fini = Expr(:call)
+    push!(fini.args, :jai_accel_wait)
+    push!(fini.args, string(accel))
+
+    kwline = Expr(:kw, :_lineno_, __source__.line)
+    push!(fini.args, kwline)
+
+    kwfile = Expr(:kw, :_filepath_, string(__source__.file))
+    push!(fini.args, kwfile)
+
+    push!(tmp.args, fini)
+
+    return(tmp)
+end
 
 
 end
