@@ -149,11 +149,11 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
         if !(varname in innames)
             typestr, dimstr = fortran_typedef(arg)
 
-            if arg in inargs
-                intentstr = ", INTENT(INOUT)"
-            else
+            #if arg in inargs
+            #    intentstr = ", INTENT(INOUT)"
+            #else
                 intentstr = ", INTENT(OUT)"
-            end
+            #end
 
             push!(typedecls, typestr * dimstr * intentstr * " :: " * varname)
         end
