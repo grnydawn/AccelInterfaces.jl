@@ -204,6 +204,7 @@ contains
 
 INTEGER (C_INT64_T) FUNCTION jai_launch($(arguments)) BIND(C, name="jai_launch")
 USE, INTRINSIC :: ISO_C_BINDING
+IMPLICIT NONE
 
 $(typedecls)
 
