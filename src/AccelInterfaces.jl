@@ -462,6 +462,18 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
         curdir = pwd()
 
         try
+            outpath = abspath(outpath)
+            pidfile = abspath(pidfile)
+
+            if debugdir != nothing
+                debugfile = joinpath(abspath(debugdir), srcfile)
+                if !ispath(debugfile)
+                    open(debugfile, "w") do io
+                        write(io, code)
+                    end
+                end
+            end
+
             procdir = mktempdir()
             cd(procdir)
 
@@ -469,19 +481,12 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
                 write(io, code)
             end
 
-            if debugdir != nothing
-                debugfile = joinpath(debugdir, srcfile)
-                open(debugfile, "w") do io
-                    write(io, code)
-                end
-            end
-
             outfile = basename(outpath)
 
             if !ispath(outpath)
                 compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
-                if !ispath(outpath)
+                if !ispath(outpath) && !ispath(pidfile)
                     open(pidfile, "w") do io
                         write(io, string(getpid()))
                     end
@@ -496,6 +501,7 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
                 end
             end
         catch err
+            println("X4", string(err))
 
         finally
             cd(curdir)
@@ -939,7 +945,7 @@ macro jaccel(accel, clauses...)
             push!(init.args, Expr(:kw, :device, Expr(:tuple, device...))) 
 
         elseif clause.args[1] == :framework
-            framework = (String(f) for f in clause.args[2:end])
+            framework = (esc(f) for f in clause.args[2:end])
 
             push!(init.args, Expr(:kw, :framework, Expr(:tuple, framework...))) 
 

@@ -53,7 +53,7 @@ END DO
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework(fortran) compile(fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel myaccel framework("fortran") compile(fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel myaccel kernel_text
 
@@ -67,7 +67,7 @@ function fortran_test_file()
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework(fortran) constant(TEST1, TEST2
+    @jaccel myaccel framework("fortran") constant(TEST1, TEST2
             ) compile(fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel myaccel "ex1.knl"
@@ -85,7 +85,7 @@ function fortran_openacc_tests()
 
     ismaster = true
 
-    @jaccel myaccel framework(fortran_openacc) constant(TEST1, TEST2
+    @jaccel myaccel framework("fortran_openacc") constant(TEST1, TEST2
                     ) compile(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
@@ -113,7 +113,7 @@ function fortran_omptarget_tests()
 
     ismaster = true
 
-    @jaccel myaccel framework(fortran_omptarget) constant(TEST1, TEST2
+    @jaccel myaccel framework("fortran_omptarget") constant(TEST1, TEST2
                     ) compile(omp_compile) device(1) set(master=ismaster,
                     debugdir=workdir, workdir=workdir)
 
@@ -149,7 +149,7 @@ function cpp_test_string()
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework(cpp) compile(cpp_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel myaccel framework("cpp") compile(cpp_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel myaccel kernel_text
 
