@@ -133,7 +133,8 @@ function fortran_genvars(kinfo::KernelInfo, launchid::String,
 
         typestr, dimstr = fortran_typedef(arg)
 
-        if varname in outnames || arg in outargs
+        #if varname in outnames || arg in outargs
+        if varname in outnames
             intentstr = ", INTENT(INOUT)"
 
         else
