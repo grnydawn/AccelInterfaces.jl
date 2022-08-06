@@ -712,7 +712,7 @@ macro jenterdata(accel, directs...)
             alloccount += 1
             push!(allocs, direct)
 
-        elseif direct.args[1] == :update
+        elseif direct.args[1] == :updateto
             insert!(direct.args, 2, stracc)
 
             for dvar in direct.args[3:end]
@@ -735,7 +735,7 @@ macro jenterdata(accel, directs...)
 
     for direct in (allocs..., nonallocs...)
 
-        if direct.args[1] == :update
+        if direct.args[1] == :updateto
             kwupdatenames = Expr(:kw, :names, Expr(:tuple, updatenames...))
             push!(direct.args, kwupdatenames)
 
@@ -783,7 +783,7 @@ macro jexitdata(accel, directs...)
         if direct isa Symbol
             push!(control, string(direct))
 
-        elseif direct.args[1] == :update
+        elseif direct.args[1] == :updatefrom
             insert!(direct.args, 2, accstr)
 
             for uvar in direct.args[3:end]
@@ -816,7 +816,7 @@ macro jexitdata(accel, directs...)
 
     for direct in (nondeallocs..., deallocs...)
 
-        if direct.args[1] == :update
+        if direct.args[1] == :updatefrom
             kwupdatenames = Expr(:kw, :names, Expr(:tuple, updatenames...))
             #kwupdatenames = Expr(:kw, :names, :($((updatenames...),)))
             push!(direct.args, kwupdatenames)

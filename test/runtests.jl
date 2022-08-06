@@ -92,11 +92,11 @@ function fortran_openacc_tests()
 
     @jkernel mykernel myaccel "ex1.knl"
 
-    @jenterdata myaccel allocate(X, Y, Z) update(X, Y)
+    @jenterdata myaccel allocate(X, Y, Z) updateto(X, Y)
 
     @jlaunch(mykernel, X, Y; output=(Z,))
 
-    @jexitdata myaccel update(Z) deallocate(X, Y, Z) async
+    @jexitdata myaccel updatefrom(Z) deallocate(X, Y, Z) async
     @test Z == ANS
     #println("TTTTT", Z)
 
@@ -120,11 +120,11 @@ function fortran_omptarget_tests()
 
     @jkernel mykernel myaccel "ex1.knl"
 
-    @jenterdata myaccel allocate(X, Y, Z) update(X, Y)
+    @jenterdata myaccel allocate(X, Y, Z) updateto(X, Y)
 
     @jlaunch(mykernel, X, Y; output=(Z,))
 
-    @jexitdata myaccel update(Z) deallocate(X, Y, Z)
+    @jexitdata myaccel updatefrom(Z) deallocate(X, Y, Z)
 
     @jdecel myaccel
 
