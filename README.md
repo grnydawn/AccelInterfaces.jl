@@ -81,30 +81,30 @@ To use GPU, you need to add additional Jai directives such as "@jenterdata", "@j
 ```julia
 fill!(z, 0)
 
-@jaccel myaccel2 framework(fortran_openacc) compile("ftn -h acc,noomp -fPIC -shared")
+@jaccel framework(fortran_openacc) compile("ftn -h acc,noomp -fPIC -shared")
 
-@jkernel mykernel2 myaccel2 kernel_text
+@jkernel mykernel2 kernel_text
 
-@jenterdata myaccel2 allocate(x, y, z) update(x, y)
+@jenterdata allocate(x, y, z) updateto(x, y)
 
 @jlaunch(mykernel2, x, y; output=(z,))
 
-@jexitdata myaccel2 update(z) deallocate(x, y, z)
+@jexitdata updatefrom(z) deallocate(x, y, z)
 
-@jdecel myaccel2
+@jdecel
 
 @assert z == answer
 ```
 
-Similar to above Fortran example, we use "@jaccel" directive to create Jai accelerator context. In this example, we used Cray compiler wrapper to compile Fortran program with OpenAcc. But you may modify the compile command for your needs. we use "fortran_openacc" for "framework" clause which let Jai choose the content under "[fortran_openacc]" instead of "[fortran]" of kernel_text text.
+Similar to above Fortran example, we use "@jaccel" directive to create Jai accelerator context. In this example, we used Cray compiler wrapper to compile Fortran program with OpenAcc. But you may modify the compile command for your needs. we use "fortran_openacc" for "framework" clause which let Jai choose the content under "[fortran_openacc]" instead of "[fortran]" of kernel_text text. Please note that we did not add the literal name for Jai accelerator context. Without specifying the name for Jai accelerator context, Jai creates a default Jai accelerator name (jai_accel_default) for you. you can skip specifying the default name in the following Jai directives as shown in this example.
 
 "@jkernel" directive creates a Jai kernel context with the literal name of "mykernel2."
 
-The first clause to "@jenterdata" is the literal name defined in "@jaccel" directive. "allocate" clause allocates device memory for the variables of "x", "y", and "z". "update" clause copies the content of "x" and "y" to the allocated corresponding device variables.
+"allocate" clause in "@jenterdata" allocates device memory for the variables of "x", "y", and "z". "updateto" clause copies the content of "x" and "y" to the allocated corresponding device variables.
 
-In "@jexitdata", users can copy back data from the device using "update" clause. "deallocate" clause deallocates device memory allocated for "x", "y", and "z".
+In "@jexitdata", users can copy back data from the device using "updatefrom" clause. "deallocate" clause deallocates device memory allocated for "x", "y", and "z".
 
-"@jdecel" directive notifies Jai that the user will not use "myaccel2" context anymore.
+"@jdecel" directive notifies Jai that the user will not use current accelerator context anymore.
 
 You may notice that the Jai usage for fortran_openacc framework has similarity to fortran framework usage shown above. In fact, you can use the same code in fortran_openacc case for supporting not only fortran_openacc but also fortran if you switch "@jaccel" with proper information of framework and compile as shown below.
 
