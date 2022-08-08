@@ -12,7 +12,8 @@ This package is still in the early phase of development. Only a subset of mentio
 
 - Creates a shared library from pre-existing Fortran/C/C++ code
 - Generates arguments for [ccall](https://docs.julialang.org/en/v1/base/c/#ccall) function that uses the created shared library
-- User interface is simplified by using Julia macros
+- Simplifies User interface using Julia macros
+- Takes advantages of Just-in-time(JIT) compilations
 
 ## Installation
 
