@@ -117,7 +117,8 @@ INTEGER :: device_number
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 device_number = buf(1)
-CALL acc_set_device_num(device_number, acc_get_device_type())
+!CALL acc_set_device_num(device_number, acc_get_device_type())
+CALL acc_set_device_num(device_number, acc_device_default)
 
 jai_set_device_num = JAI_ERRORCODE
 

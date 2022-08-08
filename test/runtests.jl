@@ -53,11 +53,13 @@ END DO
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework("fortran") compile(fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel framework("fortran") compile(fort_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel mykernel myaccel kernel_text
+    @jkernel mykernel kernel_text
 
     @jlaunch(mykernel, X, Y; output=(Z,))
+
+    @jdecel
 
     @test Z == ANS
 
@@ -67,10 +69,10 @@ function fortran_test_file()
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework("fortran") constant(TEST1, TEST2
+    @jaccel framework("fortran") constant(TEST1, TEST2
             ) compile(fort_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel mykernel myaccel "ex1.knl"
+    @jkernel mykernel "ex1.knl"
 
     @jlaunch(mykernel, X, Y; output=(Z,))
 
@@ -85,24 +87,24 @@ function fortran_openacc_tests()
 
     ismaster = true
 
-    @jaccel myaccel framework("fortran_openacc") constant(TEST1, TEST2
+    @jaccel framework("fortran_openacc") constant(TEST1, TEST2
                     ) compile(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
 
-    @jkernel mykernel myaccel "ex1.knl"
+    @jkernel mykernel "ex1.knl"
 
-    @jenterdata myaccel allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata allocate(X, Y, Z) updateto(X, Y)
 
     @jlaunch(mykernel, X, Y; output=(Z,))
 
-    @jexitdata myaccel updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
     @test Z == ANS
     #println("TTTTT", Z)
 
-    @jwait myaccel
+    @jwait
 
-    @jdecel myaccel
+    @jdecel
 
 
 end

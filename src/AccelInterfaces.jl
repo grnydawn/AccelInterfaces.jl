@@ -683,7 +683,7 @@ A more detailed explanation can go here, although I guess it is not needed in th
 julia> @jenterdata myaccel framework(fortran_openacc)
 ```
 """
-macro jenterdata(accel, directs...)
+macro jenterdata(directs...)
 
     tmp = Expr(:block)
     allocs = Expr[]
@@ -694,7 +694,20 @@ macro jenterdata(accel, directs...)
     updatenames = String[]
     control = String[]
 
-    stracc = string(accel)
+    lendir = length(directs)
+
+    if lendir == 0
+        stracc = "jai_accel_default"
+
+    elseif directs[1] isa Symbol
+        stracc = string(directs[1])
+        directs = directs[2:end]
+
+    else
+        stracc = "jai_accel_default"
+
+    end
+
 
     for direct in directs
 
@@ -764,7 +777,7 @@ macro jenterdata(accel, directs...)
     return(tmp)
 end
 
-macro jexitdata(accel, directs...)
+macro jexitdata(directs...)
 
 
     tmp = Expr(:block)
@@ -776,7 +789,19 @@ macro jexitdata(accel, directs...)
     updatenames = String[]
     control = String[]
 
-    accstr = string(accel)
+    lendir = length(directs)
+
+    if lendir == 0
+        accstr = "jai_accel_default"
+
+    elseif directs[1] isa Symbol
+        accstr = string(directs[1])
+        directs = directs[2:end]
+
+    else
+        accstr = "jai_accel_default"
+
+    end
 
     for direct in directs
 
@@ -847,14 +872,27 @@ macro jexitdata(accel, directs...)
     return(tmp)
 end
 
-macro jkernel(kernelname, accelname, kernelspec)
+macro jkernel(clauses...)
 
     tmp = Expr(:call)
     push!(tmp.args, :jai_kernel_init)
 
-    push!(tmp.args, String(kernelname))
-    push!(tmp.args, String(accelname))
-    push!(tmp.args, esc(kernelspec))
+    lenclauses = length(clauses)
+
+    if lenclauses < 2
+        error("@jkernel macro requires at least two clauses.")
+
+    elseif lenclauses == 2
+        push!(tmp.args, String(clauses[1]))
+        push!(tmp.args, "jai_accel_default")
+        push!(tmp.args, esc(clauses[2]))
+
+    elseif length(clauses) > 2
+        push!(tmp.args, String(clauses[1]))
+        push!(tmp.args, String(clauses[2]))
+        push!(tmp.args, esc(clauses[3]))
+
+    end
 
     kwline = Expr(:kw, :_lineno_, __source__.line)
     push!(tmp.args, kwline)
@@ -915,7 +953,7 @@ macro jlaunch(largs...)
 
 end
 
-macro jaccel(accel, clauses...)
+macro jaccel(clauses...)
 
     tmp = Expr(:block)
 
@@ -927,7 +965,19 @@ macro jaccel(accel, clauses...)
 
     init = Expr(:call)
     push!(init.args, :jai_accel_init)
-    push!(init.args, string(accel))
+
+    if length(clauses) == 0
+        push!(init.args, "jai_accel_default")
+
+    elseif clauses[1] isa Symbol
+        push!(init.args, string(clauses[1]))
+        clauses = clauses[2:end]
+
+    else
+        push!(init.args, "jai_accel_default")
+
+    end
+
 
     for clause in clauses
 
@@ -983,13 +1033,24 @@ macro jaccel(accel, clauses...)
 end
 
 
-macro jdecel(accel, clauses...)
+macro jdecel(clauses...)
 
     tmp = Expr(:block)
 
     fini = Expr(:call)
     push!(fini.args, :jai_accel_fini)
-    push!(fini.args, string(accel))
+
+    if length(clauses) == 0
+        push!(fini.args, "jai_accel_default")
+
+    elseif clauses[1] isa Symbol
+        push!(fini.args, string(clauses[1]))
+        clauses = clauses[2:end]
+
+    else
+        push!(fini.args, "jai_accel_default")
+
+    end
 
     for clause in clauses
     end
@@ -1006,21 +1067,32 @@ macro jdecel(accel, clauses...)
     return(tmp)
 end
 
-macro jwait(accel)
+macro jwait(clauses...)
 
     tmp = Expr(:block)
 
-    fini = Expr(:call)
-    push!(fini.args, :jai_accel_wait)
-    push!(fini.args, string(accel))
+    expr = Expr(:call)
+    push!(expr.args, :jai_accel_wait)
+
+    if length(clauses) == 0
+        push!(expr.args, "jai_accel_default")
+
+    elseif clauses[1] isa Symbol
+        push!(expr.args, string(clauses[1]))
+        clauses = clauses[2:end]
+
+    else
+        push!(expr.args, "jai_accel_default")
+
+    end
 
     kwline = Expr(:kw, :_lineno_, __source__.line)
-    push!(fini.args, kwline)
+    push!(expr.args, kwline)
 
     kwfile = Expr(:kw, :_filepath_, string(__source__.file))
-    push!(fini.args, kwfile)
+    push!(expr.args, kwfile)
 
-    push!(tmp.args, fini)
+    push!(tmp.args, expr)
 
     return(tmp)
 end

@@ -204,7 +204,8 @@ end
 
 const _kernelcache = Dict{String, KernelInfo}()
 
-function jai_kernel_init(kname::String, aname::String,
+function jai_kernel_init(kname::String,
+            aname::String,
             kspec::Union{String, KernelDef};
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
@@ -226,5 +227,6 @@ function jai_kernel_init(kname::String, aname::String,
                     _lineno_=_lineno_, _filepath_=_filepath_)
 
     global _kernelcache[kname] = kernel
+
 end
 
