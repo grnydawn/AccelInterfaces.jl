@@ -174,7 +174,7 @@ end
         fortran_test_string()
         fortran_test_file()
         fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_omptarget_tests()
         cpp_test_string()
 
     elseif Sys.isapple()

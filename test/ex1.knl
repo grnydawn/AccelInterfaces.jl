@@ -30,13 +30,13 @@ INTEGER i, j, k
 !$omp target
 !$omp teams distribute num_teams(UBOUND(X, 3)-LBOUND(X, 3)+1)
 DO k=LBOUND(X, 3), UBOUND(X, 3)
-    !$omp do collapse(2) private(j, i)
+    !$omp parallel do simd collapse(2) private(j, i)
     DO j=LBOUND(X, 2), UBOUND(X, 2)
         DO i=LBOUND(X, 1), UBOUND(X, 1)
             Z(i, j, k) = X(i, j, k) + Y(i, j, k)
         END DO
     END DO
-    !$omp end do
+    !$omp end parallel do simd
 END DO
 !$omp end teams distribute
 !$omp end target
