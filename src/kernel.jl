@@ -205,8 +205,8 @@ end
 const _kernelcache = Dict{String, KernelInfo}()
 
 function jai_kernel_init(kname::String,
-            aname::String,
-            kspec::Union{String, KernelDef};
+            kspec::Union{String, KernelDef},
+            aname::String;
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
 

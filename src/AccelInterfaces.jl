@@ -127,9 +127,6 @@ struct AccelInfo
                         const_names, compile, _lineno_, _filepath_))
         accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-     
-        sharedlibs = Dict{String, Ptr{Nothing}}()
-
         libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
         build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
@@ -155,7 +152,8 @@ struct AccelInfo
             device_num = buf[1]
 
         end
-
+     
+        sharedlibs = Dict{String, Ptr{Nothing}}()
         sharedlibs[accelid] = dlib
                
         new(accelid, acceltype, master, device_num, const_vars,
@@ -884,14 +882,23 @@ macro jkernel(clauses...)
 
     elseif lenclauses == 2
         push!(tmp.args, String(clauses[1]))
+        push!(tmp.args, esc(clauses[2]))
         push!(tmp.args, "jai_accel_default")
+
+    else
+        push!(tmp.args, String(clauses[1]))
         push!(tmp.args, esc(clauses[2]))
 
-    elseif length(clauses) > 2
-        push!(tmp.args, String(clauses[1]))
-        push!(tmp.args, String(clauses[2]))
-        push!(tmp.args, esc(clauses[3]))
+        if clauses[3] isa Symbol
+            push!(tmp.args, String(clauses[3]))
+            start = 4
+        else
+            push!(tmp.args, "jai_accel_default")
+            start = 3
+        end
 
+        for clause in clauses[start:end]
+        end
     end
 
     kwline = Expr(:kw, :_lineno_, __source__.line)
