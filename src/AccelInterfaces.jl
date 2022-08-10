@@ -23,10 +23,7 @@ import OffsetArrays.OffsetArray,
 # [mykernel1] = @jkernel kernel_text
 # retval = @jlaunch([mykernel1,] x, y; output=(z,))
 
-export AccelType, JAI_VERSION,
-        jai_directive, jai_accel_init, jai_accel_fini, jai_kernel_init,
-        @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel, @jwait
-
+export JAI_VERSION, @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdecel, @jwait
 
         
 const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
@@ -67,6 +64,23 @@ const _accelmap = Dict{String, AccelType}(
     "any" => JAI_ANYACCEL
 )
 
+function _cmap(jc, jcf, c, cf) :: String
+    return ((haskey(ENV, jc) ? ENV[jc] : (haskey(ENV, c) ? ENV[c] : "")) * " " *
+            (haskey(ENV, jcf) ? ENV[jcf] : (haskey(ENV, cf) ? ENV[cf] : "")))
+end
+
+#const _compilemap = Dict{String, String}(
+#    "fortran" => _cmap("JAI_FC", "JAI_FFLAGS", "FC", "FFLAGS"),
+#    "fortran_openacc" => _cmap("JAI_FC", "JAI_FFLAGS", "FC", "FFLAGS"),
+#    "fortran_omptarget" => _cmap("JAI_FC", "JAI_FFLAGS", "FC", "FFLAGS"),
+#    "cpp" => _cmap("JAI_CXX", "JAI_CXXFLAGS", "CXX", "CXXFLAGS"),
+#    "cpp_openacc" => _cmap("JAI_CXX", "JAI_CXXFLAGS", "CXX", "CXXFLAGS"),
+#    "cpp_omptarget" => _cmap("JAI_CXX", "JAI_CXXFLAGS", "CXX", "CXXFLAGS"),
+#    "hip" => _cmap("JAI_CXX", "JAI_CXXFLAGS", "CXX", "CXXFLAGS"),
+#    "cuda" => _cmap("JAI_CXX", "JAI_CXXFLAGS", "CXX", "CXXFLAGS")
+#)
+
+
 const JaiConstType = Union{Number, NTuple{N, T}, AbstractArray{T, N}} where {N, T<:Number}
 const JaiDataType = JaiConstType
 
@@ -88,7 +102,7 @@ struct AccelInfo
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
             const_names::NTuple{N, String} where {N}=(),
-            framework::NTuple{N, String} where {N}=(),
+            framework::NTuple{N, Tuple{String, Union{NTuple{M, Tuple{String, Union{String, Nothing}}}, String, Nothing}}} where {N, M}=nothing,
             device::NTuple{N, Integer} where {N}=(),
             compile::NTuple{N, String} where {N}=(),
             workdir::Union{String, Nothing}=nothing,
@@ -115,21 +129,70 @@ struct AccelInfo
             end
         end
 
-        # TODO: support multiple framework arguments
-        frameworkname = lowercase(framework[1])
-        acceltype = _accelmap[frameworkname]
-
-        # TODO: support multiple optional compiler commands
-        compile = length(compile) == 0 ? nothing : compile[1]
-
         io = IOBuffer()
-        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, acceltype, const_vars,
-                        const_names, compile, _lineno_, _filepath_))
+        ser = serialize(io, (Sys.STDLIB, JAI_VERSION, const_vars,
+                        const_names, _lineno_, _filepath_))
         accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-        libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
-        build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
-        dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+        dlib = nothing
+        acceltype = nothing   
+        sharedlibs = nothing   
+        compile = nothing   
+
+        # TODO: support multiple framework arguments
+        for (frameworkname, frameconfig) in framework
+            acceltype = _accelmap[frameworkname]
+
+            if frameconfig isa Nothing
+                if startswith(frameworkname, "fortran")
+                    compile = ((haskey(ENV, "JAI_FC") ? ENV["JAI_FC"] :
+                                    (haskey(ENV, "FC") ? ENV["FC"] : "")) * " " *
+                               (haskey(ENV, "JAI_FFLAGS") ? ENV["JAI_FFLAGS"] :
+                                    (haskey(ENV, "FFLAGS") ? ENV["FFLAGS"] : "")))
+
+                elseif startswith(frameworkname, "cpp")
+                    compile = ((haskey(ENV, "JAI_CXX") ? ENV["JAI_CXX"] :
+                                    (haskey(ENV, "CXX") ? ENV["CXX"] : "")) * " " *
+                               (haskey(ENV, "JAI_CXXFLAGS") ? ENV["JAI_CXXFLAGS"] :
+                                    (haskey(ENV, "CXXFLAGS") ? ENV["CXXFLAGS"] : "")))
+                end
+
+            elseif frameconfig isa String
+                compile = frameconfig
+
+            else
+                for (cfgname, cfg) in frameconfig
+                    if cfgname == "compile"
+                        compile = cfg
+                    end
+                end
+
+            end
+
+            if compile == nothing
+                error("No compile information is available.")
+            end
+
+            io = IOBuffer()
+            ser = serialize(io, (accelid, acceltype, compile))
+            accelid = bytes2hex(sha1(String(take!(io)))[1:4])
+
+            libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
+
+            try
+                build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
+
+                dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+             
+                sharedlibs = Dict{String, Ptr{Nothing}}()
+                sharedlibs[accelid] = dlib
+
+            catch err
+
+            end
+
+            break
+        end
 
         buf = fill(-1, 1)
 
@@ -152,9 +215,6 @@ struct AccelInfo
             device_num = buf[1]
 
         end
-     
-        sharedlibs = Dict{String, Ptr{Nothing}}()
-        sharedlibs[accelid] = dlib
                
         new(accelid, acceltype, master, device_num, const_vars,
             const_names, compile, sharedlibs,
@@ -168,7 +228,7 @@ const _accelcache = Dict{String, AccelInfo}()
 function jai_accel_init(name::String; master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
             const_names::NTuple{N, String} where {N}=(),
-            framework::NTuple{N, String} where {N}=(),
+            framework::NTuple{N, Tuple{String, Union{NTuple{M, Tuple{String, Union{String, Nothing}}}, String, Nothing}}} where {N, M}=nothing,
             device::NTuple{N, Integer} where {N}=(),
             compile::NTuple{N, String} where {N}=(),
             workdir::Union{String, Nothing}=nothing,
@@ -777,7 +837,6 @@ end
 
 macro jexitdata(directs...)
 
-
     tmp = Expr(:block)
     deallocs = Expr[]
     nondeallocs = Expr[]
@@ -914,6 +973,7 @@ end
 
 
 macro jlaunch(largs...)
+
     tmp = Expr(:call)
     push!(tmp.args, :launch_kernel)
     innames = String[]
@@ -964,12 +1024,6 @@ macro jaccel(clauses...)
 
     tmp = Expr(:block)
 
-    eval(quote import AccelInterfaces.jai_directive   end)
-    eval(quote import AccelInterfaces.jai_kernel_init end)
-    eval(quote import AccelInterfaces.jai_accel_init  end)
-    eval(quote import AccelInterfaces.jai_accel_fini  end)
-    eval(quote import AccelInterfaces.jai_accel_wait  end)
-
     init = Expr(:call)
     push!(init.args, :jai_accel_init)
 
@@ -1002,9 +1056,44 @@ macro jaccel(clauses...)
             push!(init.args, Expr(:kw, :device, Expr(:tuple, device...))) 
 
         elseif clause.args[1] == :framework
-            framework = (esc(f) for f in clause.args[2:end])
 
-            push!(init.args, Expr(:kw, :framework, Expr(:tuple, framework...))) 
+            # Vector{Pair{Symbol, Vector{Pair{Symbol, String}}}}
+            #items = Vector{Pair{Symbol, Vector{Pair{Symbol, String}}}}()
+            items = Vector{Expr}()
+
+            for item in clause.args[2:end]
+
+                if item isa Symbol
+                    push!(items, Expr(:tuple, String(item), :nothing))
+
+                elseif item.head == :kw
+
+                    if item.args[2] isa Symbol || item.args[2] isa String
+                        push!(items, Expr(:tuple, string(item.args[1]), esc(item.args[2])))
+
+                    elseif item.args[2].head == :tuple
+                        subitems = []
+                        for subargs in item.args[2].args
+                            push!(subitems, Expr(:tuple, string(subargs.args[1]), esc(subargs.args[2])))
+                        end
+                        push!(items, Expr(:tuple, string(item.args[1]), Expr(:tuple, subitems...)))
+
+                    else
+                        error("Wrong framework syntax")
+
+                    end
+
+                else
+                    error("Wrong framework syntax")
+                end
+            end
+
+            #dump(items)
+
+            #framework = (f for f in items)
+
+            #push!(init.args, Expr(:kw, :framework, Expr(:tuple, framework...))) 
+            push!(init.args, Expr(:kw, :framework, Expr(:tuple, items...))) 
 
         elseif clause.args[1] == :compile
             compile = (esc(c) for c in clause.args[2:end])

@@ -1,4 +1,6 @@
 using AccelInterfaces
+#using AccelInterfaces: @jaccel, @jkernel, @jenterdata, @jlaunch, @jwait, @jexitdata, @jdecel
+
 using Test
 
 #import Profile
@@ -53,7 +55,7 @@ END DO
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel framework("fortran") compile(fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel kernel_text
 
@@ -69,8 +71,8 @@ function fortran_test_file()
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel framework("fortran") constant(TEST1, TEST2
-            ) compile(fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel framework(fortran=(compile=fort_compile,)) constant(TEST1, TEST2
+            ) set(debugdir=workdir, workdir=workdir)
 
     @jkernel mykernel "ex1.knl"
 
@@ -87,7 +89,7 @@ function fortran_openacc_tests()
 
     ismaster = true
 
-    @jaccel framework("fortran_openacc") constant(TEST1, TEST2
+    @jaccel framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
                     ) compile(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
@@ -115,12 +117,12 @@ function fortran_omptarget_tests()
 
     ismaster = true
 
-    @jaccel myaccel framework("fortran_omptarget") constant(TEST1, TEST2
-                    ) compile(omp_compile) device(1) set(master=ismaster,
+    @jaccel myaccel framework(fortran_omptarget=omp_compile) constant(TEST1, TEST2
+                    ) device(1) set(master=ismaster,
                     debugdir=workdir, workdir=workdir)
 
 
-    @jkernel mykernel myaccel "ex1.knl"
+    @jkernel mykernel "ex1.knl" myaccel
 
     @jenterdata myaccel allocate(X, Y, Z) updateto(X, Y)
 
@@ -151,9 +153,12 @@ function cpp_test_string()
 
     Z = fill(0.::Float64, SHAPE)
 
-    @jaccel myaccel framework("cpp") compile(cpp_compile) set(debugdir=workdir, workdir=workdir)
+    ENV["CXX"] = "g++"
+    ENV["CXXFLAGS"] = "-fPIC -shared -g"
 
-    @jkernel mykernel myaccel kernel_text
+    @jaccel myaccel framework(cpp) set(debugdir=workdir, workdir=workdir)
+
+    @jkernel mykernel kernel_text myaccel
 
     #Profile.@profile @jlaunch(mykernel, X, Y; output=(Z,))
     #@time for i in range(1, stop=10)
