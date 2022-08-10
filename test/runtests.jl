@@ -57,9 +57,13 @@ END DO
 
     @jaccel framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
 
+    @jenterdata allocate(X, Y, Z)
+
     @jkernel mykernel kernel_text
 
     @jlaunch(mykernel, X, Y; output=(Z,))
+
+    @jexitdata deallocate(X, Y, Z)
 
     @jdecel
 

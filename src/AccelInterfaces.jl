@@ -744,6 +744,7 @@ julia> @jenterdata myaccel framework(fortran_openacc)
 macro jenterdata(directs...)
 
     tmp = Expr(:block)
+
     allocs = Expr[]
     nonallocs = Expr[]
     alloccount = 1
@@ -766,29 +767,37 @@ macro jenterdata(directs...)
 
     end
 
-
     for direct in directs
 
         if direct isa Symbol
             push!(control, string(direct))
 
         elseif direct.args[1] == :allocate
+
+            for idx in range(2, length(direct.args))
+                push!(allocnames, String(direct.args[idx]))
+                direct.args[idx] = esc(direct.args[idx])
+            end
+
             insert!(direct.args, 2, stracc)
 
-            for uvar in direct.args[3:end]
-                push!(allocnames, String(uvar))
-            end
             insert!(direct.args, 3, JAI_ALLOCATE)
             insert!(direct.args, 4, alloccount)
             alloccount += 1
             push!(allocs, direct)
 
         elseif direct.args[1] == :updateto
+
+            for idx in range(2, length(direct.args))
+                push!(updatenames, String(direct.args[idx]))
+                direct.args[idx] = esc(direct.args[idx])
+            end
+
             insert!(direct.args, 2, stracc)
 
-            for dvar in direct.args[3:end]
-                push!(updatenames, String(dvar))
-            end
+            #for dvar in direct.args[3:end]
+            #    push!(updatenames, String(dvar))
+            #end
             insert!(direct.args, 3, JAI_UPDATETO)
             insert!(direct.args, 4, updatetocount)
             updatetocount += 1
@@ -828,7 +837,7 @@ macro jenterdata(directs...)
 
         direct.args[1] = :jai_directive
 
-        push!(tmp.args, esc(direct))
+        push!(tmp.args, direct)
     end
 
     #dump(tmp)
@@ -866,22 +875,34 @@ macro jexitdata(directs...)
             push!(control, string(direct))
 
         elseif direct.args[1] == :updatefrom
+
+            for idx in range(2, length(direct.args))
+                push!(updatenames, String(direct.args[idx]))
+                direct.args[idx] = esc(direct.args[idx])
+            end
+
             insert!(direct.args, 2, accstr)
 
-            for uvar in direct.args[3:end]
-                push!(updatenames, String(uvar))
-            end
+#            for uvar in direct.args[3:end]
+#                push!(updatenames, String(uvar))
+#            end
             insert!(direct.args, 3, JAI_UPDATEFROM)
             insert!(direct.args, 4, updatefromcount)
             updatefromcount += 1
             push!(nondeallocs, direct)
 
         elseif direct.args[1] == :deallocate
-            insert!(direct.args, 2, accstr)
 
-            for dvar in direct.args[3:end]
-                push!(deallocnames, String(dvar))
+            for idx in range(2, length(direct.args))
+                push!(deallocnames, String(direct.args[idx]))
+                direct.args[idx] = esc(direct.args[idx])
             end
+
+            insert!(direct.args, 2, accstr)
+#
+#            for dvar in direct.args[3:end]
+#                push!(deallocnames, String(dvar))
+#            end
             insert!(direct.args, 3, JAI_DEALLOCATE)
             insert!(direct.args, 4, dealloccount)
             dealloccount += 1
@@ -922,7 +943,7 @@ macro jexitdata(directs...)
 
         direct.args[1] = :jai_directive
 
-        push!(tmp.args, esc(direct))
+        push!(tmp.args, direct)
     end
 
     #dump(tmp)
@@ -1021,6 +1042,8 @@ macro jlaunch(largs...)
 end
 
 macro jaccel(clauses...)
+
+    eval(quote import AccelInterfaces.jai_directive   end)
 
     tmp = Expr(:block)
 
