@@ -1080,8 +1080,6 @@ macro jaccel(clauses...)
 
         elseif clause.args[1] == :framework
 
-            # Vector{Pair{Symbol, Vector{Pair{Symbol, String}}}}
-            #items = Vector{Pair{Symbol, Vector{Pair{Symbol, String}}}}()
             items = Vector{Expr}()
 
             for item in clause.args[2:end]

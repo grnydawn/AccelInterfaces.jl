@@ -91,7 +91,8 @@ USE, INTRINSIC :: ISO_C_BINDING
 INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-buf(1) = acc_get_num_devices(acc_get_device_type())
+!buf(1) = acc_get_num_devices(acc_get_device_type())
+buf(1) = acc_get_num_devices(acc_device_default)
 
 jai_get_num_devices = JAI_ERRORCODE
 
@@ -103,7 +104,8 @@ USE, INTRINSIC :: ISO_C_BINDING
 INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
-buf(1) = acc_get_device_num(acc_get_device_type())
+!buf(1) = acc_get_device_num(acc_get_device_type())
+buf(1) = acc_get_device_num(acc_device_default)
 
 jai_get_device_num = JAI_ERRORCODE
 
