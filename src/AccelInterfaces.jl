@@ -774,7 +774,7 @@ macro jenterdata(directs...)
 
         elseif direct.args[1] == :allocate
 
-            for idx in range(2, length(direct.args))
+            for idx in range(2, stop=length(direct.args))
                 push!(allocnames, String(direct.args[idx]))
                 direct.args[idx] = esc(direct.args[idx])
             end
@@ -788,7 +788,7 @@ macro jenterdata(directs...)
 
         elseif direct.args[1] == :updateto
 
-            for idx in range(2, length(direct.args))
+            for idx in range(2, stop=length(direct.args))
                 push!(updatenames, String(direct.args[idx]))
                 direct.args[idx] = esc(direct.args[idx])
             end
@@ -876,7 +876,7 @@ macro jexitdata(directs...)
 
         elseif direct.args[1] == :updatefrom
 
-            for idx in range(2, length(direct.args))
+            for idx in range(2, stop=length(direct.args))
                 push!(updatenames, String(direct.args[idx]))
                 direct.args[idx] = esc(direct.args[idx])
             end
@@ -893,7 +893,7 @@ macro jexitdata(directs...)
 
         elseif direct.args[1] == :deallocate
 
-            for idx in range(2, length(direct.args))
+            for idx in range(2, stop=length(direct.args))
                 push!(deallocnames, String(direct.args[idx]))
                 direct.args[idx] = esc(direct.args[idx])
             end
