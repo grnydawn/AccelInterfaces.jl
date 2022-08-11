@@ -56,7 +56,7 @@ const y = fill(2, N)
 const z = fill(0, N)
 const answer = fill(3, N)
 
-@jaccel myaccel1 framework(fortran) compile("gfortran -fPIC -shared")
+@jaccel myaccel1 framework(fortran="gfortran -fPIC -shared")
 
 @jkernel mykernel1 myaccel1 kernel_text
 
@@ -67,7 +67,7 @@ const answer = fill(3, N)
 
 "kernel_text" variable contains a Fortran DO loop that actually calculates the vector sum. There are two versions of DO loop: Fortran and Fortran_OpenAcc. Users can select one of them using the "framework" clause of "@jaccel" Jai directive explained below.
 
-"@jaccel" creates a Jai accelerator context. To identify the context, here we use the literal name of "myaccel1". "framework" clause specifies the kind of acceleration(fortran in this example). With a compile clause, the user can provide Jai with the actual compiler command line to generate a shared library. The command line should include the compiler and all compiler flags except the "-o" flag with the name of an output file and the path to an input source file.
+"@jaccel" creates a Jai accelerator context. To identify the context, here we use the literal name of "myaccel1". "framework" clause specifies the kind of acceleration(fortran in this example). The user can provide Jai with the actual compiler command line to generate a shared library. The command line should include the compiler and all compiler flags except the "-o" flag with the name of an output file and the path to an input source file.
 
 "@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel1". The last clause is the kernel program written in Fortran. User can provide Jai with the kernel program in Julia string or external file path.
 
@@ -81,7 +81,7 @@ To use GPU, you need to add additional Jai directives such as "@jenterdata", "@j
 ```julia
 fill!(z, 0)
 
-@jaccel framework(fortran_openacc) compile("ftn -h acc,noomp -fPIC -shared")
+@jaccel framework(fortran_openacc="ftn -h acc,noomp -fPIC -shared")
 
 @jkernel mykernel2 kernel_text
 
