@@ -327,6 +327,7 @@ function jai_directive(accel::String, buildtype::BuildType,
         return 0::Int64
     end
 
+    # TODO: add file modified date
     cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
@@ -515,7 +516,7 @@ end
 function _gensrcfile(outpath::String, srcfile::String, code::String,
     debugdir::Union{String, Nothing}, compile::String, pidfile::String)
 
-    if !ispath(outpath)
+    if !ispath(outpath) && !ispath(pidfile)
 
         curdir = pwd()
 
@@ -541,7 +542,8 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
 
             outfile = basename(outpath)
 
-            if !ispath(outpath)
+            if !ispath(outpath) && !ispath(pidfile)
+
                 compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
                 if !ispath(outpath) && !ispath(pidfile)
@@ -633,7 +635,7 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
     pidfile = outpath * ".pid"
 
     # generate source code
-    if !ispath(outpath)
+    if !ispath(outpath) && !ispath(pidfile)
         code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
 
         _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
