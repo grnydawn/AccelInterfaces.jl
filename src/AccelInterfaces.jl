@@ -18,6 +18,9 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
+import Pidfile.mkpidlock
+
+
 # TODO: simplified user interface
 # [myaccel1] = @jaccel
 # [mykernel1] = @jkernel kernel_text
@@ -541,6 +544,10 @@ function _gensrcfile(outpath::String, srcfile::String, code::String,
 
         compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
 
+        if ispath(outfile)
+            cp(outfile, outpath, force=true)
+        end
+
     catch e
         rethrow(e)
 
@@ -561,12 +568,27 @@ function build_accel!(workdir::String, debugdir::Union{String, Nothing}, accelty
     # generate source code
     if !ispath(outpath)
 
-        code = generate_accel!(workdir, acceltype, compile, accelid)
+        lock = nothing
 
-        _gensrcfile(outpath, srcfile, code, debugdir, compile, pidfile)
+        try
+            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+
+            if !ispath(outpath)
+
+                code = generate_accel!(workdir, acceltype, compile, accelid)
+                _gensrcfile(outpath, srcfile, code, debugdir, compile, pidfile)
+            end
+
+        catch e
+
+        finally
+            if lock != nothing
+                close(lock)
+            end
+        end
     end
 
-    timeout(pidfile, TIMEOUT, waittoexist=false)
+    timeout(outpath, TIMEOUT)
 
     outpath
 
@@ -590,12 +612,26 @@ function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
     # generate source code
     if !ispath(outpath)
 
-        code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
+        lock = nothing
 
-        _gensrcfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
+        try
+            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+
+            if !ispath(outpath)
+                code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
+                _gensrcfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
+            end
+
+        catch e
+
+        finally
+            if lock != nothing
+                close(lock)
+            end
+        end
     end
 
-    timeout(pidfile, TIMEOUT, waittoexist=false)
+    timeout(outpath, TIMEOUT)
 
     outpath
 end
@@ -617,16 +653,22 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
     # generate source code
     if !ispath(outpath)
 
+        lock = nothing
+
         try
-            lock = mkpidlock(pidfile, wait=false, stale_age=5)
+            lock = mkpidlock(pidfile, wait=false, stale_age=3)
 
-            code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
-            _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
-
-            close(lock)
+            if !ispath(outpath)
+                code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
+                _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
+            end
 
         catch e
 
+        finally
+            if lock != nothing
+                close(lock)
+            end
         end
     end
 
