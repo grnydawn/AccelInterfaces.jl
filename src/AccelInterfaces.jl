@@ -516,56 +516,36 @@ end
 function _gensrcfile(outpath::String, srcfile::String, code::String,
     debugdir::Union{String, Nothing}, compile::String, pidfile::String)
 
-    if !ispath(outpath) && !ispath(pidfile)
+    curdir = pwd()
 
-        curdir = pwd()
+    try
+        outpath = abspath(outpath)
 
-        try
-            outpath = abspath(outpath)
-            pidfile = abspath(pidfile)
-
-            if debugdir != nothing
-                debugfile = joinpath(abspath(debugdir), srcfile)
-                if !ispath(debugfile)
-                    open(debugfile, "w") do io
-                        write(io, code)
-                    end
+        if debugdir != nothing
+            debugfile = joinpath(abspath(debugdir), srcfile)
+            if !ispath(debugfile)
+                open(debugfile, "w") do io
+                    write(io, code)
                 end
             end
-
-            procdir = mktempdir()
-            cd(procdir)
-
-            open(srcfile, "w") do io
-                write(io, code)
-            end
-
-            outfile = basename(outpath)
-
-            if !ispath(outpath) && !ispath(pidfile)
-
-                compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
-
-                if !ispath(outpath) && !ispath(pidfile)
-                    open(pidfile, "w") do io
-                        write(io, string(getpid()))
-                    end
-
-                    if !ispath(outpath) && ispath(pidfile)
-                        cp(outfile, outpath)
-                    end
-
-                    if ispath(pidfile)
-                        rm(pidfile)
-                    end
-                end
-            end
-        catch err
-            println("X4", string(err))
-
-        finally
-            cd(curdir)
         end
+
+        procdir = mktempdir()
+        cd(procdir)
+
+        open(srcfile, "w") do io
+            write(io, code)
+        end
+
+        outfile = basename(outpath)
+
+        compilelog = read(run(`$(split(compile)) -o $outfile $(srcfile)`), String)
+
+    catch e
+        rethrow(e)
+
+    finally
+        cd(curdir)
     end
 end
 
@@ -635,13 +615,22 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
     pidfile = outpath * ".pid"
 
     # generate source code
-    if !ispath(outpath) && !ispath(pidfile)
-        code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
+    if !ispath(outpath)
 
-        _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
+        try
+            lock = mkpidlock(pidfile, wait=false, stale_age=5)
+
+            code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
+            _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
+
+            close(lock)
+
+        catch e
+
+        end
     end
 
-    timeout(pidfile, TIMEOUT, waittoexist=false)
+    timeout(outpath, TIMEOUT)
 
     outpath
 end
