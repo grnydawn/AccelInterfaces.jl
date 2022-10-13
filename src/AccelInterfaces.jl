@@ -18,7 +18,7 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-import Pidfile.mkpidlock
+import Pidfile.open_exclusive
 
 
 # TODO: simplified user interface
@@ -516,7 +516,7 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
 end
 
 
-function _gensrcfile(outpath::String, srcfile::String, code::String,
+function _genlibfile(outpath::String, srcfile::String, code::String,
     debugdir::Union{String, Nothing}, compile::String, pidfile::String)
 
     curdir = pwd()
@@ -571,12 +571,12 @@ function build_accel!(workdir::String, debugdir::Union{String, Nothing}, accelty
         lock = nothing
 
         try
-            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+            lock = open_exclusive(pidfile, wait=false, stale_age=3)
 
             if !ispath(outpath)
 
                 code = generate_accel!(workdir, acceltype, compile, accelid)
-                _gensrcfile(outpath, srcfile, code, debugdir, compile, pidfile)
+                _genlibfile(outpath, srcfile, code, debugdir, compile, pidfile)
             end
 
         catch e
@@ -609,17 +609,17 @@ function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
     srcpath = joinpath(kinfo.accel.workdir, srcfile)
     pidfile = outpath * ".pid"
 
-    # generate source code
+    # generate shared lib
     if !ispath(outpath)
 
         lock = nothing
 
         try
-            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+            lock = open_exclusive(pidfile, wait=false, stale_age=3)
 
             if !ispath(outpath)
                 code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
-                _gensrcfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
+                _genlibfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
             end
 
         catch e
@@ -650,17 +650,17 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
     srcpath = joinpath(ainfo.workdir, srcfile)
     pidfile = outpath * ".pid"
 
-    # generate source code
+    # generate shared lib
     if !ispath(outpath)
 
         lock = nothing
 
         try
-            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+            lock = open_exclusive(pidfile, wait=false, stale_age=3)
 
             if !ispath(outpath)
                 code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
-                _gensrcfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
+                _genlibfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
             end
 
         catch e
