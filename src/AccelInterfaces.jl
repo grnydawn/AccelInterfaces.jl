@@ -616,7 +616,7 @@ function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
         lock = nothing
 
         try
-            lock = open_exclusive(pidfile, wait=false, stale_age=3)
+            lock = mkpidlock(pidfile, wait=false, stale_age=3)
 
             if !ispath(outpath)
                 code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
@@ -657,7 +657,7 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
         lock = nothing
 
         try
-            lock = open_exclusive(pidfile, wait=false, stale_age=3)
+            lock = mkpidlock(pidfile, wait=false, stale_age=3)
 
             if !ispath(outpath)
                 code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
