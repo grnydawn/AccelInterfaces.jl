@@ -18,7 +18,7 @@ import Dates.now,
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
 
-import Pidfile.open_exclusive
+import Pidfile.mkpidlock
 
 
 # TODO: simplified user interface
@@ -571,7 +571,8 @@ function build_accel!(workdir::String, debugdir::Union{String, Nothing}, accelty
         lock = nothing
 
         try
-            lock = open_exclusive(pidfile, wait=false, stale_age=3)
+            #lock = mkpidlock(pidfile, wait=false, stale_age=3)
+            lock = mkpidlock(pidfile)
 
             if !ispath(outpath)
 
