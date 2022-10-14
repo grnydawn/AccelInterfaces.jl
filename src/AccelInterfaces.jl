@@ -571,8 +571,7 @@ function build_accel!(workdir::String, debugdir::Union{String, Nothing}, accelty
         lock = nothing
 
         try
-            #lock = mkpidlock(pidfile, wait=false, stale_age=3)
-            lock = mkpidlock(pidfile)
+            lock = mkpidlock(pidfile, stale_age=3)
 
             if !ispath(outpath)
 
@@ -616,7 +615,7 @@ function build_kernel!(kinfo::KernelInfo, launchid::String, outpath::String,
         lock = nothing
 
         try
-            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+            lock = mkpidlock(pidfile, stale_age=3)
 
             if !ispath(outpath)
                 code = generate_kernel!(kinfo, launchid, inargs, outargs, innames, outnames)
@@ -657,7 +656,7 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
         lock = nothing
 
         try
-            lock = mkpidlock(pidfile, wait=false, stale_age=3)
+            lock = mkpidlock(pidfile, stale_age=3)
 
             if !ispath(outpath)
                 code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
