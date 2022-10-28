@@ -1,9 +1,6 @@
 using AccelInterfaces
-#using AccelInterfaces: @jaccel, @jkernel, @jenterdata, @jlaunch, @jwait, @jexitdata, @jdecel
 
 using Test
-
-#import Profile
 
 if occursin("crusher", Sys.BINDIR)
     const fort_compile = "ftn -fPIC -shared -g"
