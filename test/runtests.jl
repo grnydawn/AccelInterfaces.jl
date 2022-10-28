@@ -5,7 +5,7 @@ using Test
 
 #import Profile
 
-if Sys.islinux()
+if occursin("crusher", Sys.BINDIR)
     const fort_compile = "ftn -fPIC -shared -g"
     const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
     const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
@@ -15,13 +15,11 @@ if Sys.islinux()
     const cpp_compile  = "CC -fPIC -shared -g"
     const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
-elseif Sys.isapple()
+#elseif Sys.isapple()
+else
     const fort_compile = "gfortran -fPIC -shared -g"
     const cpp_compile  = "g++ -fPIC -shared -g"
     const workdir = ".jaitmp"
-
-else
-    error("Current OS is not supported yet.")
 
 end
 
