@@ -3,6 +3,22 @@ using AccelInterfaces
 using Test
 
 if occursin("crusher", Sys.BINDIR)
+    const SYSNAME = "Crusher"
+
+elseif occursin("summit", Sys.BINDIR)
+    const SYSNAME = "Summit"
+
+elseif Sys.isapple()
+    const SYSNAME = "MacOS"
+
+elseif Sys.islinux()
+    const SYSNAME = "Linux"
+
+else
+    error("Not supported system.")
+end
+
+if SYSNAME == "Crusher" 
     const fort_compile = "ftn -fPIC -shared -g"
     const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
     const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
@@ -12,7 +28,14 @@ if occursin("crusher", Sys.BINDIR)
     const cpp_compile  = "CC -fPIC -shared -g"
     const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
-#elseif Sys.isapple()
+elseif SYSNAME == "Summit" 
+    const fort_compile = "pgfortran -fPIC -shared -g"
+    const acc_compile  = "pgfortran -shared -fPIC -acc -ta=tesla:nordc"
+    #const acc_compile  = "pgfortran -shared -fPIC -acc -ta=tesla,host"
+
+    const cpp_compile  = "pgc++ -fPIC -shared -g"
+    const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
+
 else
     const fort_compile = "gfortran -fPIC -shared -g"
     const cpp_compile  = "g++ -fPIC -shared -g"
@@ -100,10 +123,10 @@ function fortran_openacc_tests()
     @jlaunch(mykernel, X, Y; output=(Z,))
 
     @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
-    @test Z == ANS
-    #println("TTTTT", Z)
 
     @jwait
+
+    @test Z == ANS
 
     @jdecel
 
@@ -174,14 +197,26 @@ end
 
 @testset "AccelInterfaces.jl" begin
 
-    if Sys.islinux()
+    if SYSNAME == "Crusher"
         fortran_test_string()
         fortran_test_file()
         fortran_openacc_tests()
         fortran_omptarget_tests()
         cpp_test_string()
 
-    elseif Sys.isapple()
+    elseif SYSNAME == "Summit"
+        fortran_test_string()
+        fortran_test_file()
+        fortran_openacc_tests()
+        cpp_test_string()
+
+    elseif SYSNAME == "Linux"
+        fortran_test_string()
+        fortran_test_file()
+        fortran_openacc_tests()
+        cpp_test_string()
+
+    elseif SYSNAME == "MacOS"
         fortran_test_string()
         fortran_test_file()
         cpp_test_string()
