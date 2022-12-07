@@ -4,6 +4,7 @@ const ACCEL_CODE = Dict{AccelType, String}(
     JAI_FORTRAN_OPENACC => "FA",
     JAI_FORTRAN_OMPTARGET => "FM",
     JAI_CPP => "CP",
+    JAI_CPP_CUDA => "CU",
     JAI_CPP_OPENACC => "CA",
     JAI_CPP_OMPTARGET => "FM"
 )
@@ -23,6 +24,7 @@ const acceltypemap = Dict{String, AccelType}(
     "fortran_openacc" => JAI_FORTRAN_OPENACC,
     "fortran_omptarget" => JAI_FORTRAN_OMPTARGET,
     "cpp"   => JAI_CPP,
+    "cuda"   => JAI_CPP_CUDA,
     "cpp_openacc" => JAI_CPP_OPENACC
 )
 
@@ -76,6 +78,14 @@ const LIBFUNC_NAME = Dict{AccelType, Dict}(
 
     JAI_CPP => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
+    ),
+    JAI_CPP_CUDA => Dict{BuildType, String}(
+        JAI_LAUNCH => "jai_launch",
+        JAI_ALLOCATE => "jai_allocate",
+        JAI_UPDATETO => "jai_updateto",
+        JAI_UPDATEFROM => "jai_updatefrom",
+        JAI_DEALLOCATE => "jai_deallocate",
+        JAI_WAIT => "jai_wait"
     ),
     JAI_CPP_OPENACC => Dict{BuildType, String}(
         JAI_LAUNCH => "jai_launch",
@@ -227,6 +237,26 @@ function jai_kernel_init(kname::String,
                     _lineno_=_lineno_, _filepath_=_filepath_)
 
     global _kernelcache[kname] = kernel
+
+end
+
+function merge_args(inargs::NTuple{N, JaiDataType} where {N},
+                outargs::NTuple{M, JaiDataType} where {M},
+                innames::NTuple{N, String} where {N},
+                outnames::NTuple{M, String} where {M})
+
+    args = collect(JaiDataType, inargs)
+    names = collect(String, innames)
+
+
+    for (index, oname) in enumerate(outnames)
+        if !(oname in innames)
+            push!(args, outargs[index])
+            push!(names, oname)
+        end
+    end
+
+    return (args...,), (names...,)
 
 end
 

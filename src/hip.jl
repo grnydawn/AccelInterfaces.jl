@@ -1,5 +1,6 @@
 
 function gencode_hip_kernel(kinfo::KernelInfo, launchid::String,
+                hipopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},

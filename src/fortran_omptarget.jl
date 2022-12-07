@@ -32,7 +32,7 @@ function fortran_omptarget_directives(buildtype::BuildType,
 
 end
 
-function gencode_fortran_omptarget(ainfo::AccelInfo, buildtype::BuildType,
+function gencode_fortran_omptarget_directive(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},

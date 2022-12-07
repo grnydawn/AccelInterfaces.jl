@@ -14,8 +14,7 @@ const typemap_j2c = Dict{DataType, String}(
 )
 
 
-function cpp_typedef(arg::JaiDataType, name::String, macros::Vector{String}
-            ) :: Tuple{String, String}
+function cpp_typedef(arg::JaiDataType, name::String) :: Tuple{String, String}
 
     dimstr = ""
 
@@ -27,11 +26,7 @@ function cpp_typedef(arg::JaiDataType, name::String, macros::Vector{String}
         for (idx, len) in enumerate(reverse(size(arg)))
             strlen = string(len)
             push!(dimlist, "[" * strlen * "]")
-            push!(macros, "uint32_t jai_shape_" * name * string(idx-1) * " = " *
-                    strlen * ";" )
-            accum *= len
         end
-        push!(macros, "uint32_t jai_size_" * name * " = " * string(accum) * ";" )
 
         dimstr = join(dimlist, "")
 
@@ -39,15 +34,13 @@ function cpp_typedef(arg::JaiDataType, name::String, macros::Vector{String}
         strlen = string(length(arg))
         typestr = typemap_j2c[eltype(arg)]
         dimstr = "[" * strlen * "]"
-        push!(macros, "uint32_t jai_shape_" * name * "0 = " * strlen * ";" )
-        push!(macros, "uint32_t jai_size_" * name * " = " * strlen * ";" )
 
     else
         typestr = typemap_j2c[typeof(arg)]
 
     end
 
-    typestr, dimstr
+    return typestr, dimstr
 end
 
 function cpp_genvalue(value::JaiConstType) :: String
@@ -76,76 +69,85 @@ function cpp_genvalue(value::JaiConstType) :: String
 
 end
 
-function cpp_genparams(ainfo::AccelInfo, macros::Vector{String}) :: String
-
-    params = String[]
-
-    for (name, value) in zip(ainfo.const_names, ainfo.const_vars)
-
-        typestr, dimstr = cpp_typedef(value, name, macros)
-        push!(params, "const " * name * " " * typestr * dimstr * " = " * cpp_genvalue(value) * ";")
-    end
-
-    return join(params, "\n")
-end
-
-
-function cpp_genvars(kinfo::KernelInfo, macros::Vector{String},
-                inargs::NTuple{N, JaiDataType} where {N},
-                outargs::NTuple{M, JaiDataType} where {M},
-                innames::NTuple{N, String} where {N},
-                outnames::NTuple{M, String} where {M}) :: String
-
-    onames = String[]
-
-    for (index, oname) in enumerate(outnames)
-        if !(oname in innames)
-            push!(onames, oname)
-        end
-    end
-
-    arguments = String[]
-
-    for (arg, varname) in zip(inargs, innames)
-
-        typestr, dimstr = cpp_typedef(arg, varname, macros)
-
-        push!(arguments, typestr * " " * varname * dimstr)
-    end
-
-    for (arg, varname) in zip(outargs, outnames)
-        if !(varname in innames)
-            typestr, dimstr = cpp_typedef(arg, varname, macros)
-
-            push!(arguments, typestr * " " * varname * dimstr)
-        end
-    end
-
-    return join(arguments, ", ")
-end
-
-function gencode_cpp_kernel(kinfo::KernelInfo, launchid::String,
-                kernelbody::String,
-                inargs::NTuple{N, JaiDataType} where {N},
-                outargs::NTuple{M, JaiDataType} where {M},
-                innames::NTuple{N, String} where {N},
-                outnames::NTuple{M, String} where {M}) :: String
+function cpp_genmacros(
+            args::NTuple{N, JaiDataType} where {N},
+            names::NTuple{N, String} where {N}
+        ) :: String
 
     macros = String[]
 
     push!(macros, "#define JSHAPE(varname, dim) jai_shape_##varname##dim")
     push!(macros, "#define JSIZE(varname) jai_size_##varname")
 
-    params = cpp_genparams(kinfo.accel, macros)
-    kernelargs = cpp_genvars(kinfo, macros, inargs, outargs, innames, outnames)
-    macrodefs = join(macros, "\n")
+    for (name, arg) in zip(names, args)
+        if arg isa AbstractArray
+            accum = 1
+            for (idx, len) in enumerate(reverse(size(arg)))
+                strlen = string(len)
+                push!(macros, "uint32_t jai_shape_" * name * string(idx-1) * " = " * strlen * ";" )
+                accum *= len
+            end
+            push!(macros, "uint32_t jai_size_" * name * " = " * string(accum) * ";" )
+
+        elseif arg isa Tuple
+            strlen = string(length(arg))
+            push!(macros, "uint32_t jai_shape_" * name * "0 = " * strlen * ";" )
+            push!(macros, "uint32_t jai_size_" * name * " = " * strlen * ";" )
+
+        end
+    end
+
+    return join(macros, "\n")
+end
+
+function cpp_genparams(ainfo::AccelInfo) :: String
+
+    params = String[]
+
+    for (name, value) in zip(ainfo.const_names, ainfo.const_vars)
+
+        typestr, dimstr = cpp_typedef(value, name)
+        push!(params, "const " * name * " " * typestr * dimstr * " = " * cpp_genvalue(value) * ";")
+    end
+
+    return join(params, "\n")
+end
+
+function cpp_genargs(
+                args::NTuple{N, JaiDataType} where {N},
+                names::NTuple{N, String} where {N}) :: String
+
+    arguments = String[]
+
+    for (arg, varname) in zip(args, names)
+
+        typestr, dimstr = cpp_typedef(arg, varname)
+
+        push!(arguments, typestr * " " * varname * dimstr)
+    end
+
+    return join(arguments, ", ")
+end
+
+function gencode_cpp_kernel(kinfo::KernelInfo, launchid::String,
+                cppopts::Dict{String, T} where T <: Any,
+                kernelbody::String,
+                inargs::NTuple{N, JaiDataType} where {N},
+                outargs::NTuple{M, JaiDataType} where {M},
+                innames::NTuple{N, String} where {N},
+                outnames::NTuple{M, String} where {M}) :: String
+
+    args, names = merge_args(inargs, outargs, innames, outnames)
+    params = cpp_genparams(kinfo.accel)
+    macros = cpp_genmacros(args, names)
+    kernelargs = cpp_genargs(args, names)
 
     return code = """
 #include <stdint.h>
 
 $(params)
 
-$(macrodefs)
+$(macros)
 
 extern "C" {
 

@@ -32,7 +32,7 @@ function fortran_openacc_directives(buildtype::BuildType,
 
 end
 
-function gencode_fortran_openacc(ainfo::AccelInfo, buildtype::BuildType,
+function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildType,
                 launchid::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},

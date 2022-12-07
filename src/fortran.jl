@@ -180,6 +180,7 @@ function fortran_directive_typedecls(launchid::String, buildtype::BuildType,
 end
 
 function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
+                fortopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},

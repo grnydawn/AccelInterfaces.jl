@@ -31,10 +31,12 @@ if SYSNAME == "Crusher"
 elseif SYSNAME == "Summit" 
     const fort_compile = "pgfortran -fPIC -shared -g"
     const acc_compile  = "pgfortran -shared -fPIC -acc -ta=tesla:nordc"
-    #const acc_compile  = "pgfortran -shared -fPIC -acc -ta=tesla,host"
 
     const cpp_compile  = "pgc++ -fPIC -shared -g"
-    const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
+    const cuda_compile  = "nvcc --linker-options=\"-fPIC\" --shared -g"
+
+    #const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
+    const workdir = "/ccs/home/grnydawn/temp/jaiwork"
 
 else
     const fort_compile = "gfortran -fPIC -shared -g"
@@ -195,6 +197,41 @@ function cpp_test_string()
 
 end
 
+function cuda_test_string()
+
+    kernel_text = """
+
+[cuda]
+for(int k=0; k<JSHAPE(X, 0); k++) {
+    for(int j=0; j<JSHAPE(X, 1); j++) {
+        for(int i=0; i<JSHAPE(X, 2); i++) {
+            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+        }
+    }
+}
+"""
+
+    Z = fill(0.::Float64, SHAPE)
+
+    @jaccel framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
+
+    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+
+    @jkernel mykernel kernel_text
+
+    @jlaunch(mykernel, X, Y; output=(Z,), cuda=Dict("chevron"=>(1,1)))
+
+    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+
+    @jwait
+
+    @test Z == ANS
+
+    @jdecel
+
+
+end
+
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
@@ -209,6 +246,7 @@ end
         fortran_test_file()
         fortran_openacc_tests()
         cpp_test_string()
+        cuda_test_string()
 
     elseif SYSNAME == "Linux"
         fortran_test_string()
