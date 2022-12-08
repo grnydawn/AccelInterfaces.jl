@@ -120,9 +120,13 @@ function gencode_cpp_cuda_kernel(kinfo::KernelInfo, launchid::String,
     decls = cuda_decls(JAI_LAUNCH, args, names)
     kernelargs = cpp_genargs(args, names)
     macros = cuda_genmacros(args, names)
-    launchconf = join(get!(cudaopts, "chevron", (1, 1)), ", ")
     launchargs = cuda_launchargs(args, names)
     reinterpret = cuda_reinterpret(args, names)
+
+    _grid, _block = get!(cudaopts, "chevron", (1, 1))
+    grid = _grid isa Number ? string(_grid) : join(_grid, ", ")
+    block = _block isa Number ? string(_block) : join(_block, ", ")
+
 
     return code = """
 #include <stdint.h>
@@ -135,6 +139,8 @@ $(macros)
 
 extern "C" {
 
+extern cudaStream_t jai_stream;
+
 $(decls)
 
 __global__ void jai_kernel(double X[4][3][2], double Y[4][3][2], double Z[4][3][2]) {
@@ -146,7 +152,7 @@ int64_t jai_launch($(kernelargs)) {
 
     $(reinterpret)
 
-    jai_kernel<<<$(launchconf)>>>($(launchargs));
+    jai_kernel<<<dim3($(grid)), dim3($(block)), 0, jai_stream>>>($(launchargs));
 
     res = 0;
 
@@ -169,7 +175,6 @@ extern "C" {
 
 cudaStream_t jai_stream;
 
-// cudaMemcpyAsync()
 
 int64_t jai_device_init(int64_t buf[]) {
 
@@ -195,8 +200,10 @@ int64_t jai_device_fini(int64_t buf[]) {
 
 int64_t jai_get_num_devices(int64_t buf[]) {
     int64_t res;
+    int count;
 
-    buf[0] = 1;
+    cudaGetDeviceCount(&count);
+    buf[0] = (int64_t)count;
 
     res = 0;
 
@@ -206,8 +213,10 @@ int64_t jai_get_num_devices(int64_t buf[]) {
 
 int64_t jai_get_device_num(int64_t buf[]) {
     int64_t res;
+    int num;
 
-    buf[0] = 0;
+    cudaGetDevice(&num);
+    buf[0] = (int64_t)num;
 
     res = 0;
 
@@ -219,6 +228,8 @@ int64_t jai_set_device_num(int64_t buf[]) {
     int64_t res;
 
     res = 0;
+
+    cudaSetDevice((int)buf[0]);
 
     return res;
 
@@ -258,10 +269,20 @@ function cpp_cuda_apicalls(buildtype::BuildType,
                 push!(apicalls, "cudaMalloc((void**)&d_$(varname), sizeof($(typestr)) * $(N));\n")
 
             elseif buildtype == JAI_UPDATETO
-                push!(apicalls, "cudaMemcpy(d_$(varname), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
+                if "async" in control
+                    push!(apicalls, "cudaMemcpyAsync(d_$(varname), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice, jai_stream);\n")
+
+                else
+                    push!(apicalls, "cudaMemcpy(d_$(varname), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
+                end
 
             elseif buildtype == JAI_UPDATEFROM
-                push!(apicalls, "cudaMemcpy($(varname), d_$(varname), sizeof($(typestr)) * $(N), cudaMemcpyDeviceToHost);\n")
+                if "async" in control
+                    push!(apicalls, "cudaMemcpyAsync($(varname), d_$(varname), sizeof($(typestr)) * $(N), cudaMemcpyDeviceToHost, jai_stream);\n")
+                else
+                    push!(apicalls, "cudaMemcpy($(varname), d_$(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
+
+                end
 
             elseif buildtype == JAI_DEALLOCATE
                 push!(apicalls, "cudaFree(d_$(varname));\n")
@@ -297,6 +318,8 @@ function gencode_cpp_cuda_directive(ainfo::AccelInfo, buildtype::BuildType,
 #include <cuda_runtime.h>
 
 extern "C" {
+
+extern cudaStream_t jai_stream;
 
 $(decls)
 

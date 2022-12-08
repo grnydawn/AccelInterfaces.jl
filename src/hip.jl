@@ -139,7 +139,7 @@ int64_t jai_wait() {
 """
 end
 
-function cpp_cuda_apicalls(buildtype::BuildType,
+function cpp_hip_apicalls(buildtype::BuildType,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
@@ -158,7 +158,6 @@ function cpp_cuda_apicalls(buildtype::BuildType,
                 push!(apicalls, "hipMalloc((void**)&d_$(varname), sizeof($(typestr)) * $(N));\n")
 
             elseif buildtype == JAI_UPDATETO
-                # hipMemcpyAsync()
                 if "async" in control
                     push!(apicalls, "hipMemcpyAsync(d_$(varname), $(varname), sizeof($(typestr)) * $(N), hipMemcpyHostToDevice, jai_stream);\n")
 
@@ -199,7 +198,7 @@ function gencode_cpp_hip_directive(ainfo::AccelInfo, buildtype::BuildType,
     params = cuda_genparams(ainfo)
     decls = cuda_decls(buildtype, args, names)
     funcargs = cpp_genargs(args, names)
-    apicalls = cpp_cuda_apicalls(buildtype, args, names, control)
+    apicalls = cpp_hip_apicalls(buildtype, args, names, control)
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
 
 

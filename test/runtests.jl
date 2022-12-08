@@ -216,7 +216,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jaccel framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata allocate(X, Y, Z) updateto(X, Y) async
 
     @jkernel mykernel kernel_text
 
@@ -280,10 +280,10 @@ end
         hip_test_string()
 
     elseif SYSNAME == "Summit"
-        fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        cpp_test_string()
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #cpp_test_string()
         cuda_test_string()
 
     elseif SYSNAME == "Linux"
