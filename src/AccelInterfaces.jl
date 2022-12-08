@@ -194,7 +194,7 @@ struct AccelInfo
                 sharedlibs[accelid] = dlib
 
             catch err
-                println("DEBUG: ", frameworkname)
+                println("DEBUG: ", string(err))
 
             end
 
@@ -298,7 +298,7 @@ function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Not
             break
 
         elseif ((now() - tstart)/ Millisecond(1000)) > duration
-            error("Timeout occured while waiting for shared library")
+            error("Timeout: " * libpath)
 
         else
             sleep(0.1)
@@ -400,7 +400,8 @@ function argsdtypes(ainfo::AccelInfo,
         if typeof(arg) <: AbstractArray
             dtype = Ptr{typeof(arg)}
 
-        elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC, JAI_CPP_CUDA)
+        elseif ainfo.acceltype in (JAI_CPP, JAI_CPP_OPENACC, JAI_CPP_CUDA,
+                    JAI_CPP_HIP)
             dtype = typeof(arg)
 
         elseif ainfo.acceltype in (JAI_FORTRAN, JAI_FORTRAN_OPENACC,
@@ -510,6 +511,13 @@ function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::Strin
             compile = "nvcc --linker-options=\"-fPIC\" --shared -g"
         end
 
+    elseif  acceltype == JAI_CPP_HIP
+        ext = ".cpp"
+        if compile == nothing
+
+            compile = "hipcc -shared -fPIC -lamdhip64 -g"
+        end
+
     elseif  acceltype == JAI_FORTRAN_OPENACC
         ext = ".F90"
         if compile == nothing
@@ -589,7 +597,6 @@ function build_accel!(workdir::String, debugdir::Union{String, Nothing}, accelty
             lock = mkpidlock(pidfile, stale_age=3)
 
             if !ispath(outpath)
-
                 code = generate_accel!(workdir, acceltype, compile, accelid)
                 _genlibfile(outpath, srcfile, code, debugdir, compile, pidfile)
             end
@@ -709,6 +716,9 @@ function generate_accel!(workdir::String, acceltype::AccelType,
     elseif acceltype == JAI_CPP_CUDA
         code = gencode_cpp_cuda_accel()
 
+    elseif acceltype == JAI_CPP_HIP
+        code = gencode_cpp_hip_accel()
+
     elseif acceltype == JAI_FORTRAN_OPENACC
         code = gencode_fortran_openacc_accel(accelid)
 
@@ -749,6 +759,11 @@ function generate_kernel!(kinfo::KernelInfo, launchid::String,
         code = gencode_cpp_cuda_kernel(kinfo, launchid, cudaopts, body,
                                 inargs, outargs, innames, outnames)
 
+    elseif kinfo.accel.acceltype == JAI_CPP_HIP
+        hipopts = launchopts["hip"] != nothing ? launchopts["hip"] : Dict{String}()
+        code = gencode_cpp_hip_kernel(kinfo, launchid, hipopts, body,
+                                inargs, outargs, innames, outnames)
+
     elseif kinfo.accel.acceltype == JAI_FORTRAN_OPENACC
         foaccopts = launchopts["fortran_openacc"] != nothing ? launchopts["fortran_openacc"] : Dict{String, Any}()
         code = gencode_fortran_kernel(kinfo, launchid, foaccopts, body,
@@ -756,12 +771,7 @@ function generate_kernel!(kinfo::KernelInfo, launchid::String,
 
     elseif kinfo.accel.acceltype == JAI_FORTRAN_OMPTARGET
         fomptopts = launchopts["fortran_omptarget"] != nothing ? launchopts["fortran_omptarget"] : Dict{String}()
-        code = gencode_fortran_kernel(kinfo, fomptopts, launchopts, body,
-                                inargs, outargs, innames, outnames)
-
-    elseif kinfo.accel.acceltype == JAI_CPP_HIP
-        hipopts = launchopts["hip"] != nothing ? launchopts["hip"] : Dict{String}()
-        code = gencode_cpp_kernel(kinfo, launchid, hipopts, body,
+        code = gencode_fortran_kernel(kinfo, launchid, fomptopts, body,
                                 inargs, outargs, innames, outnames)
 
     else
@@ -789,6 +799,10 @@ function generate_directive!(ainfo::AccelInfo, buildtype::BuildType,
 
     elseif ainfo.acceltype == JAI_CPP_CUDA
         code = gencode_cpp_cuda_directive(ainfo, buildtype, launchid, args,
+                                                names, control)
+
+    elseif ainfo.acceltype == JAI_CPP_HIP
+        code = gencode_cpp_hip_directive(ainfo, buildtype, launchid, args,
                                                 names, control)
 
     else
@@ -1097,7 +1111,7 @@ macro jlaunch(largs...)
                         for ovar in param.args[2].args
                             push!(outnames, String(ovar))
                         end
-                    elseif param.args[1] in (:cuda,)
+                    elseif param.args[1] in (:cuda, :hip)
                     else
                         error(string(param.args[1]) * " is not supported.")
                     end

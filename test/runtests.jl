@@ -26,6 +26,7 @@ if SYSNAME == "Crusher"
     #const omp_compile  = "ftn -shared -fPIC -fopenmp"
 
     const cpp_compile  = "CC -fPIC -shared -g"
+    const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Summit" 
@@ -232,14 +233,49 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
 end
 
+function hip_test_string()
+
+    kernel_text = """
+
+[hip]
+for(int k=0; k<JSHAPE(X, 0); k++) {
+    for(int j=0; j<JSHAPE(X, 1); j++) {
+        for(int i=0; i<JSHAPE(X, 2); i++) {
+            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+        }
+    }
+}
+"""
+
+    Z = fill(0.::Float64, SHAPE)
+
+    @jaccel framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
+
+    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+
+    @jkernel mykernel kernel_text
+
+    @jlaunch(mykernel, X, Y; output=(Z,), hip=Dict("chevron"=>(1,1)))
+
+    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+
+    @jwait
+
+    @test Z == ANS
+
+    @jdecel
+
+end
+
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
-        fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        fortran_omptarget_tests()
-        cpp_test_string()
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #fortran_omptarget_tests()
+        #cpp_test_string()
+        hip_test_string()
 
     elseif SYSNAME == "Summit"
         fortran_test_string()
