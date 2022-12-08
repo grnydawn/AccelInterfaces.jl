@@ -167,6 +167,32 @@ function gencode_cpp_cuda_accel() :: String
 
 extern "C" {
 
+cudaStream_t jai_stream;
+
+// cudaMemcpyAsync()
+
+int64_t jai_device_init(int64_t buf[]) {
+
+    int64_t res;
+
+    cudaStreamCreate(&jai_stream);
+
+    res = 0;
+
+    return res;
+}
+
+int64_t jai_device_fini(int64_t buf[]) {
+
+    int64_t res;
+
+    cudaStreamDestroy(jai_stream);
+
+    res = 0;
+
+    return res;
+}
+
 int64_t jai_get_num_devices(int64_t buf[]) {
     int64_t res;
 
@@ -200,6 +226,8 @@ int64_t jai_set_device_num(int64_t buf[]) {
 
 int64_t jai_wait() {
     int64_t res;
+
+    cudaDeviceSynchronize();
 
     res = 0;
 

@@ -234,10 +234,10 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 end
 
 function hip_test_string()
-
     kernel_text = """
 
 [hip]
+
 for(int k=0; k<JSHAPE(X, 0); k++) {
     for(int j=0; j<JSHAPE(X, 1); j++) {
         for(int i=0; i<JSHAPE(X, 2); i++) {
@@ -259,9 +259,11 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
 
+    @test Z == ANS
+
     @jwait
 
-    @test Z == ANS
+    #@test Z == ANS
 
     @jdecel
 
@@ -270,11 +272,11 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
-        #fortran_test_string()
-        #fortran_test_file()
-        #fortran_openacc_tests()
-        #fortran_omptarget_tests()
-        #cpp_test_string()
+        fortran_test_string()
+        fortran_test_file()
+        fortran_openacc_tests()
+        fortran_omptarget_tests()
+        cpp_test_string()
         hip_test_string()
 
     elseif SYSNAME == "Summit"

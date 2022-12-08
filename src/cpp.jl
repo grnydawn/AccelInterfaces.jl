@@ -173,6 +173,25 @@ function gencode_cpp_accel() :: String
 
 extern "C" {
 
+int64_t jai_device_init(int64_t buf[]) {
+
+    int64_t res;
+
+    res = 0;
+
+    return res;
+}
+
+int64_t jai_device_fini(int64_t buf[]) {
+
+    int64_t res;
+
+    res = 0;
+
+    return res;
+}
+
+
 int64_t jai_get_num_devices(int64_t buf[]) {
     int64_t res;
 

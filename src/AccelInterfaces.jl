@@ -222,7 +222,10 @@ struct AccelInfo
             device_num = buf[1]
 
         end
-               
+
+        dfunc = dlsym(dlib, :jai_device_init)
+        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+              
         new(accelid, acceltype, master, device_num, const_vars,
             const_names, compile, sharedlibs,
             workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
@@ -255,6 +258,13 @@ end
 function jai_accel_fini(name::String;
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
+
+    buf = fill(-1, 1)
+    accel = _accelcache[name]
+    dlib = accel.sharedlibs[accel.accelid]
+
+    dfunc = dlsym(dlib, :jai_device_fini)
+    ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
 
     delete!(_accelcache, name)
 end
