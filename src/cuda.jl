@@ -13,6 +13,7 @@ function cuda_genparams(ainfo::AccelInfo) :: String
 end
 
 function cuda_reinterpret(
+            aid::String,
             args::NTuple{N, JaiDataType} where {N},
             names::NTuple{N, String} where {N}
         ) :: String
@@ -25,7 +26,7 @@ function cuda_reinterpret(
             typestr, dimstr = cpp_typedef(arg, varname)
             push!(reinterpret,  typestr * " (*ptr_" * varname * ")" * dimstr *
                                 " = " * "reinterpret_cast<" * typestr * " (*)" *
-                                dimstr * ">(d_" * varname * ");\n")
+                                dimstr * ">(jai_dev_" * varname * "_" * aid * ");\n")
         end
     end
 
@@ -81,7 +82,9 @@ function cuda_genmacros(
     return join(macros, "\n")
 end
 
-function cuda_decls(buildtype::BuildType,
+function cuda_decls(
+                aid::String,
+                buildtype::BuildType,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N}) :: String
 
@@ -94,10 +97,10 @@ function cuda_decls(buildtype::BuildType,
             typestr = typemap_j2c[eltype(arg)]
 
             if buildtype == JAI_ALLOCATE
-                push!(_decls, "$(typestr) * d_$(varname);\n")
+                push!(_decls, "$(typestr) * jai_dev_$(varname)_$(aid);\n")
 
             else
-                push!(_decls, "extern $(typestr) * d_$(varname);\n")
+                push!(_decls, "extern $(typestr) * jai_dev_$(varname)_$(aid);\n")
 
             end
         end
@@ -106,7 +109,9 @@ function cuda_decls(buildtype::BuildType,
     return join(_decls, "\n")
 end
 
-function gencode_cpp_cuda_kernel(kinfo::KernelInfo, launchid::String,
+function gencode_cpp_cuda_kernel(
+                kinfo::KernelInfo,
+                lid::String,
                 cudaopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
@@ -115,9 +120,10 @@ function gencode_cpp_cuda_kernel(kinfo::KernelInfo, launchid::String,
                 outnames::NTuple{M, String} where {M}) :: String
 
     args, names = merge_args(inargs, outargs, innames, outnames)
+    aid = kinfo.accel.accelid[1:_IDLEN]
 
     params = cuda_genparams(kinfo.accel)
-    decls = cuda_decls(JAI_LAUNCH, args, names)
+    decls = cuda_decls(aid, JAI_LAUNCH, args, names)
     kernelargs = cpp_genargs(args, names)
     macros = cuda_genmacros(args, names)
     launchargs = cuda_launchargs(args, names)
@@ -307,14 +313,18 @@ function cpp_cuda_apicalls(buildtype::BuildType,
 
 end
 
-function gencode_cpp_cuda_directive(ainfo::AccelInfo, buildtype::BuildType,
-                launchid::String,
+function gencode_cpp_cuda_directive(
+                ainfo::AccelInfo,
+                buildtype::BuildType,
+                lid::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
 
+    aid = ainfo.accelid[1:_IDLEN]
+
     params = cuda_genparams(ainfo)
-    decls = cuda_decls(buildtype, args, names)
+    decls = cuda_decls(aid, buildtype, args, names)
     funcargs = cpp_genargs(args, names)
     apicalls = cpp_cuda_apicalls(buildtype, args, names, control)
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]

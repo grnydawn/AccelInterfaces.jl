@@ -130,7 +130,9 @@ function cpp_genargs(
     return join(arguments, ", ")
 end
 
-function gencode_cpp_kernel(kinfo::KernelInfo, launchid::String,
+function gencode_cpp_kernel(
+                kinfo::KernelInfo,
+                lid::String,
                 cppopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
@@ -140,7 +142,7 @@ function gencode_cpp_kernel(kinfo::KernelInfo, launchid::String,
 
     args, names = merge_args(inargs, outargs, innames, outnames)
     params = cpp_genparams(kinfo.accel)
-    macros = cpp_genmacros(launchid[1:_IDLEN], args, names)
+    macros = cpp_genmacros(lid, args, names)
     kernelargs = cpp_genargs(args, names)
 
     aid = kinfo.accel.accelid[1:_IDLEN]
@@ -154,7 +156,7 @@ $(macros)
 
 extern "C" {
 
-int64_t jai_launch_$(aid)($(kernelargs)) {
+int64_t jai_launch_$(lid)($(kernelargs)) {
     int64_t res;
 
     $(kernelbody)

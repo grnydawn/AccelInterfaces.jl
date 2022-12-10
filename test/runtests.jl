@@ -306,12 +306,12 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
-        #fortran_test_string()
-        #fortran_test_file()
-        #fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_test_string()
+        fortran_test_file()
+        fortran_openacc_tests()
+        fortran_omptarget_tests()
         cpp_test_string()
-        #hip_test_string()
+        hip_test_string()
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"

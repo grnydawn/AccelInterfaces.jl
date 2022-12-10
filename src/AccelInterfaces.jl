@@ -486,7 +486,7 @@ function launch_kernel(kname::String,
         kinfo.accel.sharedlibs[launchid] = dlib
     end
 
-    kfunc = dlsym(dlib, Symbol("jai_launch_" * kinfo.accel.accelid[1:_IDLEN]))
+    kfunc = dlsym(dlib, Symbol("jai_launch_" * launchid[1:_IDLEN]))
     ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
@@ -654,7 +654,8 @@ function build_kernel!(kinfo::KernelInfo, launchid::String,
             lock = mkpidlock(pidfile, stale_age=3)
 
             if !ispath(outpath)
-                code = generate_kernel!(kinfo, launchid, launchopts, inargs, outargs, innames, outnames)
+                code = generate_kernel!(kinfo, launchid[1:_IDLEN], launchopts,
+                                        inargs, outargs, innames, outnames)
                 _genlibfile(outpath, srcfile, code, kinfo.accel.debugdir, compile, pidfile)
             end
 

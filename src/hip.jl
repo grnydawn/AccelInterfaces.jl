@@ -1,5 +1,7 @@
 
-function gencode_cpp_hip_kernel(kinfo::KernelInfo, launchid::String,
+function gencode_cpp_hip_kernel(
+                kinfo::KernelInfo,
+                lid::String,
                 cudaopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
@@ -8,13 +10,14 @@ function gencode_cpp_hip_kernel(kinfo::KernelInfo, launchid::String,
                 outnames::NTuple{M, String} where {M}) :: String
 
     args, names = merge_args(inargs, outargs, innames, outnames)
+    aid = kinfo.accel.accelid[1:_IDLEN]
 
     params = cuda_genparams(kinfo.accel)
-    decls = cuda_decls(JAI_LAUNCH, args, names)
+    decls = cuda_decls(aid, JAI_LAUNCH, args, names)
     kernelargs = cpp_genargs(args, names)
     macros = cuda_genmacros(args, names)
     launchargs = cuda_launchargs(args, names)
-    reinterpret = cuda_reinterpret(args, names)
+    reinterpret = cuda_reinterpret(aid, args, names)
 
     _grid, _block = get(cudaopts, "chevron", (1, 1))
     grid = _grid isa Number ? string(_grid) : join(_grid, ", ")
@@ -24,8 +27,9 @@ function gencode_cpp_hip_kernel(kinfo::KernelInfo, launchid::String,
         stream = ""
         launchstmt = "jai_kernel<<<dim3($(grid)), dim3($(block))>>>($(launchargs));"
     else
-        stream = "extern hipStream_t jai_stream;"
-        launchstmt = "hipLaunchKernelGGL(jai_kernel, dim3($(grid)), dim3($(block)), 0, jai_stream, $(launchargs));"
+        stream = "extern hipStream_t jai_stream_$(aid);"
+        launchstmt = ("hipLaunchKernelGGL(jai_kernel, dim3($(grid)), " *
+                      "dim3($(block)), 0, jai_stream_$(aid), $(launchargs));")
     end
 
     return code = """
@@ -46,7 +50,7 @@ __global__ void jai_kernel(double X[4][3][2], double Y[4][3][2], double Z[4][3][
     $(kernelbody)
 }
 
-int64_t jai_launch($(kernelargs)) {
+int64_t jai_launch_$(lid)($(kernelargs)) {
     int64_t res;
 
     $(reinterpret)
@@ -63,7 +67,7 @@ int64_t jai_launch($(kernelargs)) {
 """
 end
 
-function gencode_cpp_hip_accel() :: String
+function gencode_cpp_hip_accel(aid::String) :: String
 
     return code = """
 #include <stdint.h>
@@ -71,32 +75,32 @@ function gencode_cpp_hip_accel() :: String
 
 extern "C" {
 
-hipStream_t jai_stream;
+hipStream_t jai_stream_$(aid);
 
 
-int64_t jai_device_init(int64_t buf[]) {
+int64_t jai_device_init_$(aid)(int64_t buf[]) {
 
     int64_t res;
 
-    hipStreamCreate(&jai_stream);
+    hipStreamCreate(&jai_stream_$(aid));
 
     res = 0;
 
     return res;
 }
 
-int64_t jai_device_fini(int64_t buf[]) {
+int64_t jai_device_fini_$(aid)(int64_t buf[]) {
 
     int64_t res;
 
-    hipStreamDestroy(jai_stream);
+    hipStreamDestroy(jai_stream_$(aid));
 
     res = 0;
 
     return res;
 }
 
-int64_t jai_get_num_devices(int64_t buf[]) {
+int64_t jai_get_num_devices_$(aid)(int64_t buf[]) {
     int64_t res;
     int count;
 
@@ -108,7 +112,7 @@ int64_t jai_get_num_devices(int64_t buf[]) {
     return res;
 }
 
-int64_t jai_get_device_num(int64_t buf[]) {
+int64_t jai_get_device_num_$(aid)(int64_t buf[]) {
     int64_t res;
     int num;
 
@@ -121,7 +125,7 @@ int64_t jai_get_device_num(int64_t buf[]) {
 
 }
 
-int64_t jai_set_device_num(int64_t buf[]) {
+int64_t jai_set_device_num_$(aid)(int64_t buf[]) {
     int64_t res;
 
     res = 0;
@@ -132,7 +136,7 @@ int64_t jai_set_device_num(int64_t buf[]) {
 
 }
 
-int64_t jai_wait() {
+int64_t jai_wait_$(aid)() {
     int64_t res;
 
     hipDeviceSynchronize();
@@ -147,7 +151,9 @@ int64_t jai_wait() {
 """
 end
 
-function cpp_hip_apicalls(buildtype::BuildType,
+function cpp_hip_apicalls(
+                aid::String,
+                buildtype::BuildType,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
@@ -163,27 +169,27 @@ function cpp_hip_apicalls(buildtype::BuildType,
 
             if buildtype == JAI_ALLOCATE
                 #push!(apicalls, "$(typestr) * d_$(varname);\n")
-                push!(apicalls, "hipMalloc((void**)&d_$(varname), sizeof($(typestr)) * $(N));\n")
+                push!(apicalls, "hipMalloc((void**)&jai_dev_$(varname)_$(aid), sizeof($(typestr)) * $(N));\n")
 
             elseif buildtype == JAI_UPDATETO
                 if "async" in control
-                    push!(apicalls, "hipMemcpyAsync(d_$(varname), $(varname), sizeof($(typestr)) * $(N), hipMemcpyHostToDevice, jai_stream);\n")
+                    push!(apicalls, "hipMemcpyAsync(jai_dev_$(varname)_$(aid), $(varname), sizeof($(typestr)) * $(N), hipMemcpyHostToDevice, jai_stream_$(aid));\n")
 
                 else
-                    push!(apicalls, "hipMemcpyHtoD(d_$(varname), $(varname), sizeof($(typestr)) * $(N));\n")
+                    push!(apicalls, "hipMemcpyHtoD(jai_dev_$(varname)_$(aid), $(varname), sizeof($(typestr)) * $(N));\n")
                 end
 
             elseif buildtype == JAI_UPDATEFROM
                 if "async" in control
-                    push!(apicalls, "hipMemcpyAsync($(varname), d_$(varname), sizeof($(typestr)) * $(N), hipMemcpyDeviceToHost, jai_stream);\n")
+                    push!(apicalls, "hipMemcpyAsync($(varname), jai_dev_$(varname)_$(aid), sizeof($(typestr)) * $(N), hipMemcpyDeviceToHost, jai_stream_$(aid));\n")
                 else
-                    push!(apicalls, "hipMemcpyDtoH($(varname), d_$(varname), sizeof($(typestr)) * $(N));\n")
+                    push!(apicalls, "hipMemcpyDtoH($(varname), jai_dev_$(varname)_$(aid), sizeof($(typestr)) * $(N));\n")
                     #push!(apicalls, "printf(\"####### %f #####\\n\", $(varname)[0][0][0] );")
 
                 end
 
             elseif buildtype == JAI_DEALLOCATE
-                push!(apicalls, "hipFree(d_$(varname));\n")
+                push!(apicalls, "hipFree(jai_dev_$(varname)_$(aid));\n")
 
             else
 
@@ -197,16 +203,20 @@ function cpp_hip_apicalls(buildtype::BuildType,
 
 end
 
-function gencode_cpp_hip_directive(ainfo::AccelInfo, buildtype::BuildType,
-                launchid::String,
+function gencode_cpp_hip_directive(
+                ainfo::AccelInfo,
+                buildtype::BuildType,
+                lid::String,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
 
+    aid = ainfo.accelid[1:_IDLEN]
+
     params = cuda_genparams(ainfo)
-    decls = cuda_decls(buildtype, args, names)
+    decls = cuda_decls(aid, buildtype, args, names)
     funcargs = cpp_genargs(args, names)
-    apicalls = cpp_hip_apicalls(buildtype, args, names, control)
+    apicalls = cpp_hip_apicalls(aid, buildtype, args, names, control)
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
 
 
@@ -216,13 +226,13 @@ function gencode_cpp_hip_directive(ainfo::AccelInfo, buildtype::BuildType,
 
 extern "C" {
 
-extern hipStream_t jai_stream;
-
-$(decls)
+extern hipStream_t jai_stream_$(aid);
 
 $(params)
 
-int64_t $(funcname)($(funcargs)) {
+$(decls)
+
+int64_t $(funcname)_$(lid)($(funcargs)) {
     int64_t res, JAI_ERRORCODE;
     JAI_ERRORCODE = 0;
 

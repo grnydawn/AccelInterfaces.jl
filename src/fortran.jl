@@ -111,7 +111,7 @@ function fortran_genparams(ainfo::AccelInfo) :: String
     return join(typedecls, "\n")
 end
 
-function fortran_genvars(kinfo::KernelInfo, launchid::String,
+function fortran_genvars(kinfo::KernelInfo, lid::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
@@ -179,7 +179,9 @@ function fortran_directive_typedecls(launchid::String, buildtype::BuildType,
     return join(typedecls, "\n")
 end
 
-function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
+function gencode_fortran_kernel(
+                kinfo::KernelInfo,
+                lid::String,
                 fortopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
@@ -188,23 +190,23 @@ function gencode_fortran_kernel(kinfo::KernelInfo, launchid::String,
                 outnames::NTuple{M, String} where {M}) :: String
 
     params = fortran_genparams(kinfo.accel)
-    arguments, typedecls = fortran_genvars(kinfo, launchid, inargs, outargs,
+    arguments, typedecls = fortran_genvars(kinfo, lid, inargs, outargs,
                                 innames, outnames)
     devnum = kinfo.accel.device_num
     aid = kinfo.accel.accelid[1:_IDLEN]
 
     return code = """
-module mod$(launchid)
+module mod_kernel_$(lid)
 USE, INTRINSIC :: ISO_C_BINDING
 
 !!INTEGER, PARAMETER :: JAI_DEVICE_NUM = $(devnum)
 $(params)
 
-public jai_launch_$(aid)
+public jai_launch_$(lid)
 
 contains
 
-INTEGER (C_INT64_T) FUNCTION jai_launch_$(aid)($(arguments)) BIND(C, name="jai_launch_$(aid)")
+INTEGER (C_INT64_T) FUNCTION jai_launch_$(lid)($(arguments)) BIND(C, name="jai_launch_$(lid)")
 USE, INTRINSIC :: ISO_C_BINDING
 IMPLICIT NONE
 
@@ -214,7 +216,7 @@ INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 $(kernelbody)
 
-jai_launch_$(aid) = JAI_ERRORCODE
+jai_launch_$(lid) = JAI_ERRORCODE
 
 END FUNCTION
 
