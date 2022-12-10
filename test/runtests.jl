@@ -237,7 +237,7 @@ function hip_test_string()
     kernel_text = """
 
 [hip]
-
+/*
 for(int k=0; k<JSHAPE(X, 0); k++) {
     for(int j=0; j<JSHAPE(X, 1); j++) {
         for(int i=0; i<JSHAPE(X, 2); i++) {
@@ -245,6 +245,12 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
         }
     }
 }
+*/
+    int i = blockIdx.x;
+    int j = blockIdx.y;
+    int k = blockIdx.z;
+
+    Z[i][j][k] = X[i][j][k] + Y[i][j][k];
 """
 
     Z = fill(0.::Float64, SHAPE)
@@ -255,7 +261,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jkernel mykernel kernel_text
 
-    @jlaunch(mykernel, X, Y; output=(Z,), hip=Dict("chevron"=>(1,1)))
+    @jlaunch(mykernel, X, Y; output=(Z,), hip=Dict("chevron"=>((4,3,2),1)))
 
     @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
 

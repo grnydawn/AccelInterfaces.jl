@@ -1,6 +1,6 @@
 
 function fortran_openacc_directives(
-                lid::String,
+                aid::String,
                 buildtype::BuildType,
                 inargs::NTuple{N, JaiDataType} where {N},
                 innames::NTuple{N, String} where {N},
@@ -15,7 +15,7 @@ function fortran_openacc_directives(
 
         if buildtype == JAI_ALLOCATE
             push!(directs, "!\$acc enter data create($(varname)) $(clauses)\n")
-            push!(directs, "jai_dev_$(varname)_$(lid) = acc_deviceptr($(varname))\n")
+            push!(directs, "jai_dev_$(varname)_$(aid) = acc_deviceptr($(varname))\n")
 
         elseif buildtype == JAI_UPDATETO
             push!(directs, "!\$acc update device($(varname)) $(clauses)\n")
@@ -41,9 +41,11 @@ function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildTyp
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
 
+    aid = ainfo.accelid[1:_IDLEN]
+
     params = fortran_genparams(ainfo)
     typedecls = fortran_directive_typedecls(lid, buildtype, args, names)
-    directives = fortran_openacc_directives(lid, buildtype, args[2:end], names[2:end], control)
+    directives = fortran_openacc_directives(aid, buildtype, args[2:end], names[2:end], control)
     arguments = join(names, ",")
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
 
@@ -51,9 +53,9 @@ function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildTyp
     devicevars = ""
 
     if buildtype == JAI_ALLOCATE
-        deviceptrs = join([("TYPE (C_PTR ), BIND(C, NAME='jai_dev_$(v)_$(lid)') ::" *
-                         " jai_dev_$(v)_$(lid)") for v in names[2:end]], "\n")
-        devicevars = "public " * join(["jai_dev_$(v)_$(lid)" for v in names[2:end]], ",")
+        deviceptrs = join([("TYPE (C_PTR ), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
+                         " jai_dev_$(v)_$(aid)") for v in names[2:end]], "\n")
+        devicevars = "public " * join(["jai_dev_$(v)_$(aid)" for v in names[2:end]], ",")
     end
     
     return """

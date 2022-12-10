@@ -495,6 +495,7 @@ function launch_kernel(kname::String,
 
     retval = @eval $ccallexpr
 
+    return retval
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
