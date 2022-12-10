@@ -127,7 +127,7 @@ function gencode_cpp_cuda_kernel(
     kernelargs = cpp_genargs(args, names)
     macros = cuda_genmacros(args, names)
     launchargs = cuda_launchargs(args, names)
-    reinterpret = cuda_reinterpret(args, names)
+    reinterpret = cuda_reinterpret(aid, args, names)
 
     _grid, _block = get(cudaopts, "chevron", (1, 1))
     grid = _grid isa Number ? string(_grid) : join(_grid, ", ")
@@ -137,8 +137,8 @@ function gencode_cpp_cuda_kernel(
         stream = ""
         launchstmt = "jai_kernel<<<dim3($(grid)), dim3($(block))>>>($(launchargs));"
     else
-        stream = "extern cudaStream_t jai_stream;"
-        launchstmt = "jai_kernel<<<dim3($(grid)), dim3($(block)), 0, jai_stream)>>>($(launchargs));"
+        stream = "extern cudaStream_t jai_stream_$(aid);"
+        launchstmt = "jai_kernel<<<dim3($(grid)), dim3($(block)), 0, jai_stream_$(aid)>>>($(launchargs));"
     end
 
 
@@ -161,7 +161,7 @@ __global__ void jai_kernel(double X[4][3][2], double Y[4][3][2], double Z[4][3][
     $(kernelbody)
 }
 
-int64_t jai_launch($(kernelargs)) {
+int64_t jai_launch_$(lid)($(kernelargs)) {
     int64_t res;
 
     $(reinterpret)
@@ -178,7 +178,7 @@ int64_t jai_launch($(kernelargs)) {
 """
 end
 
-function gencode_cpp_cuda_accel() :: String
+function gencode_cpp_cuda_accel(aid::String) :: String
 
     return code = """
 #include <stdint.h>
@@ -187,32 +187,32 @@ function gencode_cpp_cuda_accel() :: String
 
 extern "C" {
 
-cudaStream_t jai_stream;
+cudaStream_t jai_stream_$(aid);
 
 
-int64_t jai_device_init(int64_t buf[]) {
+int64_t jai_device_init_$(aid)(int64_t buf[]) {
 
     int64_t res;
 
-    cudaStreamCreate(&jai_stream);
+    cudaStreamCreate(&jai_stream_$(aid));
 
     res = 0;
 
     return res;
 }
 
-int64_t jai_device_fini(int64_t buf[]) {
+int64_t jai_device_fini_$(aid)(int64_t buf[]) {
 
     int64_t res;
 
-    cudaStreamDestroy(jai_stream);
+    cudaStreamDestroy(jai_stream_$(aid));
 
     res = 0;
 
     return res;
 }
 
-int64_t jai_get_num_devices(int64_t buf[]) {
+int64_t jai_get_num_devices_$(aid)(int64_t buf[]) {
     int64_t res;
     int count;
 
@@ -225,7 +225,7 @@ int64_t jai_get_num_devices(int64_t buf[]) {
 
 }
 
-int64_t jai_get_device_num(int64_t buf[]) {
+int64_t jai_get_device_num_$(aid)(int64_t buf[]) {
     int64_t res;
     int num;
 
@@ -238,7 +238,7 @@ int64_t jai_get_device_num(int64_t buf[]) {
 
 }
 
-int64_t jai_set_device_num(int64_t buf[]) {
+int64_t jai_set_device_num_$(aid)(int64_t buf[]) {
     int64_t res;
 
     res = 0;
@@ -249,7 +249,7 @@ int64_t jai_set_device_num(int64_t buf[]) {
 
 }
 
-int64_t jai_wait() {
+int64_t jai_wait_$(aid)() {
     int64_t res;
 
     cudaDeviceSynchronize();
@@ -264,7 +264,9 @@ int64_t jai_wait() {
 """
 end
 
-function cpp_cuda_apicalls(buildtype::BuildType,
+function cpp_cuda_apicalls(
+                aid::String,
+                buildtype::BuildType,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
@@ -279,27 +281,26 @@ function cpp_cuda_apicalls(buildtype::BuildType,
             N = prod(size(arg))
 
             if buildtype == JAI_ALLOCATE
-                #push!(apicalls, "$(typestr) * d_$(varname);\n")
-                push!(apicalls, "cudaMalloc((void**)&d_$(varname), sizeof($(typestr)) * $(N));\n")
+                push!(apicalls, "cudaMalloc((void**)&jai_dev_$(varname)_$(aid), sizeof($(typestr)) * $(N));\n")
 
             elseif buildtype == JAI_UPDATETO
                 if "async" in control
-                    push!(apicalls, "cudaMemcpyAsync(d_$(varname), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice, jai_stream);\n")
+                    push!(apicalls, "cudaMemcpyAsync(jai_dev_$(varname)_$(aid), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice, jai_stream_$(aid));\n")
 
                 else
-                    push!(apicalls, "cudaMemcpy(d_$(varname), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
+                    push!(apicalls, "cudaMemcpy(jai_dev_$(varname)_$(aid), $(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
                 end
 
             elseif buildtype == JAI_UPDATEFROM
                 if "async" in control
-                    push!(apicalls, "cudaMemcpyAsync($(varname), d_$(varname), sizeof($(typestr)) * $(N), cudaMemcpyDeviceToHost, jai_stream);\n")
+                    push!(apicalls, "cudaMemcpyAsync($(varname), jai_dev_$(varname)_$(aid), sizeof($(typestr)) * $(N), cudaMemcpyDeviceToHost, jai_stream_$(aid));\n")
                 else
-                    push!(apicalls, "cudaMemcpy($(varname), d_$(varname), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
+                    push!(apicalls, "cudaMemcpy($(varname), jai_dev_$(varname)_$(aid), sizeof($(typestr)) * $(N), cudaMemcpyHostToDevice);\n")
 
                 end
 
             elseif buildtype == JAI_DEALLOCATE
-                push!(apicalls, "cudaFree(d_$(varname));\n")
+                push!(apicalls, "cudaFree(jai_dev_$(varname)_$(aid));\n")
 
             else
 
@@ -326,7 +327,7 @@ function gencode_cpp_cuda_directive(
     params = cuda_genparams(ainfo)
     decls = cuda_decls(aid, buildtype, args, names)
     funcargs = cpp_genargs(args, names)
-    apicalls = cpp_cuda_apicalls(buildtype, args, names, control)
+    apicalls = cpp_cuda_apicalls(aid, buildtype, args, names, control)
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
 
 
@@ -337,13 +338,13 @@ function gencode_cpp_cuda_directive(
 
 extern "C" {
 
-extern cudaStream_t jai_stream;
+extern cudaStream_t jai_stream_$(aid);
 
 $(decls)
 
 $(params)
 
-int64_t $(funcname)($(funcargs)) {
+int64_t $(funcname)_$(lid)($(funcargs)) {
     int64_t res, JAI_ERRORCODE;
     JAI_ERRORCODE = 0;
 

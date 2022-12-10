@@ -53,7 +53,7 @@ function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildTyp
     devicevars = ""
 
     if buildtype == JAI_ALLOCATE
-        deviceptrs = join([("TYPE (C_PTR ), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
+        deviceptrs = join([("TYPE (C_DEVPTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
                          " jai_dev_$(v)_$(aid)") for v in names[2:end]], "\n")
         devicevars = "public " * join(["jai_dev_$(v)_$(aid)" for v in names[2:end]], ",")
     end
