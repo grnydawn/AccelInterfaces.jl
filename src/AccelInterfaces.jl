@@ -9,7 +9,8 @@ import Libdl.dlopen,
        Libdl.RTLD_DEEPBIND,
        Libdl.RTLD_GLOBAL,
        Libdl.dlext,
-       Libdl.dlsym
+       Libdl.dlsym,
+       Libdl.dlclose
 
 import SHA.sha1
 import Dates.now,
@@ -31,6 +32,7 @@ export JAI_VERSION, @jenterdata, @jexitdata, @jlaunch, @jaccel, @jkernel, @jdece
         
 const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 const TIMEOUT = 10
+const _IDLEN = 3
 
 @enum BuildType::Int64 begin
     JAI_ACCEL       = 10
@@ -149,16 +151,12 @@ struct AccelInfo
 
             if frameconfig isa Nothing
                 if startswith(frameworkname, "fortran")
-                    compile = ((haskey(ENV, "JAI_FC") ? ENV["JAI_FC"] :
-                                    (haskey(ENV, "FC") ? ENV["FC"] : "")) * " " *
-                               (haskey(ENV, "JAI_FFLAGS") ? ENV["JAI_FFLAGS"] :
-                                    (haskey(ENV, "FFLAGS") ? ENV["FFLAGS"] : "")))
+                    compile = get(ENV, "JAI_FC", get(ENV, "FC", "")) * " " *
+                                get(ENV, "JAI_FFLAGS", get(ENV, "FFLAGS", ""))
 
                 elseif startswith(frameworkname, "cpp")
-                    compile = ((haskey(ENV, "JAI_CXX") ? ENV["JAI_CXX"] :
-                                    (haskey(ENV, "CXX") ? ENV["CXX"] : "")) * " " *
-                               (haskey(ENV, "JAI_CXXFLAGS") ? ENV["JAI_CXXFLAGS"] :
-                                    (haskey(ENV, "CXXFLAGS") ? ENV["CXXFLAGS"] : "")))
+                    compile = get(ENV, "JAI_CXX", get(ENV, "CXX", "")) * " " *
+                                get(ENV, "JAI_CXXFLAGS", get(ENV, "CXXFLAGS", ""))
                 else
                     error(string(frameworkname * " is not supported."))
                 end
@@ -183,18 +181,18 @@ struct AccelInfo
             ser = serialize(io, (accelid, acceltype, compile))
             accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-            libpath = joinpath(workdir, "SL" * frameworkname * JAI_VERSION * "." * dlext)
+            libpath = joinpath(workdir, "LIB" * accelid * "." * dlext)
 
             try
-                build_accel!(workdir, debugdir, acceltype, compile, frameworkname, libpath)
+                build_accel!(workdir, debugdir, acceltype, compile, accelid, libpath)
 
                 dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
              
                 sharedlibs = Dict{String, Ptr{Nothing}}()
                 sharedlibs[accelid] = dlib
 
-            catch err
-                println("DEBUG: ", string(err))
+            catch e
+                rethrow(e)
 
             end
 
@@ -203,7 +201,7 @@ struct AccelInfo
 
         buf = fill(-1, 1)
 
-        dfunc = dlsym(dlib, :jai_get_num_devices)
+        dfunc = dlsym(dlib, Symbol("jai_get_num_devices_" * accelid[1:_IDLEN]))
         ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
         if buf[1] < 1
             error("The number of devices is less than 1.")
@@ -211,19 +209,19 @@ struct AccelInfo
 
         if length(device) == 1
             buf[1] = device[1]
-            dfunc = dlsym(dlib, :jai_set_device_num)
+            dfunc = dlsym(dlib, Symbol("jai_set_device_num_" * accelid[1:_IDLEN]))
             ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
             device_num = device[1]
 
         else
             buf[1] = -1
-            dfunc = dlsym(dlib, :jai_get_device_num)
+            dfunc = dlsym(dlib, Symbol("jai_get_device_num_" * accelid[1:_IDLEN]))
             ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
             device_num = buf[1]
 
         end
 
-        dfunc = dlsym(dlib, :jai_device_init)
+        dfunc = dlsym(dlib, Symbol("jai_device_init_" * accelid[1:_IDLEN]))
         ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
               
         new(accelid, acceltype, master, device_num, const_vars,
@@ -263,8 +261,9 @@ function jai_accel_fini(name::String;
     accel = _accelcache[name]
     dlib = accel.sharedlibs[accel.accelid]
 
-    dfunc = dlsym(dlib, :jai_device_fini)
+    dfunc = dlsym(dlib, Symbol("jai_device_fini_" * accel.accelid[1:_IDLEN]))
     ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+    dlclose(dlib)
 
     delete!(_accelcache, name)
 end
@@ -281,7 +280,7 @@ function jai_accel_wait(name::String;
 
     # load shared lib
     dlib = accel.sharedlibs[accel.accelid]
-    local dfunc = dlsym(dlib, :jai_wait)
+    local dfunc = dlsym(dlib, Symbol("jai_wait_" * accel.accelid[1:_IDLEN]))
 
     ccallexpr = :(ccall($dfunc, Int64, ()))
     retval = @eval $ccallexpr
@@ -350,8 +349,9 @@ function jai_directive(accel::String, buildtype::BuildType,
     io = IOBuffer()
     ser = serialize(io, (buildtype, accel.accelid, dtypes, sizes))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
+    shortid = launchid[1:_IDLEN]
 
-    local libpath = joinpath(accel.workdir, "SL$(launchid)." * dlext)
+    local libpath = joinpath(accel.workdir, "LIB$(launchid)." * dlext)
 
     # load shared lib
     if haskey(accel.sharedlibs, launchid)
@@ -364,16 +364,16 @@ function jai_directive(accel::String, buildtype::BuildType,
     end
 
     if buildtype == JAI_ALLOCATE
-        local dfunc = dlsym(dlib, :jai_allocate)
+        local dfunc = dlsym(dlib, Symbol("jai_allocate_" * shortid))
 
     elseif buildtype == JAI_UPDATETO
-        local dfunc = dlsym(dlib, :jai_updateto)
+        local dfunc = dlsym(dlib, Symbol("jai_updateto_" * shortid))
 
     elseif buildtype == JAI_UPDATEFROM
-        local dfunc = dlsym(dlib, :jai_updatefrom)
+        local dfunc = dlsym(dlib, Symbol("jai_updatefrom_" * shortid))
 
     elseif buildtype == JAI_DEALLOCATE
-        local dfunc = dlsym(dlib, :jai_deallocate)
+        local dfunc = dlsym(dlib, Symbol("jai_deallocate_" * shortid))
 
     else
         error(string(buildtype) * " is not supported.")
@@ -474,7 +474,7 @@ function launch_kernel(kname::String,
     ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-    libpath = joinpath(kinfo.accel.workdir, "SL$(launchid)." * dlext)
+    libpath = joinpath(kinfo.accel.workdir, "LIB$(launchid)." * dlext)
 
     # load shared lib
     if haskey(kinfo.accel.sharedlibs, launchid)
@@ -486,7 +486,7 @@ function launch_kernel(kname::String,
         kinfo.accel.sharedlibs[launchid] = dlib
     end
 
-    kfunc = dlsym(dlib, :jai_launch)
+    kfunc = dlsym(dlib, Symbol("jai_launch_" * kinfo.accel.accelid[1:_IDLEN]))
     ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
@@ -612,6 +612,7 @@ function build_accel!(workdir::String, debugdir::Union{String, Nothing}, accelty
             end
 
         catch e
+            rethrow(e)
 
         finally
             if lock != nothing
@@ -635,10 +636,11 @@ function build_kernel!(kinfo::KernelInfo, launchid::String,
                 innames::NTuple{N, String} where {N},
                 outnames::NTuple{M, String} where {M}) :: String
 
-    compile = kinfo.accel.compile
+    # TODO: select acceltype for kernel
+    # TODO: get compile and srcfile, ... accordingly
 
-    srcfile, compile = setup_build(kinfo.accel.acceltype, JAI_LAUNCH, launchid,
-                                    compile)
+    srcfile, compile = setup_build(kinfo.acceltype, JAI_LAUNCH, launchid,
+                                    kinfo.compile)
 
     srcpath = joinpath(kinfo.accel.workdir, srcfile)
     pidfile = outpath * ".pid"
@@ -694,7 +696,8 @@ function build_directive!(ainfo::AccelInfo, buildtype::BuildType, launchid::Stri
             lock = mkpidlock(pidfile, stale_age=3)
 
             if !ispath(outpath)
-                code = generate_directive!(ainfo, buildtype, launchid, args, names, control)
+                code = generate_directive!(ainfo, buildtype, launchid[1:_IDLEN],
+                                        args, names, control)
                 _genlibfile(outpath, srcfile, code, ainfo.debugdir, compile, pidfile)
             end
 
@@ -717,29 +720,31 @@ end
 function generate_accel!(workdir::String, acceltype::AccelType,
         compile::Union{String, Nothing}, accelid::String) :: String
 
+    shortid = accelid[1:_IDLEN]
+
     if acceltype == JAI_FORTRAN
-        code = gencode_fortran_accel(accelid)
+        code = gencode_fortran_accel(shortid)
 
     elseif acceltype == JAI_CPP
-        code = gencode_cpp_accel()
+        code = gencode_cpp_accel(shortid)
 
     elseif acceltype == JAI_CPP_CUDA
-        code = gencode_cpp_cuda_accel()
+        code = gencode_cpp_cuda_accel(shortid)
 
     elseif acceltype == JAI_CPP_HIP
-        code = gencode_cpp_hip_accel()
+        code = gencode_cpp_hip_accel(shortid)
 
     elseif acceltype == JAI_FORTRAN_OPENACC
-        code = gencode_fortran_openacc_accel(accelid)
+        code = gencode_fortran_openacc_accel(shortid)
 
     elseif acceltype == JAI_FORTRAN_OMPTARGET
-        code = gencode_fortran_omptarget_accel(accelid)
+        code = gencode_fortran_omptarget_accel(shortid)
 
     else
         error(string(acceltype) * " is not supported yet.")
     end
 
-    code
+    return code
 
 end
 
@@ -754,38 +759,38 @@ function generate_kernel!(kinfo::KernelInfo, launchid::String,
 
     body = kinfo.kerneldef.body
 
-    if kinfo.accel.acceltype == JAI_FORTRAN
+    if kinfo.acceltype == JAI_FORTRAN
         fortopts = launchopts["fortran"] != nothing ? launchopts["fortran"] : Dict{String, Any}()
         code = gencode_fortran_kernel(kinfo, launchid, fortopts, body,
                                 inargs, outargs, innames, outnames)
 
-    elseif kinfo.accel.acceltype == JAI_CPP
+    elseif kinfo.acceltype == JAI_CPP
         cppopts = launchopts["cpp"] != nothing ? launchopts["cpp"] : Dict{String, Any}()
         code = gencode_cpp_kernel(kinfo, launchid, cppopts, body,
                                 inargs, outargs, innames, outnames)
 
-    elseif kinfo.accel.acceltype == JAI_CPP_CUDA
+    elseif kinfo.acceltype == JAI_CPP_CUDA
         cudaopts = launchopts["cuda"] != nothing ? launchopts["cuda"] : Dict{String, Any}()
         code = gencode_cpp_cuda_kernel(kinfo, launchid, cudaopts, body,
                                 inargs, outargs, innames, outnames)
 
-    elseif kinfo.accel.acceltype == JAI_CPP_HIP
+    elseif kinfo.acceltype == JAI_CPP_HIP
         hipopts = launchopts["hip"] != nothing ? launchopts["hip"] : Dict{String}()
         code = gencode_cpp_hip_kernel(kinfo, launchid, hipopts, body,
                                 inargs, outargs, innames, outnames)
 
-    elseif kinfo.accel.acceltype == JAI_FORTRAN_OPENACC
+    elseif kinfo.acceltype == JAI_FORTRAN_OPENACC
         foaccopts = launchopts["fortran_openacc"] != nothing ? launchopts["fortran_openacc"] : Dict{String, Any}()
         code = gencode_fortran_kernel(kinfo, launchid, foaccopts, body,
                                 inargs, outargs, innames, outnames)
 
-    elseif kinfo.accel.acceltype == JAI_FORTRAN_OMPTARGET
+    elseif kinfo.acceltype == JAI_FORTRAN_OMPTARGET
         fomptopts = launchopts["fortran_omptarget"] != nothing ? launchopts["fortran_omptarget"] : Dict{String}()
         code = gencode_fortran_kernel(kinfo, launchid, fomptopts, body,
                                 inargs, outargs, innames, outnames)
 
     else
-        error(string(kinfo.accel.acceltype) * " is not supported yet.")
+        error(string(kinfo.acceltype) * " is not supported yet.")
     end
 
     code
@@ -797,7 +802,6 @@ function generate_directive!(ainfo::AccelInfo, buildtype::BuildType,
                 args::NTuple{N, JaiDataType} where {N},
                 names::NTuple{N, String} where {N},
                 control::Vector{String}) :: String
-
 
     if ainfo.acceltype == JAI_FORTRAN_OPENACC
         code = gencode_fortran_openacc_directive(ainfo, buildtype, launchid,
@@ -1061,25 +1065,58 @@ macro jkernel(clauses...)
 
     if lenclauses < 2
         error("@jkernel macro requires at least two clauses.")
+    end
 
-    elseif lenclauses == 2
-        push!(tmp.args, String(clauses[1]))
-        push!(tmp.args, esc(clauses[2]))
+    start = 3
+
+    push!(tmp.args, String(clauses[1]))
+    push!(tmp.args, esc(clauses[2]))
+
+    if lenclauses == 2
         push!(tmp.args, "jai_accel_default")
 
+    elseif clauses[3] isa Symbol
+        push!(tmp.args, String(clauses[3]))
+        start = 4
+
     else
-        push!(tmp.args, String(clauses[1]))
-        push!(tmp.args, esc(clauses[2]))
+        push!(tmp.args, "jai_accel_default")
 
-        if clauses[3] isa Symbol
-            push!(tmp.args, String(clauses[3]))
-            start = 4
-        else
-            push!(tmp.args, "jai_accel_default")
-            start = 3
-        end
+    end
 
-        for clause in clauses[start:end]
+    for clause in clauses[start:end]
+        if clause.args[1] == :framework
+
+            items = Vector{Expr}()
+
+            for item in clause.args[2:end]
+
+                if item isa Symbol
+                    push!(items, Expr(:tuple, String(item), :nothing))
+
+                elseif item.head == :kw
+
+                    if item.args[2] isa Symbol || item.args[2] isa String
+                        push!(items, Expr(:tuple, string(item.args[1]), esc(item.args[2])))
+
+                    elseif item.args[2].head == :tuple
+                        subitems = []
+                        for subargs in item.args[2].args
+                            push!(subitems, Expr(:tuple, string(subargs.args[1]), esc(subargs.args[2])))
+                        end
+                        push!(items, Expr(:tuple, string(item.args[1]), Expr(:tuple, subitems...)))
+
+                    else
+                        error("Wrong framework syntax")
+
+                    end
+
+                else
+                    error("Wrong framework syntax")
+                end
+            end
+
+            push!(tmp.args, Expr(:kw, :framework, Expr(:tuple, items...))) 
         end
     end
 
@@ -1150,7 +1187,7 @@ end
 
 macro jaccel(clauses...)
 
-    eval(quote import AccelInterfaces.jai_directive   end)
+    eval(quote import AccelInterfaces.jai_directive  end)
 
     tmp = Expr(:block)
 

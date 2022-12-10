@@ -123,9 +123,17 @@ function gencode_cpp_cuda_kernel(kinfo::KernelInfo, launchid::String,
     launchargs = cuda_launchargs(args, names)
     reinterpret = cuda_reinterpret(args, names)
 
-    _grid, _block = get!(cudaopts, "chevron", (1, 1))
+    _grid, _block = get(cudaopts, "chevron", (1, 1))
     grid = _grid isa Number ? string(_grid) : join(_grid, ", ")
     block = _block isa Number ? string(_block) : join(_block, ", ")
+
+    if kinfo.accel.acceltype in (JAI_FORTRAN_OPENACC, )
+        stream = ""
+        launchstmt = "jai_kernel<<<dim3($(grid)), dim3($(block))>>>($(launchargs));"
+    else
+        stream = "extern cudaStream_t jai_stream;"
+        launchstmt = "jai_kernel<<<dim3($(grid)), dim3($(block)), 0, jai_stream)>>>($(launchargs));"
+    end
 
 
     return code = """
@@ -139,7 +147,7 @@ $(macros)
 
 extern "C" {
 
-extern cudaStream_t jai_stream;
+$(stream)
 
 $(decls)
 
@@ -152,7 +160,7 @@ int64_t jai_launch($(kernelargs)) {
 
     $(reinterpret)
 
-    jai_kernel<<<dim3($(grid)), dim3($(block)), 0, jai_stream>>>($(launchargs));
+    $(launchstmt)
 
     res = 0;
 

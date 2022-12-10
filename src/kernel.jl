@@ -1,19 +1,19 @@
 
 const ACCEL_CODE = Dict{AccelType, String}(
-    JAI_FORTRAN => "FO",
+    JAI_FORTRAN => "F_",
     JAI_FORTRAN_OPENACC => "FA",
     JAI_FORTRAN_OMPTARGET => "FM",
-    JAI_CPP => "CP",
+    JAI_CPP => "C_",
     JAI_CPP_CUDA => "CU",
     JAI_CPP_HIP => "CH",
     JAI_CPP_OPENACC => "CA",
-    JAI_CPP_OMPTARGET => "FM"
+    JAI_CPP_OMPTARGET => "CM"
 )
 
 const BUILD_CODE = Dict{BuildType, String}(
-    JAI_ACCEL => "C",
+    JAI_ACCEL => "A",
     JAI_LAUNCH => "L",
-    JAI_ALLOCATE => "A",
+    JAI_ALLOCATE => "M",
     JAI_UPDATETO => "I",
     JAI_UPDATEFROM => "O",
     JAI_DEALLOCATE => "D"
@@ -139,10 +139,10 @@ struct KernelDef
     params::Dict
     body::String
 
-    function KernelDef(accel::AccelInfo, kerneldef::String)
+    function KernelDef(accel::AccelInfo, acceltype::AccelType, kerneldef::String)
 
         sections = KernelSection[]
-        acceltype = accel.acceltype
+        #acceltype = accel.acceltype
         accelid = accel.accelid
 
         acctypes = Vector{AccelType}()
@@ -208,8 +208,11 @@ struct KernelInfo
     kernelid::String
     accel::AccelInfo
     kerneldef::KernelDef
+    acceltype::AccelType
+    compile::String
 
-    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef;
+    function KernelInfo(accel::AccelInfo, kerneldef::KernelDef,
+            acceltype::AccelType, compile::String;
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
 
@@ -217,7 +220,7 @@ struct KernelInfo
         ser = serialize(io, (accel.accelid, kerneldef.specid, _lineno_, _filepath_))
         kernelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
-        new(kernelid, accel, kerneldef)
+        new(kernelid, accel, kerneldef, acceltype, compile)
     end
 
 end
@@ -227,6 +230,8 @@ const _kernelcache = Dict{String, KernelInfo}()
 function jai_kernel_init(kname::String,
             kspec::Union{String, KernelDef},
             aname::String;
+            framework::Union{NTuple{N, Tuple{String, Union{NTuple{M, Tuple{String,
+                        Union{String, Nothing}}}, String, Nothing}}}, Nothing} where {N, M}=nothing,
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
 
@@ -243,8 +248,47 @@ function jai_kernel_init(kname::String,
         end
     end
 
-    kernel = KernelInfo(accel, KernelDef(accel, kdef),
-                    _lineno_=_lineno_, _filepath_=_filepath_)
+    acceltype = accel.acceltype
+    compile = accel.compile
+
+    # TODO: add more framework that should be available as a kernel
+
+    if framework != nothing
+        for (frameworkname, frameconfig) in framework
+            acceltype = _accelmap[frameworkname]
+
+            if frameconfig isa Nothing
+                if startswith(frameworkname, "fortran")
+                    compile = get(ENV, "JAI_FC", get(ENV, "FC", "")) * " " *
+                                get(ENV, "JAI_FFLAGS", get(ENV, "FFLAGS", ""))
+
+                elseif startswith(frameworkname, "cpp")
+                    compile = get(ENV, "JAI_CXX", get(ENV, "CXX", "")) * " " *
+                                get(ENV, "JAI_CXXFLAGS", get(ENV, "CXXFLAGS", ""))
+                else
+                    error(string(frameworkname * " is not supported."))
+                end
+
+            elseif frameconfig isa String
+                compile = frameconfig
+
+            else
+                for (cfgname, cfg) in frameconfig
+                    if cfgname == "compile"
+                        compile = cfg
+                    end
+                end
+            end
+
+            if compile == nothing
+                error("No compile information is available.")
+            end
+
+        end
+    end
+
+    kernel = KernelInfo(accel, KernelDef(accel, acceltype, kdef),
+                    acceltype, compile, _lineno_=_lineno_, _filepath_=_filepath_)
 
     global _kernelcache[kname] = kernel
 
