@@ -27,6 +27,9 @@ function cuda_reinterpret(
             push!(reinterpret,  typestr * " (*ptr_" * varname * ")" * dimstr *
                                 " = " * "reinterpret_cast<" * typestr * " (*)" *
                                 dimstr * ">(jai_dev_" * varname * "_" * aid * ");\n")
+            #push!(reinterpret,  typestr * " (*ptr_" * varname * ")"  *
+            #                    " = " * "jai_dev_" * varname * "_" * aid * ";\n")
+
         end
     end
 
@@ -52,29 +55,30 @@ function cuda_launchargs(
 end
 
 function cuda_genmacros(
+            lid::String,
             args::NTuple{N, JaiDataType} where {N},
             names::NTuple{N, String} where {N}
         ) :: String
 
     macros = String[]
 
-    push!(macros, "#define JSHAPE(varname, dim) jai_shape_##varname##dim")
-    push!(macros, "#define JSIZE(varname) jai_size_##varname")
+    push!(macros, "#define JSHAPE(varname, dim) jai_shape_$(lid)_##varname##dim")
+    push!(macros, "#define JSIZE(varname) jai_size_$(lid)_##varname")
 
     for (name, arg) in zip(names, args)
         if arg isa AbstractArray
             accum = 1
             for (idx, len) in enumerate(reverse(size(arg)))
                 strlen = string(len)
-                push!(macros, "__device__ const uint32_t jai_shape_" * name * string(idx-1) * " = " * strlen * ";" )
+                push!(macros, "__device__ const uint32_t jai_shape_$(lid)_" * name * string(idx-1) * " = " * strlen * ";" )
                 accum *= len
             end
-            push!(macros, "__device__ const uint32_t jai_size_" * name * " = " * string(accum) * ";" )
+            push!(macros, "__device__ const uint32_t jai_size_$(lid)_" * name * " = " * string(accum) * ";" )
 
         elseif arg isa Tuple
             strlen = string(length(arg))
-            push!(macros, "__device__ const uint32_t jai_shape_" * name * "0 = " * strlen * ";" )
-            push!(macros, "__device__ const uint32_t jai_size_" * name * " = " * strlen * ";" )
+            push!(macros, "__device__ const uint32_t jai_shape_$(lid)_" * name * "0 = " * strlen * ";" )
+            push!(macros, "__device__ const uint32_t jai_size_$(lid)_" * name * " = " * strlen * ";" )
 
         end
     end
@@ -125,7 +129,7 @@ function gencode_cpp_cuda_kernel(
     params = cuda_genparams(kinfo.accel)
     decls = cuda_decls(aid, JAI_LAUNCH, args, names)
     kernelargs = cpp_genargs(args, names)
-    macros = cuda_genmacros(args, names)
+    macros = cuda_genmacros(lid, args, names)
     launchargs = cuda_launchargs(args, names)
     reinterpret = cuda_reinterpret(aid, args, names)
 

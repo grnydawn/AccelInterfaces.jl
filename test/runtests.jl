@@ -309,23 +309,58 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
 end
 
+function fortran_openacc_cuda_test_string()
+    kernel_text = """
+
+[cuda]
+
+for(int k=0; k<JSHAPE(X, 0); k++) {
+    for(int j=0; j<JSHAPE(X, 1); j++) {
+        for(int i=0; i<JSHAPE(X, 2); i++) {
+            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+        }
+    }
+}
+"""
+
+    Z = fill(0.::Float64, SHAPE)
+
+    @jaccel framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
+
+    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+
+    @jkernel mykernel kernel_text framework(cuda=cuda_compile)
+
+    @jlaunch(mykernel, X, Y; output=(Z,), cuda=Dict("chevron"=>(1,1)))
+
+    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+
+    @jwait
+
+    @test Z == ANS
+
+    @jdecel
+
+end
+
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
-        fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        fortran_omptarget_tests()
-        cpp_test_string()
-        hip_test_string()
-        #fortran_openacc_hip_test_string()
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #fortran_omptarget_tests()
+        #cpp_test_string()
+        #hip_test_string()
+        fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"
-        fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        cpp_test_string()
-        cuda_test_string()
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #cpp_test_string()
+        #cuda_test_string()
+        fortran_openacc_cuda_test_string()
 
     elseif SYSNAME == "Linux"
         fortran_test_string()

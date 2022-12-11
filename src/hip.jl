@@ -15,7 +15,7 @@ function gencode_cpp_hip_kernel(
     params = cuda_genparams(kinfo.accel)
     decls = cuda_decls(aid, JAI_LAUNCH, args, names)
     kernelargs = cpp_genargs(args, names)
-    macros = cuda_genmacros(args, names)
+    macros = cuda_genmacros(lid, args, names)
     launchargs = cuda_launchargs(args, names)
     reinterpret = cuda_reinterpret(aid, args, names)
 
