@@ -5,7 +5,7 @@ function cuda_genparams(ainfo::AccelInfo) :: String
     for (name, value) in zip(ainfo.const_names, ainfo.const_vars)
 
         typestr, dimstr = cpp_typedef(value, name)
-        push!(params, "__device__ const " * name * " " * typestr * dimstr *
+        push!(params, "__device__ const " * typestr * " " * name * dimstr *
                 " = " * cpp_genvalue(value) * ";")
     end
 
@@ -48,6 +48,8 @@ function cuda_launchargs(
 
         if arg isa AbstractArray || arg isa Tuple
             push!(launch,  "*ptr_" * varname)
+        else
+            push!(launch,  varname)
         end
     end
 
