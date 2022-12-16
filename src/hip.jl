@@ -14,9 +14,10 @@ function gencode_cpp_hip_kernel(
 
     params = cuda_genparams(kinfo.accel)
     decls = cuda_decls(aid, JAI_LAUNCH, args, names)
-    kernelargs = cpp_genargs(args, names)
+    funcargs = cpp_genargs(args, names)
+    kernelargs = cpp_genargs(args[2:end], names[2:end])
     macros = cuda_genmacros(lid, args, names)
-    launchargs = cuda_launchargs(args, names)
+    launchargs = cuda_launchargs(args[2:end], names[2:end])
     reinterpret = cuda_reinterpret(aid, args, names)
 
     _grid, _block = get(cudaopts, "chevron", (1, 1))
@@ -46,11 +47,11 @@ $(stream)
 
 $(decls)
 
-__global__ void jai_kernel(double X[4][3][2], double Y[4][3][2], double Z[4][3][2]) {
+__global__ void jai_kernel($(kernelargs)) {
     $(kernelbody)
 }
 
-int64_t jai_launch_$(lid)($(kernelargs)) {
+int64_t jai_launch_$(lid)($(funcargs)) {
     int64_t res;
 
     $(reinterpret)
