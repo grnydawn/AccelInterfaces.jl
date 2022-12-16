@@ -86,6 +86,8 @@ END DO
 
     @jexitdata deallocate(X, Y, Z)
 
+    @jwait
+
     @jdecel
 
     @test Z == ANS

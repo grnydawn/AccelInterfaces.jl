@@ -101,8 +101,7 @@ struct AccelInfo
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
-    ccallcache::Dict{Tuple{BuildType, Int64, Int64, String},
-                    Tuple{Ptr{Nothing}, Vector{DataType}}}
+    ccallcache::Dict{Tuple{BuildType, Int64, Int64, String}, Ptr{Nothing}}
 
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
@@ -227,11 +226,36 @@ struct AccelInfo
         new(accelid, acceltype, master, device_num, const_vars,
             const_names, compile, sharedlibs,
             workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
-            Tuple{Ptr{Nothing}, Expr}}())
+                                    Ptr{Nothing}}())
     end
 end
 
 const _accelcache = Dict{String, AccelInfo}()
+
+@generated function jai_ccall(func, args...)
+
+    argtypes = Vector{String}()
+    argitems = Vector{String}()
+
+    for (i, arg) in enumerate(args)
+        if arg <: AbstractArray
+            push!(argtypes, string(Ptr{arg}))
+        else
+            push!(argtypes, string(Ref{arg}))
+        end
+
+        push!(argitems, "args[$i]")
+    end
+
+    typestr = join(argtypes, ", ")
+    argsstr = join(argitems, ", ")
+
+    if typestr == ""
+        return Meta.parse("ccall(func, Int64, ())")
+    else
+        return Meta.parse("ccall(func, Int64, ($(typestr),), $(argsstr))")
+    end
+end
 
 function jai_accel_init(name::String; master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
@@ -282,8 +306,9 @@ function jai_accel_wait(name::String;
     dlib = accel.sharedlibs[accel.accelid]
     local dfunc = dlsym(dlib, Symbol("jai_wait_" * accel.accelid[1:_IDLEN]))
 
-    ccallexpr = :(ccall($dfunc, Int64, ()))
-    retval = @eval $ccallexpr
+#    ccallexpr = :(ccall($dfunc, Int64, ()))
+#    retval = @eval $ccallexpr
+    return ccall(dfunc, Int64, ())
 
 end
 
@@ -325,26 +350,28 @@ function jai_directive(accel::String, buildtype::BuildType,
 
     accel = _accelcache[accel]
 
-    data = (accel.device_num, data...)
-    names = ("jai_arg_device_num", names...)
-
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
         return 0::Int64
     end
+
+    data = (accel.device_num, data...)
+    names = ("jai_arg_device_num", names...)
 
     # TODO: add file modified date
     cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.ccallcache, cachekey)
-            dfunc, dtypes = accel.ccallcache[cachekey]
-            ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
-            retval = @eval $ccallexpr
-            return retval
+            dfunc = accel.ccallcache[cachekey]
+            #dfunc, dtypes = accel.ccallcache[cachekey]
+            #ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
+            #retval = @eval $ccallexpr
+            #return retval
+            return jai_ccall(dfunc, data...)
         end
     end
 
-    dtypes, sizes = argsdtypes(accel, data...)
+    #dtypes, sizes = argsdtypes(accel, data...)
 
     io = IOBuffer()
     ser = serialize(io, (buildtype, accel.accelid, dtypes, sizes))
@@ -383,13 +410,15 @@ function jai_directive(accel::String, buildtype::BuildType,
     # TODO: find out how to avoid @eval every time
     # TODO: find out how to avoid "ccall($dfunc, Int64, ($(dtypes...),)" part evert time
 
-    ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
+    #ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        accel.ccallcache[cachekey] = (dfunc, dtypes)
+        #accel.ccallcache[cachekey] = (dfunc, dtypes)
+        accel.ccallcache[cachekey] = dfunc
     end
 
-    retval = @eval $ccallexpr
+    #retval = @eval $ccallexpr
+    return jai_ccall(dfunc, data...)
 
 end
 
@@ -454,24 +483,24 @@ function launch_kernel(kname::String,
     invars = (kinfo.accel.device_num, invars...)
     innames = ("jai_arg_device_num", innames...)
 
-    args = (invars..., output...)
+    #args = (invars..., output...)
+    args, names = merge_args(invars, output, innames, outnames)
     cachekey = (JAI_LAUNCH, 0::Int64, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.accel.ccallcache, cachekey)
-            kfunc, ddtypes = kinfo.accel.ccallcache[cachekey]
-            ccallexpr = :(ccall($kfunc, Int64, ($(ddtypes...),), $(args...)))
-            retval = @eval $ccallexpr
-            return retval
+            kfunc = kinfo.accel.ccallcache[cachekey]
+            return jai_ccall(kfunc, args...)
         end
     end
 
-    indtypes, insizes = argsdtypes(kinfo.accel, invars...)
-    outdtypes, outsizes = argsdtypes(kinfo.accel, output...)
-    dtypes = vcat(indtypes, outdtypes)
+    #indtypes, insizes = argsdtypes(kinfo.accel, invars...)
+    #outdtypes, outsizes = argsdtypes(kinfo.accel, output...)
+    #dtypes = vcat(indtypes, outdtypes)
 
     io = IOBuffer()
-    ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
+    #ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
+    ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, [typeof(a) for a in args]))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
     libpath = joinpath(kinfo.accel.workdir, "LIB$(launchid)." * dlext)
@@ -487,15 +516,12 @@ function launch_kernel(kname::String,
     end
 
     kfunc = dlsym(dlib, Symbol("jai_launch_" * launchid[1:_IDLEN]))
-    ccallexpr = :(ccall($kfunc, Int64, ($(dtypes...),), $(args...)))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.accel.ccallcache[cachekey] = (kfunc, dtypes)
+        kinfo.accel.ccallcache[cachekey] = kfunc
     end
 
-    retval = @eval $ccallexpr
-
-    return retval
+    return jai_ccall(kfunc, args...)
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
@@ -1165,6 +1191,7 @@ macro jlaunch(largs...)
                         error(string(param.args[1]) * " is not supported.")
                     end
                 end
+
                 push!(tmp.args, esc(param))
             end
         end
@@ -1189,7 +1216,7 @@ end
 
 macro jaccel(clauses...)
 
-    eval(quote import AccelInterfaces.jai_directive  end)
+    #eval(quote import AccelInterfaces.jai_directive  end)
 
     tmp = Expr(:block)
 
