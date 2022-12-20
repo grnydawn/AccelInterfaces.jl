@@ -2,7 +2,7 @@
 function gencode_cpp_hip_kernel(
                 kinfo::KernelInfo,
                 lid::String,
-                cudaopts::Dict{String, T} where T <: Any,
+                hipopts::Dict{String, T} where T <: Any,
                 kernelbody::String,
                 inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
@@ -20,7 +20,7 @@ function gencode_cpp_hip_kernel(
     launchargs = cuda_launchargs(args[2:end], names[2:end])
     reinterpret = cuda_reinterpret(aid, args, names)
 
-    _grid, _block = get(cudaopts, "chevron", (1, 1))
+    _grid, _block = get(hipopts, "chevron", (1, 1))
     grid = _grid isa Number ? string(_grid) : join(_grid, ", ")
     block = _block isa Number ? string(_block) : join(_block, ", ")
 
@@ -175,7 +175,6 @@ function cpp_hip_apicalls(
             elseif buildtype == JAI_UPDATETO
                 if "async" in control
                     push!(apicalls, "hipMemcpyAsync(jai_dev_$(varname)_$(aid), $(varname), sizeof($(typestr)) * $(N), hipMemcpyHostToDevice, jai_stream_$(aid));\n")
-
                 else
                     push!(apicalls, "hipMemcpyHtoD(jai_dev_$(varname)_$(aid), $(varname), sizeof($(typestr)) * $(N));\n")
                 end

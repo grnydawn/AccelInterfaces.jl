@@ -57,6 +57,9 @@ end
         JAI_HEADER
 end
 
+const ACCEL_SYMBOLS = (:fortran, :fortran_openacc, :fortran_omptarget,
+        :cpp, :cpp_openacc, :cpp_omptarget, :cuda, :hip)
+
 const _accelmap = Dict{String, AccelType}(
     "fortran" => JAI_FORTRAN,
     "fortran_openacc" => JAI_FORTRAN_OPENACC,
@@ -200,28 +203,28 @@ struct AccelInfo
 
         buf = fill(-1, 1)
 
-        dfunc = dlsym(dlib, Symbol("jai_get_num_devices_" * accelid[1:_IDLEN]))
-        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+        func = dlsym(dlib, Symbol("jai_get_num_devices_" * accelid[1:_IDLEN]))
+        ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
         if buf[1] < 1
             error("The number of devices is less than 1.")
         end
 
         if length(device) == 1
             buf[1] = device[1]
-            dfunc = dlsym(dlib, Symbol("jai_set_device_num_" * accelid[1:_IDLEN]))
-            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+            func = dlsym(dlib, Symbol("jai_set_device_num_" * accelid[1:_IDLEN]))
+            ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
             device_num = device[1]
 
         else
             buf[1] = -1
-            dfunc = dlsym(dlib, Symbol("jai_get_device_num_" * accelid[1:_IDLEN]))
-            ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+            func = dlsym(dlib, Symbol("jai_get_device_num_" * accelid[1:_IDLEN]))
+            ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
             device_num = buf[1]
 
         end
 
-        dfunc = dlsym(dlib, Symbol("jai_device_init_" * accelid[1:_IDLEN]))
-        ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+        func = dlsym(dlib, Symbol("jai_device_init_" * accelid[1:_IDLEN]))
+        ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
               
         new(accelid, acceltype, master, device_num, const_vars,
             const_names, compile, sharedlibs,
@@ -232,29 +235,11 @@ end
 
 const _accelcache = Dict{String, AccelInfo}()
 
-@generated function jai_ccall(func, args...)
-
-    argtypes = Vector{String}()
-    argitems = Vector{String}()
-
-    for (i, arg) in enumerate(args)
-        if arg <: AbstractArray
-            push!(argtypes, string(Ptr{arg}))
-        else
-            push!(argtypes, string(Ref{arg}))
-        end
-
-        push!(argitems, "args[$i]")
-    end
-
-    typestr = join(argtypes, ", ")
-    argsstr = join(argitems, ", ")
-
-    if typestr == ""
-        return Meta.parse("ccall(func, Int64, ())")
-    else
-        return Meta.parse("ccall(func, Int64, ($(typestr),), $(argsstr))")
-    end
+function jai_ccall(dtypestr, libfunc, args)
+    n = length(args)
+    s = join(["a[$i]" for i in range(1, stop=n)], ",")
+    fstr = "(f,a) -> ccall(f, Int64, ($dtypestr,), $s)"
+    Base.invokelatest(eval(Meta.parse(fstr)), libfunc, args)
 end
 
 function jai_accel_init(name::String; master::Bool=true,
@@ -285,8 +270,8 @@ function jai_accel_fini(name::String;
     accel = _accelcache[name]
     dlib = accel.sharedlibs[accel.accelid]
 
-    dfunc = dlsym(dlib, Symbol("jai_device_fini_" * accel.accelid[1:_IDLEN]))
-    ccall(dfunc, Int64, (Ptr{Vector{Int64}},), buf)
+    func = dlsym(dlib, Symbol("jai_device_fini_" * accel.accelid[1:_IDLEN]))
+    ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
     dlclose(dlib)
 
     delete!(_accelcache, name)
@@ -304,11 +289,9 @@ function jai_accel_wait(name::String;
 
     # load shared lib
     dlib = accel.sharedlibs[accel.accelid]
-    local dfunc = dlsym(dlib, Symbol("jai_wait_" * accel.accelid[1:_IDLEN]))
+    local func = dlsym(dlib, Symbol("jai_wait_" * accel.accelid[1:_IDLEN]))
 
-#    ccallexpr = :(ccall($dfunc, Int64, ()))
-#    retval = @eval $ccallexpr
-    return ccall(dfunc, Int64, ())
+    return ccall(func, Int64, ())
 
 end
 
@@ -340,7 +323,9 @@ function timeout(libpath::String, duration::Real; waittoexist::Bool=true) :: Not
     end
 end
 
-function jai_directive(accel::String, buildtype::BuildType,
+function jai_directive(
+            accelname::String,
+            buildtype::BuildType,
             buildtypecount::Int64,
             data::Vararg{JaiDataType, N} where {N};
             names::NTuple{N, String} where {N}=(),
@@ -348,33 +333,29 @@ function jai_directive(accel::String, buildtype::BuildType,
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing) :: Int64
 
-    accel = _accelcache[accel]
+    accel = _accelcache[accelname]
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
         return 0::Int64
     end
 
-    data = (accel.device_num, data...)
+    args = (accel.device_num, data...)
     names = ("jai_arg_device_num", names...)
+    dtypes, sizes = argsdtypes(accel, args...)
+    dtypestr = join([string(t) for t in dtypes], ", ")
 
     # TODO: add file modified date
     cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.ccallcache, cachekey)
-            dfunc = accel.ccallcache[cachekey]
-            #dfunc, dtypes = accel.ccallcache[cachekey]
-            #ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
-            #retval = @eval $ccallexpr
-            #return retval
-            return jai_ccall(dfunc, data...)
+            func = accel.ccallcache[cachekey]
+            return jai_ccall(dtypestr, func, args)
         end
     end
 
-    #dtypes, sizes = argsdtypes(accel, data...)
-
     io = IOBuffer()
-    ser = serialize(io, (buildtype, accel.accelid, dtypes, sizes))
+    ser = serialize(io, (buildtype, accel.accelid, [typeof(d) for d in args]))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
     shortid = launchid[1:_IDLEN]
 
@@ -385,41 +366,33 @@ function jai_directive(accel::String, buildtype::BuildType,
         dlib = accel.sharedlibs[launchid]
 
     else
-        build_directive!(accel, buildtype, launchid, libpath, data, names, control)
+        build_directive!(accel, buildtype, launchid, libpath, args, names, control)
         dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
         accel.sharedlibs[launchid] = dlib
     end
 
     if buildtype == JAI_ALLOCATE
-        local dfunc = dlsym(dlib, Symbol("jai_allocate_" * shortid))
+        local func = dlsym(dlib, Symbol("jai_allocate_" * shortid))
 
     elseif buildtype == JAI_UPDATETO
-        local dfunc = dlsym(dlib, Symbol("jai_updateto_" * shortid))
+        local func = dlsym(dlib, Symbol("jai_updateto_" * shortid))
 
     elseif buildtype == JAI_UPDATEFROM
-        local dfunc = dlsym(dlib, Symbol("jai_updatefrom_" * shortid))
+        local func = dlsym(dlib, Symbol("jai_updatefrom_" * shortid))
 
     elseif buildtype == JAI_DEALLOCATE
-        local dfunc = dlsym(dlib, Symbol("jai_deallocate_" * shortid))
+        local func = dlsym(dlib, Symbol("jai_deallocate_" * shortid))
 
     else
         error(string(buildtype) * " is not supported.")
 
     end
 
-    # TODO: find out how to avoid @eval every time
-    # TODO: find out how to avoid "ccall($dfunc, Int64, ($(dtypes...),)" part evert time
-
-    #ccallexpr = :(ccall($dfunc, Int64, ($(dtypes...),), $(data...)))
-
     if _lineno_ isa Int64 && _filepath_ isa String
-        #accel.ccallcache[cachekey] = (dfunc, dtypes)
-        accel.ccallcache[cachekey] = dfunc
+        accel.ccallcache[cachekey] = func
     end
 
-    #retval = @eval $ccallexpr
-    return jai_ccall(dfunc, data...)
-
+    return jai_ccall(dtypestr, func, args)
 end
 
 function argsdtypes(ainfo::AccelInfo,
@@ -455,10 +428,12 @@ function argsdtypes(ainfo::AccelInfo,
 end
 
 # kernel launch
-function launch_kernel(kname::String,
-            invars::Vararg{JaiDataType, N} where {N};
+function launch_kernel(
+            aname::String,
+            kname::String;
             innames::NTuple{N, String} where {N}=(),
             outnames::NTuple{N, String} where {N}=(),
+            input::NTuple{N,JaiDataType} where {N}=(),
             output::NTuple{N,JaiDataType} where {N}=(),
             cpp::Dict{String}=Dict{String, JaiDataType}(),
             cuda::Dict{String}=Dict{String, JaiDataType}(),
@@ -478,25 +453,24 @@ function launch_kernel(kname::String,
         "fortran_omptarget" => fortran_omptarget
     )
 
-    kinfo = _kernelcache[kname]
+    kinfo = _kernelcache[aname * kname]
 
-    invars = (kinfo.accel.device_num, invars...)
+    invars = (kinfo.accel.device_num, input...)
     innames = ("jai_arg_device_num", innames...)
 
-    #args = (invars..., output...)
     args, names = merge_args(invars, output, innames, outnames)
+    dtypes, sizes = argsdtypes(kinfo.accel, args...)
+    dtypestr = join([string(t) for t in dtypes], ", ")
+
+    # TODO: add launchopts into cachekey
     cachekey = (JAI_LAUNCH, 0::Int64, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.accel.ccallcache, cachekey)
-            kfunc = kinfo.accel.ccallcache[cachekey]
-            return jai_ccall(kfunc, args...)
+            func = kinfo.accel.ccallcache[cachekey]
+            return jai_ccall(dtypestr, func, args)
         end
     end
-
-    #indtypes, insizes = argsdtypes(kinfo.accel, invars...)
-    #outdtypes, outsizes = argsdtypes(kinfo.accel, output...)
-    #dtypes = vcat(indtypes, outdtypes)
 
     io = IOBuffer()
     #ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
@@ -515,13 +489,13 @@ function launch_kernel(kname::String,
         kinfo.accel.sharedlibs[launchid] = dlib
     end
 
-    kfunc = dlsym(dlib, Symbol("jai_launch_" * launchid[1:_IDLEN]))
+    func = dlsym(dlib, Symbol("jai_launch_" * launchid[1:_IDLEN]))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.accel.ccallcache[cachekey] = kfunc
+        kinfo.accel.ccallcache[cachekey] = func
     end
 
-    return jai_ccall(kfunc, args...)
+    return jai_ccall(dtypestr, func, args)
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
@@ -875,7 +849,7 @@ A more detailed explanation can go here, although I guess it is not needed in th
 julia> @jenterdata myaccel framework(fortran_openacc)
 ```
 """
-macro jenterdata(directs...)
+macro jenterdata(accname, directs...)
 
     tmp = Expr(:block)
 
@@ -887,19 +861,7 @@ macro jenterdata(directs...)
     updatenames = String[]
     control = String[]
 
-    lendir = length(directs)
-
-    if lendir == 0
-        stracc = "jai_accel_default"
-
-    elseif directs[1] isa Symbol
-        stracc = string(directs[1])
-        directs = directs[2:end]
-
-    else
-        stracc = "jai_accel_default"
-
-    end
+    stracc = string(accname)
 
     for direct in directs
 
@@ -909,12 +871,11 @@ macro jenterdata(directs...)
         elseif direct.args[1] == :allocate
 
             for idx in range(2, stop=length(direct.args))
-                push!(allocnames, String(direct.args[idx]))
+                push!(allocnames, string(direct.args[idx]))
                 direct.args[idx] = esc(direct.args[idx])
             end
 
             insert!(direct.args, 2, stracc)
-
             insert!(direct.args, 3, JAI_ALLOCATE)
             insert!(direct.args, 4, alloccount)
             alloccount += 1
@@ -923,15 +884,11 @@ macro jenterdata(directs...)
         elseif direct.args[1] == :updateto
 
             for idx in range(2, stop=length(direct.args))
-                push!(updatenames, String(direct.args[idx]))
+                push!(updatenames, string(direct.args[idx]))
                 direct.args[idx] = esc(direct.args[idx])
             end
 
             insert!(direct.args, 2, stracc)
-
-            #for dvar in direct.args[3:end]
-            #    push!(updatenames, String(dvar))
-            #end
             insert!(direct.args, 3, JAI_UPDATETO)
             insert!(direct.args, 4, updatetocount)
             updatetocount += 1
@@ -978,7 +935,7 @@ macro jenterdata(directs...)
     return(tmp)
 end
 
-macro jexitdata(directs...)
+macro jexitdata(accname, directs...)
 
     tmp = Expr(:block)
     deallocs = Expr[]
@@ -989,19 +946,7 @@ macro jexitdata(directs...)
     updatenames = String[]
     control = String[]
 
-    lendir = length(directs)
-
-    if lendir == 0
-        accstr = "jai_accel_default"
-
-    elseif directs[1] isa Symbol
-        accstr = string(directs[1])
-        directs = directs[2:end]
-
-    else
-        accstr = "jai_accel_default"
-
-    end
+    accstr = string(accname)
 
     for direct in directs
 
@@ -1016,10 +961,6 @@ macro jexitdata(directs...)
             end
 
             insert!(direct.args, 2, accstr)
-
-#            for uvar in direct.args[3:end]
-#                push!(updatenames, String(uvar))
-#            end
             insert!(direct.args, 3, JAI_UPDATEFROM)
             insert!(direct.args, 4, updatefromcount)
             updatefromcount += 1
@@ -1033,10 +974,6 @@ macro jexitdata(directs...)
             end
 
             insert!(direct.args, 2, accstr)
-#
-#            for dvar in direct.args[3:end]
-#                push!(deallocnames, String(dvar))
-#            end
             insert!(direct.args, 3, JAI_DEALLOCATE)
             insert!(direct.args, 4, dealloccount)
             dealloccount += 1
@@ -1055,13 +992,11 @@ macro jexitdata(directs...)
 
         if direct.args[1] == :updatefrom
             kwupdatenames = Expr(:kw, :names, Expr(:tuple, updatenames...))
-            #kwupdatenames = Expr(:kw, :names, :($((updatenames...),)))
             push!(direct.args, kwupdatenames)
 
         elseif direct.args[1] == :deallocate
 
             kwdeallocnames = Expr(:kw, :names, Expr(:tuple, deallocnames...))
-            #kwdeallocnames = Expr(:kw, :names, :($((deallocnames...),)))
             push!(direct.args, kwdeallocnames)
 
         end
@@ -1081,38 +1016,20 @@ macro jexitdata(directs...)
     end
 
     #dump(tmp)
+    #println(tmp)
     return(tmp)
 end
 
-macro jkernel(clauses...)
+macro jkernel(accname, knlname, knldef, clauses...)
 
     tmp = Expr(:call)
     push!(tmp.args, :jai_kernel_init)
 
-    lenclauses = length(clauses)
+    push!(tmp.args, string(accname))
+    push!(tmp.args, string(knlname))
+    push!(tmp.args, esc(knldef))
 
-    if lenclauses < 2
-        error("@jkernel macro requires at least two clauses.")
-    end
-
-    start = 3
-
-    push!(tmp.args, String(clauses[1]))
-    push!(tmp.args, esc(clauses[2]))
-
-    if lenclauses == 2
-        push!(tmp.args, "jai_accel_default")
-
-    elseif clauses[3] isa Symbol
-        push!(tmp.args, String(clauses[3]))
-        start = 4
-
-    else
-        push!(tmp.args, "jai_accel_default")
-
-    end
-
-    for clause in clauses[start:end]
+    for clause in clauses
         if clause.args[1] == :framework
 
             items = Vector{Expr}()
@@ -1155,47 +1072,50 @@ macro jkernel(clauses...)
     push!(tmp.args, kwfile)
 
     #dump(tmp)
+    #println(tmp)
     return(tmp)
 
 end
 
-
-macro jlaunch(largs...)
+macro jlaunch(accname, knlname, clauses...)
 
     tmp = Expr(:call)
     push!(tmp.args, :launch_kernel)
+    input = :(())
+    output = :(())
     innames = String[]
     outnames = String[]
 
-    flag = true
+    push!(tmp.args, string(accname))
+    push!(tmp.args, string(knlname))
 
-    for larg in largs
-        if larg isa Symbol
-            if flag
-                push!(tmp.args, string(larg))
-                flag = false
-            else
-                push!(innames, String(larg))
-                push!(tmp.args, esc(larg))
-            end
-
-        elseif larg.head == :parameters
-            for param in larg.args
-                if param.head  == :kw
-                    if param.args[1] == :output
-                        for ovar in param.args[2].args
-                            push!(outnames, String(ovar))
-                        end
-                    elseif param.args[1] in (:cuda, :hip)
-                    else
-                        error(string(param.args[1]) * " is not supported.")
-                    end
+    for clause in clauses
+        if clause.head == :call
+            if clause.args[1] == :input
+                for invar in clause.args[2:end]
+                    push!(innames, String(invar))
+                    push!(input.args, esc(invar))
                 end
-
-                push!(tmp.args, esc(param))
+            elseif clause.args[1] == :output
+                for outvar in clause.args[2:end]
+                    push!(outnames, String(outvar))
+                    push!(output.args, esc(outvar))
+                end
+            elseif clause.args[1] in ACCEL_SYMBOLS
+                kvs = :(Dict())
+                for kv in clause.args[2:end]
+                    push!(kvs.args, esc(kv))
+                end
+                push!(tmp.args, Expr(:kw, clause.args[1], kvs))
             end
         end
     end
+
+    kwinput = Expr(:kw, :input, input)
+    push!(tmp.args, kwinput)
+
+    kwoutput = Expr(:kw, :output, output)
+    push!(tmp.args, kwoutput)
 
     kwinnames = Expr(:kw, :innames, Expr(:tuple, innames...))
     push!(tmp.args, kwinnames)
@@ -1214,33 +1134,19 @@ macro jlaunch(largs...)
 
 end
 
-macro jaccel(clauses...)
-
-    #eval(quote import AccelInterfaces.jai_directive  end)
+macro jaccel(accname, clauses...)
 
     tmp = Expr(:block)
 
     init = Expr(:call)
     push!(init.args, :jai_accel_init)
-
-    if length(clauses) == 0
-        push!(init.args, "jai_accel_default")
-
-    elseif clauses[1] isa Symbol
-        push!(init.args, string(clauses[1]))
-        clauses = clauses[2:end]
-
-    else
-        push!(init.args, "jai_accel_default")
-
-    end
-
+    push!(init.args, string(accname))
 
     for clause in clauses
 
         if clause.args[1] == :constant
             const_vars = clause.args[2:end]
-            const_names = [String(n) for n in const_vars]
+            const_names = [string(n) for n in const_vars]
             const_vars = (esc(c) for c in const_vars)
 
             push!(init.args, Expr(:kw, :const_vars, Expr(:tuple, const_vars...))) 
@@ -1258,7 +1164,7 @@ macro jaccel(clauses...)
             for item in clause.args[2:end]
 
                 if item isa Symbol
-                    push!(items, Expr(:tuple, String(item), :nothing))
+                    push!(items, Expr(:tuple, string(item), :nothing))
 
                 elseif item.head == :kw
 
@@ -1281,10 +1187,6 @@ macro jaccel(clauses...)
                     error("Wrong framework syntax")
                 end
             end
-
-            #dump(items)
-
-            #framework = (f for f in items)
 
             #push!(init.args, Expr(:kw, :framework, Expr(:tuple, framework...))) 
             push!(init.args, Expr(:kw, :framework, Expr(:tuple, items...))) 
@@ -1323,27 +1225,16 @@ macro jaccel(clauses...)
 end
 
 
-macro jdecel(clauses...)
+macro jdecel(accname, clauses...)
 
     tmp = Expr(:block)
 
     fini = Expr(:call)
     push!(fini.args, :jai_accel_fini)
+    push!(fini.args, string(accname))
 
-    if length(clauses) == 0
-        push!(fini.args, "jai_accel_default")
-
-    elseif clauses[1] isa Symbol
-        push!(fini.args, string(clauses[1]))
-        clauses = clauses[2:end]
-
-    else
-        push!(fini.args, "jai_accel_default")
-
-    end
-
-    for clause in clauses
-    end
+    #for clause in clauses
+    #end
 
     kwline = Expr(:kw, :_lineno_, __source__.line)
     push!(fini.args, kwline)
@@ -1357,24 +1248,13 @@ macro jdecel(clauses...)
     return(tmp)
 end
 
-macro jwait(clauses...)
+macro jwait(accname, clauses...)
 
     tmp = Expr(:block)
 
     expr = Expr(:call)
     push!(expr.args, :jai_accel_wait)
-
-    if length(clauses) == 0
-        push!(expr.args, "jai_accel_default")
-
-    elseif clauses[1] isa Symbol
-        push!(expr.args, string(clauses[1]))
-        clauses = clauses[2:end]
-
-    else
-        push!(expr.args, "jai_accel_default")
-
-    end
+    push!(expr.args, string(accname))
 
     kwline = Expr(:kw, :_lineno_, __source__.line)
     push!(expr.args, kwline)

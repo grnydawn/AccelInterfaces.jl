@@ -227,9 +227,10 @@ end
 
 const _kernelcache = Dict{String, KernelInfo}()
 
-function jai_kernel_init(kname::String,
-            kspec::Union{String, KernelDef},
-            aname::String;
+function jai_kernel_init(
+            aname::String,
+            kname::String,
+            kspec::Union{String, KernelDef};
             framework::Union{NTuple{N, Tuple{String, Union{NTuple{M, Tuple{String,
                         Union{String, Nothing}}}, String, Nothing}}}, Nothing} where {N, M}=nothing,
             _lineno_::Union{Int64, Nothing}=nothing,
@@ -290,7 +291,7 @@ function jai_kernel_init(kname::String,
     kernel = KernelInfo(accel, KernelDef(accel, acceltype, kdef),
                     acceltype, compile, _lineno_=_lineno_, _filepath_=_filepath_)
 
-    global _kernelcache[kname] = kernel
+    global _kernelcache[aname * kname] = kernel
 
 end
 

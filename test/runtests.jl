@@ -48,12 +48,7 @@ end
 
 const TEST1 = 100
 const TEST2 = (1, 2)
-
 const SHAPE = (2,3,4)
-const X = rand(Float64, SHAPE)
-const Y = rand(Float64, SHAPE)
-
-const ANS = X .+ Y
 
 function fortran_test_string()
 
@@ -74,21 +69,24 @@ DO k=LBOUND(X, 3), UBOUND(X, 3)
 END DO
 """
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
-    @jaccel framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel fortacc framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata allocate(X, Y, Z)
+    @jenterdata fortacc allocate(X, Y, Z)
 
-    @jkernel mykernel kernel_text
+    @jkernel fortacc mykernel kernel_text
 
-    @jlaunch(mykernel, X, Y; output=(Z,))
+    @jlaunch fortacc mykernel input(X, Y) output(Z,)
 
-    @jexitdata deallocate(X, Y, Z)
+    @jexitdata fortacc deallocate(X, Y, Z)
 
-    @jwait
+    @jwait fortacc
 
-    @jdecel
+    @jdecel fortacc
 
     @test Z == ANS
 
@@ -96,68 +94,77 @@ end
 
 function fortran_test_file()
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
-    @jaccel framework(fortran=(compile=fort_compile,)) constant(TEST1, TEST2
+
+    @jaccel fortfileacc framework(fortran=(compile=fort_compile,)) constant(TEST1, TEST2
             ) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel mykernel "ex1.knl"
+    @jkernel fortfileacc mykernel "ex1.knl"
 
-    @jlaunch(mykernel, X, Y; output=(Z,))
+    @jlaunch fortfileacc mykernel input(X, Y) output(Z,)
 
     @test Z == ANS
-
 
 end
 
 function fortran_openacc_tests()
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
     ismaster = true
 
-    @jaccel framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
+    @jaccel accacc framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
                     ) compile(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
 
-    @jkernel mykernel "ex1.knl"
+    @jkernel accacc mykernel "ex1.knl"
 
-    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata accacc allocate(X, Y, Z) updateto(X, Y)
 
-    @jlaunch(mykernel, X, Y; output=(Z,))
+    @jlaunch accacc mykernel input(X, Y) output(Z,)
 
-    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata accacc updatefrom(Z) deallocate(X, Y, Z) async
 
-    @jwait
+    @jwait accacc
 
     @test Z == ANS
 
-    @jdecel
+    @jdecel accacc
 
 
 end
 
 function fortran_omptarget_tests()
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
     ismaster = true
 
-    @jaccel myaccel framework(fortran_omptarget=omp_compile) constant(TEST1, TEST2
+    @jaccel omptacc framework(fortran_omptarget=omp_compile) constant(TEST1, TEST2
                     ) device(1) set(master=ismaster,
                     debugdir=workdir, workdir=workdir)
 
 
-    @jkernel mykernel "ex1.knl" myaccel
+    @jkernel omptacc mykernel "ex1.knl"
 
-    @jenterdata myaccel allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata omptacc allocate(X, Y, Z) updateto(X, Y)
 
-    @jlaunch(mykernel, X, Y; output=(Z,))
+    @jlaunch omptacc mykernel input(X, Y) output(Z,)
 
-    @jexitdata myaccel updatefrom(Z) deallocate(X, Y, Z)
+    @jexitdata omptacc updatefrom(Z) deallocate(X, Y, Z)
 
-    @jdecel myaccel
+    @jdecel omptacc
 
     @test Z == ANS
 
@@ -177,19 +184,21 @@ function cpp_test_string()
     }
 //}
 """
-
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
     ENV["CXX"] = "g++"
     ENV["CXXFLAGS"] = "-fPIC -shared -g"
 
-    @jaccel myaccel framework(cpp) set(debugdir=workdir, workdir=workdir)
+    @jaccel cppacc framework(cpp) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel mykernel kernel_text myaccel
+    @jkernel cppacc mykernel kernel_text
 
     #Profile.@profile @jlaunch(mykernel, X, Y; output=(Z,))
     #@time for i in range(1, stop=10)
-        @jlaunch(mykernel, X, Y; output=(Z,))
+        @jlaunch cppacc mykernel input(X, Y) output(Z,)
     #end
 
     @test Z[:,:,1] == ANS[:,:,1]
@@ -198,6 +207,7 @@ function cpp_test_string()
     #    Profile.print(s, format=:flat, sortedby=:count)
     #end
 
+    @jdecel cppacc
 end
 
 function cuda_test_string()
@@ -214,23 +224,26 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 }
 """
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
-    @jaccel framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel cudaacc framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata allocate(X, Y, Z) updateto(X, Y) async
+    @jenterdata cudaacc allocate(X, Y, Z) updateto(X, Y) async
 
-    @jkernel mykernel kernel_text
+    @jkernel cudaacc mykernel kernel_text
 
-    @jlaunch(mykernel, X, Y; output=(Z,), cuda=Dict("chevron"=>(1,1)))
+    @jlaunch cudaacc mykernel input(X, Y) output(Z,) cuda("chevron"=>(1,1))
 
-    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata cudaacc updatefrom(Z) deallocate(X, Y, Z) async
 
-    @jwait
+    @jwait cudaacc
 
     @test Z == ANS
 
-    @jdecel
+    @jdecel cudaacc
 
 
 end
@@ -255,25 +268,28 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     Z[i][j][k] = X[i][j][k] + Y[i][j][k];
 """
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
-    @jaccel framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel hipacc framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata hipacc allocate(X, Y, Z) updateto(X, Y)
 
-    @jkernel mykernel kernel_text
+    @jkernel hipacc mykernel kernel_text
 
-    @jlaunch(mykernel, X, Y; output=(Z,), hip=Dict("chevron"=>((4,3,2),1)))
+    tt = ((4,3,2),1)
+    #@jlaunch hipacc mykernel input(X, Y) output(Z,) hip("chevron"=>((4,3,2),1), "test"=>3)
+    @jlaunch hipacc mykernel input(X, Y) output(Z,) hip("chevron"=>tt, "test"=>3)
 
-    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata hipacc updatefrom(Z,) deallocate(X, Y, Z) async
+
+    @jwait hipacc
 
     @test Z == ANS
 
-    @jwait
-
-    #@test Z == ANS
-
-    @jdecel
+    @jdecel hipacc
 
 end
 
@@ -282,6 +298,7 @@ function fortran_openacc_hip_test_string()
 
 [hip]
 
+/*
 for(int k=0; k<JSHAPE(X, 0); k++) {
     for(int j=0; j<JSHAPE(X, 1); j++) {
         for(int i=0; i<JSHAPE(X, 2); i++) {
@@ -289,25 +306,36 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
         }
     }
 }
+*/
+    int i = blockIdx.x;
+    int j = blockIdx.y;
+    int k = blockIdx.z;
+
+    Z1[i][j][k] = X1[i][j][k] + Y1[i][j][k];
+
 """
 
-    Z = fill(0.::Float64, SHAPE)
+    X1 = rand(Float64, SHAPE)
+    Y1 = rand(Float64, SHAPE)
+    Z1 = fill(0.::Float64, SHAPE)
+    ANS = X1 .+ Y1
 
-    @jaccel framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel acchipacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata acchipacc allocate(X1, Y1, Z1) updateto(X1, Y1)
 
-    @jkernel mykernel kernel_text framework(hip=hip_compile)
+    @jkernel acchipacc mykernel kernel_text framework(hip=hip_compile)
 
-    @jlaunch(mykernel, X, Y; output=(Z,), hip=Dict("chevron"=>(1,1)))
+    tt = ((4,3,2),1)
+    @jlaunch acchipacc mykernel input(X1, Y1) output(Z1) hip("chevron"=>tt)
 
-    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata acchipacc updatefrom(Z1) deallocate(X1, Y1, Z1) async
 
-    @jwait
+    @jwait acchipacc
 
-    @test Z == ANS
+    @test Z1 == ANS
 
-    @jdecel
+    @jdecel acchipacc
 
 end
 
@@ -325,23 +353,27 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 }
 """
 
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
 
-    @jaccel framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel acccudaacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata acccudaacc allocate(X, Y, Z) updateto(X, Y)
 
-    @jkernel mykernel kernel_text framework(cuda=cuda_compile)
+    @jkernel acccudaacc mykernel kernel_text framework(cuda=cuda_compile)
 
-    @jlaunch(mykernel, X, Y; output=(Z,), cuda=Dict("chevron"=>(1,1)))
+    #@jlaunch(acccudaacc, mykernel, X, Y; output=(Z,), cuda=("chevron"=>(1,1))
+    @jlaunch acccudaacc mykernel input(X, Y) output(Z,) cuda("chevron"=>(1,1))
 
-    @jexitdata updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata acccudaacc updatefrom(Z) deallocate(X, Y, Z) async
 
-    @jwait
+    @jwait acccudaacc
 
     @test Z == ANS
 
-    @jdecel
+    @jdecel acccudaacc
 
 end
 
@@ -351,18 +383,18 @@ end
         #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_omptarget_tests()
         #cpp_test_string()
         #hip_test_string()
         fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"
-        #fortran_test_string()
+        fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
         #cpp_test_string()
         #cuda_test_string()
-        fortran_openacc_cuda_test_string()
+        #fortran_openacc_cuda_test_string()
 
     elseif SYSNAME == "Linux"
         fortran_test_string()
