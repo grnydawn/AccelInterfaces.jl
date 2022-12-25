@@ -12,10 +12,18 @@ function fortran_openacc_directives(
     for (arg, varname) in zip(inargs, innames)
 
         # for debug
+        if !(arg isa AbstractArray)
+            continue
+        end
+
+        sz = sizeof(arg)
 
         if buildtype == JAI_ALLOCATE
-            push!(directs, "!\$acc enter data create($(varname)) $(clauses)\n")
-            push!(directs, "jai_dev_$(varname)_$(aid) = acc_deviceptr($(varname))\n")
+            #push!(directs, "!\$acc enter data create($(varname)) $(clauses)")
+            #push!(directs, "jai_dev_$(varname)_$(aid) = acc_deviceptr($(varname))")
+            push!(directs, "jai_dev_$(varname)_$(aid) = acc_malloc($(sz))")
+            push!(directs, "jai_host_$(varname)_$(aid) => $(varname)")
+            push!(directs, "CALL acc_map_data(jai_host_$(varname)_$(aid), jai_dev_$(varname)_$(aid), $(sz))\n")
 
         elseif buildtype == JAI_UPDATETO
             push!(directs, "!\$acc update device($(varname)) $(clauses)\n")
@@ -35,6 +43,28 @@ function fortran_openacc_directives(
 
 end
 
+function fortran_openacc_host_typedecls(aid::String, buildtype::BuildType,
+                args::NTuple{N, JaiDataType} where {N},
+                names::NTuple{N, String} where {N}) :: String
+
+    typedecls = String[]
+
+    for (arg, varname) in zip(args, names)
+
+        if arg isa AbstractArray
+
+            typestr, dimstr = fortran_typedef(arg)
+            intent = buildtype in (JAI_DEALLOCATE, JAI_UPDATEFROM) ? "IN" : "IN"
+
+            sp = join([":" for _ in range(1, length=ndims(arg))], ", ")
+            dimshape = ", DIMENSION($(sp))"
+            push!(typedecls, typestr * dimshape * ", POINTER :: jai_host_" * varname * "_" * aid)
+        end
+    end
+
+    return join(typedecls, "\n")
+end
+
 function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildType,
                 lid::String,
                 args::NTuple{N, JaiDataType} where {N},
@@ -44,18 +74,22 @@ function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildTyp
     aid = ainfo.accelid[1:_IDLEN]
 
     params = fortran_genparams(ainfo)
-    typedecls = fortran_directive_typedecls(lid, buildtype, args, names)
+    typedecls = fortran_directive_typedecls(lid, buildtype, args, names, target=true)
     directives = fortran_openacc_directives(aid, buildtype, args[2:end], names[2:end], control)
     arguments = join(names, ",")
     funcname = LIBFUNC_NAME[ainfo.acceltype][buildtype]
 
     deviceptrs = ""
     devicevars = ""
+    hostvars   = ""
 
     if buildtype == JAI_ALLOCATE
-        deviceptrs = join([("TYPE (C_PTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
+        # TODO: support different compiler and versions
+        #deviceptrs = join([("TYPE (C_PTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
+        deviceptrs = join([("TYPE (C_DEVPTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
                          " jai_dev_$(v)_$(aid)") for v in names[2:end]], "\n")
         devicevars = "public " * join(["jai_dev_$(v)_$(aid)" for v in names[2:end]], ",")
+        hostvars = fortran_openacc_host_typedecls(aid, buildtype, args, names)
     end
     
     return """
@@ -76,6 +110,7 @@ INTEGER (C_INT64_T) FUNCTION $(funcname)_$(lid)($(arguments)) BIND(C, name="$(fu
 USE, INTRINSIC :: ISO_C_BINDING
 
 $(typedecls)
+$(hostvars)
 
 INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 

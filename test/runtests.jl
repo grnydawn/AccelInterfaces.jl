@@ -364,8 +364,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jkernel acccudaacc mykernel kernel_text framework(cuda=cuda_compile)
 
-    #@jlaunch(acccudaacc, mykernel, X, Y; output=(Z,), cuda=("chevron"=>(1,1))
-    @jlaunch acccudaacc mykernel input(X, Y) output(Z,) cuda("chevron"=>(1,1))
+    @jlaunch acccudaacc mykernel input(X, Y) output(Z) cuda("chevron"=>(1,1))
 
     @jexitdata acccudaacc updatefrom(Z) deallocate(X, Y, Z) async
 
@@ -383,18 +382,18 @@ end
         #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
-        fortran_omptarget_tests()
+        #fortran_omptarget_tests()
         #cpp_test_string()
         #hip_test_string()
         fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"
-        fortran_test_string()
+        #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
         #cpp_test_string()
         #cuda_test_string()
-        #fortran_openacc_cuda_test_string()
+        fortran_openacc_cuda_test_string()
 
     elseif SYSNAME == "Linux"
         fortran_test_string()

@@ -162,9 +162,12 @@ function fortran_genvars(kinfo::KernelInfo, lid::String,
     return arguments, join(typedecls, "\n")
 end
 
-function fortran_directive_typedecls(launchid::String, buildtype::BuildType,
+function fortran_directive_typedecls(
+                launchid::String, buildtype::BuildType,
                 args::NTuple{N, JaiDataType} where {N},
-                names::NTuple{N, String} where {N}) :: String
+                names::NTuple{N, String} where {N};
+                target::Bool=false
+        ) :: String
 
     typedecls = String[]
 
@@ -173,7 +176,11 @@ function fortran_directive_typedecls(launchid::String, buildtype::BuildType,
         typestr, dimstr = fortran_typedef(arg)
         intent = buildtype in (JAI_DEALLOCATE, JAI_UPDATEFROM) ? "IN" : "IN"
 
-        push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
+        if target
+            push!(typedecls, typestr * dimstr * ", INTENT(" * intent * "), TARGET :: " * varname)
+        else
+            push!(typedecls, typestr * dimstr * ", INTENT(" * intent * ") :: " * varname)
+        end
     end
 
     return join(typedecls, "\n")
