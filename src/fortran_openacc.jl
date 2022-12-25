@@ -21,9 +21,9 @@ function fortran_openacc_directives(
         if buildtype == JAI_ALLOCATE
             #push!(directs, "!\$acc enter data create($(varname)) $(clauses)")
             #push!(directs, "jai_dev_$(varname)_$(aid) = acc_deviceptr($(varname))")
-            push!(directs, "jai_dev_$(varname)_$(aid) = acc_malloc($(sz))")
+            push!(directs, "jai_dev_$(varname)_$(aid) = acc_malloc($(sz)_8)")
             push!(directs, "jai_host_$(varname)_$(aid) => $(varname)")
-            push!(directs, "CALL acc_map_data(jai_host_$(varname)_$(aid), jai_dev_$(varname)_$(aid), $(sz))\n")
+            push!(directs, "CALL acc_map_data(jai_host_$(varname)_$(aid), jai_dev_$(varname)_$(aid), $(sz)_8)\n")
 
         elseif buildtype == JAI_UPDATETO
             push!(directs, "!\$acc update device($(varname)) $(clauses)\n")
@@ -85,8 +85,8 @@ function gencode_fortran_openacc_directive(ainfo::AccelInfo, buildtype::BuildTyp
 
     if buildtype == JAI_ALLOCATE
         # TODO: support different compiler and versions
-        #deviceptrs = join([("TYPE (C_PTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
-        deviceptrs = join([("TYPE (C_DEVPTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
+        deviceptrs = join([("TYPE (C_PTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
+        #deviceptrs = join([("TYPE (C_DEVPTR), BIND(C, NAME='jai_dev_$(v)_$(aid)') ::" *
                          " jai_dev_$(v)_$(aid)") for v in names[2:end]], "\n")
         devicevars = "public " * join(["jai_dev_$(v)_$(aid)" for v in names[2:end]], ",")
         hostvars = fortran_openacc_host_typedecls(aid, buildtype, args, names)
