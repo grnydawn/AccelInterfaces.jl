@@ -350,7 +350,7 @@ function jai_directive(
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.ccallcache, cachekey)
             func = accel.ccallcache[cachekey]
-            return jai_ccall(dtypestr, func, args)
+            return @time jai_ccall(dtypestr, func, args)
         end
     end
 
@@ -392,7 +392,7 @@ function jai_directive(
         accel.ccallcache[cachekey] = func
     end
 
-    return jai_ccall(dtypestr, func, args)
+    return @time jai_ccall(dtypestr, func, args)
 end
 
 function argsdtypes(ainfo::AccelInfo,
@@ -468,7 +468,7 @@ function launch_kernel(
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.accel.ccallcache, cachekey)
             func = kinfo.accel.ccallcache[cachekey]
-            return jai_ccall(dtypestr, func, args)
+            return @time jai_ccall(dtypestr, func, args)
         end
     end
 
@@ -495,7 +495,7 @@ function launch_kernel(
         kinfo.accel.ccallcache[cachekey] = func
     end
 
-    return jai_ccall(dtypestr, func, args)
+    return @time jai_ccall(dtypestr, func, args)
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
@@ -1102,7 +1102,8 @@ macro jlaunch(accname, knlname, clauses...)
                     push!(output.args, esc(outvar))
                 end
             elseif clause.args[1] in ACCEL_SYMBOLS
-                kvs = :(Dict())
+                #kvs = :(Dict())
+                kvs = :(Dict{String, Any}())
                 for kv in clause.args[2:end]
                     push!(kvs.args, esc(kv))
                 end

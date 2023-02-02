@@ -298,7 +298,10 @@ end
 function merge_args(inargs::NTuple{N, JaiDataType} where {N},
                 outargs::NTuple{M, JaiDataType} where {M},
                 innames::NTuple{N, String} where {N},
-                outnames::NTuple{M, String} where {M})
+                outnames::NTuple{M, String} where {M}) :: Tuple{
+                    NTuple{M, JaiDataType} where {M},
+                    NTuple{N, String} where {N}
+                }
 
     args = collect(JaiDataType, inargs)
     names = collect(String, innames)
