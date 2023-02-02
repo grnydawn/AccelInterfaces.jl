@@ -350,7 +350,8 @@ function jai_directive(
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.ccallcache, cachekey)
             func = accel.ccallcache[cachekey]
-            return @time "jai_directive 1" jai_ccall(dtypestr, func, args)
+            println("jai_directive 1")
+            return @time jai_ccall(dtypestr, func, args)
         end
     end
 
@@ -392,7 +393,8 @@ function jai_directive(
         accel.ccallcache[cachekey] = func
     end
 
-    return @time "jai_directive 2" jai_ccall(dtypestr, func, args)
+    println("jai_directive 2")
+    return @time jai_ccall(dtypestr, func, args)
 end
 
 function argsdtypes(ainfo::AccelInfo,
@@ -468,7 +470,8 @@ function launch_kernel(
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.accel.ccallcache, cachekey)
             func = kinfo.accel.ccallcache[cachekey]
-            return @time "launch_kernel 1" jai_ccall(dtypestr, func, args)
+            println("launch_kernel 1")
+            return @time jai_ccall(dtypestr, func, args)
         end
     end
 
@@ -495,7 +498,8 @@ function launch_kernel(
         kinfo.accel.ccallcache[cachekey] = func
     end
 
-    return @time "launch_kernel 2" jai_ccall(dtypestr, func, args)
+    println("launch_kernel 2")
+    return @time jai_ccall(dtypestr, func, args)
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
