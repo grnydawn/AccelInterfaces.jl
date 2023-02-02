@@ -234,12 +234,22 @@ struct AccelInfo
 end
 
 const _accelcache = Dict{String, AccelInfo}()
+const fcache = Dict()
 
-function jai_ccall(dtypestr, libfunc, args)
+function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args)
     n = length(args)
     s = join(["a[$i]" for i in range(1, stop=n)], ",")
-    fstr = "(f,a) -> ccall(f, Int64, ($dtypestr,), $s)"
-    Base.invokelatest(eval(Meta.parse(fstr)), libfunc, args)
+    funcstr = "(f,a) -> ccall(f, Int64, ($dtypestr,), $s)"
+    fid = bytes2hex(sha1(funcstr))[1:4] 
+    if ! haskey(fcache, fid)
+        fcache[fid] = eval(Meta.parse(funcstr))
+    end
+    Base.invokelatest(fcache[fid], libfunc, args)
+    #Base.invokelatest(eval(Meta.parse(fstr)), libfunc, args)
+    # if the pointer of libfunc and dtypestr are the same, the the same call?
+    #fstr = "function MM(f,a) ccall(f, Int64, ($dtypestr,), $s) end"
+    #func = eval(Meta.parse(fstr))
+    #Base.invokelatest(func, libfunc, args)
 end
 
 function jai_accel_init(name::String; master::Bool=true,
