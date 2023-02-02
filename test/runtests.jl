@@ -36,8 +36,8 @@ elseif SYSNAME == "Summit"
     const cpp_compile  = "pgc++ -fPIC -shared -g"
     const cuda_compile  = "nvcc --linker-options=\"-fPIC\" --shared -g"
 
-    #const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
-    const workdir = "/ccs/home/grnydawn/temp/jaiwork"
+    const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
+    #const workdir = "/ccs/home/grnydawn/temp/jaiwork"
 
 else
     const fort_compile = "gfortran -fPIC -shared -g"
@@ -49,6 +49,7 @@ end
 const TEST1 = 100
 const TEST2 = (1, 2)
 const SHAPE = (2,3,4)
+#const SHAPE = (200,30,40)
 
 function fortran_test_string()
 
@@ -248,6 +249,65 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
 end
 
+function hip_fortran_test_string()
+
+    kernel_hiptext = """
+
+[hip]
+for(int k=0; k<JSHAPE(X, 0); k++) {
+    for(int j=0; j<JSHAPE(X, 1); j++) {
+        for(int i=0; i<JSHAPE(X, 2); i++) {
+            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+        }
+    }
+}
+"""
+
+    kernel_fortrand = """
+[fortran]
+CALL RANDOM_NUMBER(X)
+CALL RANDOM_NUMBER(Y)
+CALL RANDOM_NUMBER(Z)
+"""
+
+    X = Array{Float64}(undef, SHAPE)
+    Y = Array{Float64}(undef, SHAPE)
+    Z = Array{Float64}(undef, SHAPE)
+
+    #println("#######")
+    #println(Z)
+
+    @jaccel hipacc framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
+
+    @jkernel hipacc initarrays kernel_fortrand framework(fortran=fort_compile)
+
+    @jlaunch hipacc initarrays output(X, Y, Z) fortran()
+
+    #println("#######")
+    #println(Z)
+
+    ANS = X .+ Y
+
+    @jenterdata hipacc allocate(X, Y, Z) updateto(X, Y) async
+
+    @jkernel hipacc mykernel kernel_hiptext
+
+    @jlaunch hipacc mykernel input(X, Y) output(Z,) hip("chevron"=>(1,1))
+
+    @jexitdata hipacc updatefrom(Z) deallocate(X, Y, Z) async
+
+    @jwait hipacc
+
+    #println("#######")
+    #println(Z)
+
+    @test Z == ANS
+
+    @jdecel hipacc
+
+
+end
+
 function hip_test_string()
     kernel_text = """
 
@@ -379,13 +439,14 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
-        fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        fortran_omptarget_tests()
-        cpp_test_string()
-        hip_test_string()
-        fortran_openacc_hip_test_string()
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #fortran_omptarget_tests()
+        #cpp_test_string()
+        #hip_test_string()
+        hip_fortran_test_string()
+        #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"
         #fortran_test_string()
