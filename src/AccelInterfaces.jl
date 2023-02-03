@@ -239,7 +239,7 @@ const _ccall_cache = Dict()
 function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args) :: Int64
 
     s = join(["a[$i]" for i in range(1, stop=length(args))], ",")
-    funcstr = "(f,a) -> ccall(f, Int64, ($dtypestr,), $s)"
+    funcstr = "(f,a) -> ccall(f, Int64, (" * dtypestr * ",), " * s * ")"
     fid = bytes2hex(sha1(funcstr))[1:4] 
 
     if ! haskey(_ccall_cache, fid)
