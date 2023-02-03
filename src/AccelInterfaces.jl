@@ -104,7 +104,7 @@ struct AccelInfo
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
-    ccallcache::Dict{Tuple{BuildType, Int64, Int64, String}, Ptr{Nothing}}
+    ccallcache::Dict{Tuple{BuildType, Int64, Int64, String}, Tuple{Ptr{Nothing}, String}}
 
     function AccelInfo(;master::Bool=true,
             const_vars::NTuple{N,JaiConstType} where {N}=(),
@@ -235,12 +235,13 @@ end
 
 const _accelcache = Dict{String, AccelInfo}()
 const _ccall_cache = Dict()
+const _dummyargs = ["a[$i]" for i in range(1, stop=200)]
+const _ccs = ("(f,a) -> ccall(f, Int64, (", ",), " , ")")
 
 function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args) :: Int64
 
-    s = join(["a[$i]" for i in range(1, stop=length(args))], ",")
-    funcstr = "(f,a) -> ccall(f, Int64, (" * dtypestr * ",), " * s * ")"
-    fid = bytes2hex(sha1(funcstr))[1:4] 
+    funcstr = _ccs[1] * dtypestr * _ccs[2] * join(_dummyargs[1:length(args)], ",") * _ccs[3]
+    fid = read(IOBuffer(sha1(funcstr)[1:8]), Int64)
 
     if ! haskey(_ccall_cache, fid)
         _ccall_cache[fid] = eval(Meta.parse(funcstr))
@@ -349,17 +350,18 @@ function jai_directive(
     args = (accel.device_num, data...)
     names = ("jai_arg_device_num", names...)
     dtypes, sizes = argsdtypes(accel, args...)
-    dtypestr = join([string(t) for t in dtypes], ", ")
 
     # TODO: add file modified date
     cachekey = (buildtype, buildtypecount, _lineno_, _filepath_)
 
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.ccallcache, cachekey)
-            func = accel.ccallcache[cachekey]
+            func, dtypestr = accel.ccallcache[cachekey]
             return jai_ccall(dtypestr, func, args)
         end
     end
+
+    dtypestr = join([string(t) for t in dtypes], ", ")
 
     io = IOBuffer()
     ser = serialize(io, (buildtype, accel.accelid, [typeof(d) for d in args]))
@@ -396,7 +398,7 @@ function jai_directive(
     end
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        accel.ccallcache[cachekey] = func
+        accel.ccallcache[cachekey] = (func, dtypestr)
     end
 
     return jai_ccall(dtypestr, func, args)
@@ -467,20 +469,21 @@ function launch_kernel(
 
     args, names = merge_args(invars, output, innames, outnames)
     dtypes, sizes = argsdtypes(kinfo.accel, args...)
-    dtypestr = join([string(t) for t in dtypes], ", ")
 
     # TODO: add launchopts into cachekey
     cachekey = (JAI_LAUNCH, 0::Int64, _lineno_, _filepath_)
 
+
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.accel.ccallcache, cachekey)
-            func = kinfo.accel.ccallcache[cachekey]
+            func, dtypestr = kinfo.accel.ccallcache[cachekey]
             return jai_ccall(dtypestr, func, args)
         end
     end
 
+    dtypestr = join([string(t) for t in dtypes], ", ")
+
     io = IOBuffer()
-    #ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, indtypes, insizes, outdtypes, outsizes))
     ser = serialize(io, (JAI_LAUNCH, kinfo.kernelid, [typeof(a) for a in args]))
     launchid = bytes2hex(sha1(String(take!(io)))[1:4])
 
@@ -499,10 +502,10 @@ function launch_kernel(
     func = dlsym(dlib, Symbol("jai_launch_" * launchid[1:_IDLEN]))
 
     if _lineno_ isa Int64 && _filepath_ isa String
-        kinfo.accel.ccallcache[cachekey] = func
+        kinfo.accel.ccallcache[cachekey] = (func, dtypestr)
     end
 
-    return jai_ccall(dtypestr, func, args)
+    ret = jai_ccall(dtypestr, func, args)
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,

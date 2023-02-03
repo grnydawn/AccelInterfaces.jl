@@ -301,20 +301,35 @@ function merge_args(inargs::NTuple{N, JaiDataType} where {N},
                 outnames::NTuple{M, String} where {M}) :: Tuple{
                     NTuple{M, JaiDataType} where {M},
                     NTuple{N, String} where {N}
-                }
+                } Tuple{NTuple{M, JaiDataType}, NTuple{M, String}} where {M}
 
-    args = collect(JaiDataType, inargs)
-    names = collect(String, innames)
+    #args = collect(JaiDataType, inargs)
+    #names = collect(String, innames)
+    N1 = length(inargs)
+    N = N1 + length(outargs)
+    args = Vector{JaiDataType}(undef, N)
+    names = Vector{String}(undef, N)
 
+    for i in range(1, stop=N1)
+        args[i] = inargs[i]
+        names[i] = innames[i]
+    end
+
+    ptr = N1
 
     for (index, oname) in enumerate(outnames)
         if !(oname in innames)
-            push!(args, outargs[index])
-            push!(names, oname)
+            #push!(args, outargs[index])
+            #push!(names, oname)
+            ptr += 1
+            args[ptr] = outargs[index]
+            names[ptr] = oname
+
         end
     end
 
-    return (args...,), (names...,)
+    #return (args...,), (names...,)
+    return (args[1:ptr]...,), (names[1:ptr]...,)
 
 end
 
