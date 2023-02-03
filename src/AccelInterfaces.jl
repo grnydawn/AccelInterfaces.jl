@@ -234,22 +234,19 @@ struct AccelInfo
 end
 
 const _accelcache = Dict{String, AccelInfo}()
-const fcache = Dict()
+const _ccall_cache = Dict()
 
-function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args)
-    n = length(args)
-    s = join(["a[$i]" for i in range(1, stop=n)], ",")
+function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args) :: Int64
+
+    s = join(["a[$i]" for i in range(1, stop=length(args))], ",")
     funcstr = "(f,a) -> ccall(f, Int64, ($dtypestr,), $s)"
     fid = bytes2hex(sha1(funcstr))[1:4] 
-    if ! haskey(fcache, fid)
-        fcache[fid] = eval(Meta.parse(funcstr))
+
+    if ! haskey(_ccall_cache, fid)
+        _ccall_cache[fid] = eval(Meta.parse(funcstr))
     end
-    Base.invokelatest(fcache[fid], libfunc, args)
-    #Base.invokelatest(eval(Meta.parse(fstr)), libfunc, args)
-    # if the pointer of libfunc and dtypestr are the same, the the same call?
-    #fstr = "function MM(f,a) ccall(f, Int64, ($dtypestr,), $s) end"
-    #func = eval(Meta.parse(fstr))
-    #Base.invokelatest(func, libfunc, args)
+
+    Base.invokelatest(_ccall_cache[fid], libfunc, args)
 end
 
 function jai_accel_init(name::String; master::Bool=true,
@@ -360,8 +357,7 @@ function jai_directive(
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(accel.ccallcache, cachekey)
             func = accel.ccallcache[cachekey]
-            println("jai_directive 1")
-            return @time jai_ccall(dtypestr, func, args)
+            return jai_ccall(dtypestr, func, args)
         end
     end
 
@@ -403,8 +399,7 @@ function jai_directive(
         accel.ccallcache[cachekey] = func
     end
 
-    println("jai_directive 2")
-    return @time jai_ccall(dtypestr, func, args)
+    return jai_ccall(dtypestr, func, args)
 end
 
 function argsdtypes(ainfo::AccelInfo,
@@ -480,8 +475,7 @@ function launch_kernel(
     if _lineno_ isa Int64 && _filepath_ isa String
         if haskey(kinfo.accel.ccallcache, cachekey)
             func = kinfo.accel.ccallcache[cachekey]
-            println("launch_kernel 1")
-            return @time jai_ccall(dtypestr, func, args)
+            return jai_ccall(dtypestr, func, args)
         end
     end
 
@@ -508,8 +502,7 @@ function launch_kernel(
         kinfo.accel.ccallcache[cachekey] = func
     end
 
-    println("launch_kernel 2")
-    return @time jai_ccall(dtypestr, func, args)
+    return jai_ccall(dtypestr, func, args)
 end
 
 function setup_build(acceltype::AccelType, buildtype::BuildType, launchid::String,
