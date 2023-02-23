@@ -5,17 +5,17 @@ const ACCEL_CODE = Dict{AccelType, String}(
     JAI_FORTRAN_OMPTARGET => "FM",
     JAI_CPP => "C_",
     JAI_CPP_CUDA => "CU",
-    JAI_CPP_HIP => "CH",
+    JAI_CPP_HIP => "HI",
     JAI_CPP_OPENACC => "CA",
     JAI_CPP_OMPTARGET => "CM"
 )
 
 const BUILD_CODE = Dict{BuildType, String}(
-    JAI_ACCEL => "A",
-    JAI_LAUNCH => "L",
-    JAI_ALLOCATE => "M",
-    JAI_UPDATETO => "I",
-    JAI_UPDATEFROM => "O",
+    JAI_ACCEL => "I",
+    JAI_LAUNCH => "K",
+    JAI_ALLOCATE => "A",
+    JAI_UPDATETO => "T",
+    JAI_UPDATEFROM => "F",
     JAI_DEALLOCATE => "D"
 )
 

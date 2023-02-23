@@ -92,15 +92,65 @@ end
 const JaiConstType = Union{Number, String, NTuple{N, T}, AbstractArray{T, N}} where {N, T<:Number}
 const JaiDataType = JaiConstType
 
+function select_data_framework(frameworks::NTuple{N, Tuple{String, Union{NTuple{M, Tuple{String,
+                    Union{String, Nothing}}}, String, Nothing}}} where {N, M}) :: String	
+
+	framework = ""
+
+	for (name, config) in frameworks
+
+		if framework == ""
+			framework = name
+
+		elseif name in ("fortran", "cpp")
+
+		elseif name == "fortran_omptarget"
+			framework = name
+
+		elseif name == "cpp_omptarget"
+			if !(framework in ("fortran_omptarget",))
+				framework = name
+			end
+
+		elseif name == "fortran_openacc"
+			if !(framework in ("fortran_omptarget, cpp_omptarget"))
+				framework = name
+			end
+
+		elseif name == "cpp_openacc"
+			if !(framework in ("fortran_omptarget, cpp_omptarget",
+							 "fortran_openacc"))
+				framework = name
+			end
+
+		elseif name == "cuda"
+			if !(framework in ("fortran_omptarget, cpp_omptarget",
+							 "fortran_openacc", "cpp_openacc"))
+				framework = name
+			end
+
+
+		elseif name == "hip"
+			if !(framework in ("fortran_omptarget, cpp_omptarget",
+							 "fortran_openacc", "cpp_openacc", "cuda"))
+				framework = name
+			end
+		end
+	end
+
+	return framework
+end
+
 struct AccelInfo
 
     accelid::String
-    acceltype::AccelType
+    #acceltype::AccelType
     ismaster::Bool
     device_num::Int64
     const_vars::NTuple{N,JaiConstType} where {N}
     const_names::NTuple{N, String} where {N}
-    compile::Union{String, Nothing}
+    data_framework::String
+    compile_frameworks::Dict{String, String}
     sharedlibs::Dict{String, Ptr{Nothing}}
     workdir::Union{String, Nothing}
     debugdir::Union{String, Nothing}
@@ -142,14 +192,20 @@ struct AccelInfo
                         const_names, _lineno_, _filepath_))
         accelid = bytes2hex(sha1(String(take!(io)))[1:4])
 
+		# determine which framework will do memory management
+        data_framework = select_data_framework(framework)
+        compile_frameworks = Dict{String, String}()
+
         dlib = nothing
         acceltype = nothing   
         sharedlibs = nothing   
-        compile = nothing   
+        compile = ""   
 
         # TODO: support multiple framework arguments
         for (frameworkname, frameconfig) in framework
             acceltype = _accelmap[frameworkname]
+
+			compile = ""
 
             if frameconfig isa Nothing
                 if startswith(frameworkname, "fortran")
@@ -159,6 +215,15 @@ struct AccelInfo
                 elseif startswith(frameworkname, "cpp")
                     compile = get(ENV, "JAI_CXX", get(ENV, "CXX", "")) * " " *
                                 get(ENV, "JAI_CXXFLAGS", get(ENV, "CXXFLAGS", ""))
+
+                elseif frameworkname == "cuda"
+                    compile = get(ENV, "JAI_NVCC", "") * " " *
+                                get(ENV, "JAI_NVCCFLAGS", "")
+
+                elseif frameworkname == "hip"
+                    compile = get(ENV, "JAI_HIPCC", "") * " " *
+                                get(ENV, "JAI_HIPCCFLAGS", "")
+
                 else
                     error(string(frameworkname * " is not supported."))
                 end
@@ -172,10 +237,9 @@ struct AccelInfo
                         compile = cfg
                     end
                 end
-
             end
 
-            if compile == nothing
+            if strip(compile) == ""
                 error("No compile information is available.")
             end
 
@@ -188,17 +252,21 @@ struct AccelInfo
             try
                 build_accel!(workdir, debugdir, acceltype, compile, accelid, libpath)
 
-                dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
-             
-                sharedlibs = Dict{String, Ptr{Nothing}}()
-                sharedlibs[accelid] = dlib
+				if frameworkname == data_framework
+					dlib = dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+				 
+					sharedlibs = Dict{String, Ptr{Nothing}}()
+					sharedlibs[accelid] = dlib
+
+				end
+
+                compile_frameworks[frameworkname] = compile
 
             catch e
                 rethrow(e)
 
             end
 
-            break
         end
 
         buf = fill(-1, 1)
@@ -227,7 +295,7 @@ struct AccelInfo
         ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
               
         new(accelid, acceltype, master, device_num, const_vars,
-            const_names, compile, sharedlibs,
+            const_names, data_framework, compile_frameworks, sharedlibs,
             workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
                                     Ptr{Nothing}}())
     end

@@ -48,3 +48,13 @@ END DO
 for (int i=0; i < JAI_LEN(x); i++) {
 	z[i] = x[i] + j[i]
 }
+
+[cuda, hip]
+
+int i = blockDim.x * blockIdx.x;
+int j = blockDim.y * blockIdx.y;
+int k = blockDim.z * blockIdx.z;
+
+Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+
+

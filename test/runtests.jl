@@ -5,6 +5,9 @@ using Test
 if occursin("crusher", Sys.BINDIR)
     const SYSNAME = "Crusher"
 
+elseif get!(ENV, "NERSC_HOST", "") == "perlmutter"
+    const SYSNAME = "Perlmutter"
+
 elseif occursin("summit", Sys.BINDIR)
     const SYSNAME = "Summit"
 
@@ -38,6 +41,19 @@ elseif SYSNAME == "Summit"
 
     const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
     #const workdir = "/ccs/home/grnydawn/temp/jaiwork"
+
+elseif SYSNAME == "Perlmutter" 
+
+    const fort_compile = "ftn -fPIC -shared -g"
+    const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
+    #const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
+    const omp_compile  = "ftn -shared -fPIC -fopenmp"
+    #const acc_compile  = "ftn -shared -fPIC -fopenacc"
+    #const omp_compile  = "ftn -shared -fPIC -fopenmp"
+
+    const cpp_compile  = "CC -fPIC -shared -g"
+    const cuda_compile  = "nvcc --linker-options=\"-fPIC\" --compiler-options=\"-fPIC\" --shared -g"
+    const workdir = "/pscratch/sd/y/youngsun/jaiwork"
 
 else
     const fort_compile = "gfortran -fPIC -shared -g"
@@ -166,6 +182,34 @@ function fortran_omptarget_tests()
     @jexitdata omptacc updatefrom(Z) deallocate(X, Y, Z)
 
     @jdecel omptacc
+
+    @test Z == ANS
+
+end
+
+function fortran_omptarget_cuda_tests()
+
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
+    Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
+
+    ismaster = true
+
+    @jaccel ompcuda framework(fortran_omptarget=omp_compile, cuda=cuda_compile) constant(TEST1, TEST2
+                    ) device(1) set(master=ismaster,
+                    debugdir=workdir, workdir=workdir)
+
+
+    @jkernel ompcuda mykernel "ex1.knl"
+
+    @jenterdata ompcuda allocate(X, Y, Z) updateto(X, Y)
+
+    @jlaunch ompcuda mykernel input(X, Y) output(Z,) cuda("chevron"=>(SHAPE,1))
+
+    @jexitdata ompcuda updatefrom(Z) deallocate(X, Y, Z)
+
+    @jdecel ompcuda
 
     @test Z == ANS
 
@@ -444,6 +488,16 @@ end
         #fortran_openacc_tests()
         #fortran_omptarget_tests()
         cpp_test_string()
+        #hip_test_string()
+        #hip_fortran_test_string()
+        #fortran_openacc_hip_test_string()
+
+    elseif SYSNAME == "Perlmutter"
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_omptarget_tests()
+        fortran_omptarget_cuda_tests()
+        #cpp_test_string()
         #hip_test_string()
         #hip_fortran_test_string()
         #fortran_openacc_hip_test_string()
