@@ -144,7 +144,6 @@ end
 struct AccelInfo
 
     accelid::String
-    #acceltype::AccelType
     ismaster::Bool
     device_num::Int64
     const_vars::NTuple{N,JaiConstType} where {N}
@@ -294,10 +293,11 @@ struct AccelInfo
         func = dlsym(dlib, Symbol("jai_device_init_" * accelid[1:_IDLEN]))
         ccall(func, Int64, (Ptr{Vector{Int64}},), buf)
               
-        new(accelid, acceltype, master, device_num, const_vars,
+        new(accelid, master, device_num, const_vars,
             const_names, data_framework, compile_frameworks, sharedlibs,
-            workdir, debugdir, Dict{Tuple{BuildType, Int64, Int64, String},
-                                    Ptr{Nothing}}())
+            workdir, debugdir,
+            Dict{Tuple{BuildType, Int64, Int64, String}, Ptr{Nothing}}())
+
     end
 end
 
@@ -357,7 +357,7 @@ function jai_accel_wait(name::String;
             _lineno_::Union{Int64, Nothing}=nothing,
             _filepath_::Union{String, Nothing}=nothing)
 
-    accel = _accelcache[name]
+    acceltype = get(_accelcache, name, get(_kernelcache, name, nothing))
 
     if accel.acceltype in (JAI_FORTRAN, JAI_CPP)
         return 0::Int64

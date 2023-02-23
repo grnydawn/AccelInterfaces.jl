@@ -33,14 +33,27 @@ if SYSNAME == "Crusher"
     const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Summit" 
-    const fort_compile = "pgfortran -fPIC -shared -g"
-    const acc_compile  = "pgfortran -shared -fPIC -acc -ta=tesla:nordc"
-
-    const cpp_compile  = "pgc++ -fPIC -shared -g"
-    const cuda_compile  = "nvcc --linker-options=\"-fPIC\" --shared -g"
 
     const workdir = "/gpfs/alpine/scratch/grnydawn/cli137/jaiwork"
     #const workdir = "/ccs/home/grnydawn/temp/jaiwork"
+
+    if get!(ENV, "LMOD_FAMILY_COMPILER", "") == "pgi"
+
+        const fort_compile = "pgfortran -fPIC -shared -g"
+        const acc_compile  = "pgfortran -shared -fPIC -acc -ta=tesla:nordc"
+
+        const cpp_compile  = "pgc++ -fPIC -shared -g"
+        const cuda_compile  = "nvcc --linker-options=\"-fPIC\" --compiler-options=\"-fPIC\" --shared -g"
+
+    elseif get!(ENV, "LMOD_FAMILY_COMPILER", "") == "xl"
+
+        const fort_compile = "xlf_r -qpic -qmkshrobj -g"
+        const omp_compile  = "xlf_r -qpic -qmkshrobj -qoffload -qsmp -g"
+
+        const cpp_compile  = "xlc++_r -qpic -qmkshrobj -g"
+        const cuda_compile  = "nvcc --linker-options=\"-fPIC\"  --compiler-options=\"-fPIC\" --shared -g"
+
+    end
 
 elseif SYSNAME == "Perlmutter" 
 
@@ -503,12 +516,12 @@ end
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"
-        #fortran_test_string()
+        fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
         #cpp_test_string()
         #cuda_test_string()
-        fortran_openacc_cuda_test_string()
+        #fortran_openacc_cuda_test_string()
 
     elseif SYSNAME == "Linux"
         fortran_test_string()
