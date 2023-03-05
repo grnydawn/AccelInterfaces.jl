@@ -1,6 +1,8 @@
 # AccelInterfaces.jl
 
-Documentation for AccelInterfaces.jl
+Julia Accelerator Interfaces(Jai) is a GPU and CPU programming interface for Julia programmers.
+
+Jai focuses on reusing Fortran and C/C++ codes. The Fortran and C/C++ codes could include directive based GPU programming such as OpenAcc and OpenMP Target. Or even the codes are written in CUDA or HIP.
 
 # AccelInterfaces.jl
 

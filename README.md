@@ -123,3 +123,5 @@ In case of fortram framework, "@jenterdata" and "@jexitdata" silently exit with
 ## Questions and Suggestions
 
 Usage questions and suggestions can be posted on the [issue](https://github.com/grnydawn/AccelInterfaces.jl/issues).
+
+[//]: # (generate docs: julia --project --color=yes docs/make.jl)

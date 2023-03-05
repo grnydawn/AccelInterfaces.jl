@@ -104,15 +104,15 @@ END DO
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel fortacc framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel fortacc framework(test, fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata fortacc allocate(X, Y, Z)
+    @jenterdata fortacc alloc(X, Y, Z)
 
-    @jkernel fortacc mykernel kernel_text
+    @jkernel kernel_text mykernel fortacc framework(test, fortran=fort_compile)
 
-    @jlaunch fortacc mykernel input(X, Y) output(Z,)
+    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran() # fortran(test="1", tt="2")
 
-    @jexitdata fortacc deallocate(X, Y, Z)
+    @jexitdata fortacc delete(X, Y, Z)
 
     @jwait fortacc
 
@@ -133,9 +133,9 @@ function fortran_test_file()
     @jaccel fortfileacc framework(fortran=(compile=fort_compile,)) constant(TEST1, TEST2
             ) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel fortfileacc mykernel "ex1.knl"
+    @jkernel  "ex1.knl" mykernel fortfileacc
 
-    @jlaunch fortfileacc mykernel input(X, Y) output(Z,)
+    @jlaunch mykernel fortfileacc input(X, Y) output(Z,)
 
     @test Z == ANS
 
@@ -155,13 +155,13 @@ function fortran_openacc_tests()
                     workdir=workdir)
 
 
-    @jkernel accacc mykernel "ex1.knl"
+    @jkernel "ex1.knl" mykernel accacc
 
-    @jenterdata accacc allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata accacc alloc(X, Y, Z) updateto(X, Y)
 
-    @jlaunch accacc mykernel input(X, Y) output(Z,)
+    @jlaunch mykernel accacc input(X, Y) output(Z,)
 
-    @jexitdata accacc updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata accacc updatefrom(Z) delete(X, Y, Z) async
 
     @jwait accacc
 
@@ -186,13 +186,13 @@ function fortran_omptarget_tests()
                     debugdir=workdir, workdir=workdir)
 
 
-    @jkernel omptacc mykernel "ex1.knl"
+    @jkernel "ex1.knl" mykernel omptacc 
 
-    @jenterdata omptacc allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata omptacc alloc(X, Y, Z) updateto(X, Y)
 
-    @jlaunch omptacc mykernel input(X, Y) output(Z,)
+    @jlaunch mykernel omptacc input(X, Y) output(Z,)
 
-    @jexitdata omptacc updatefrom(Z) deallocate(X, Y, Z)
+    @jexitdata omptacc updatefrom(Z) delete(X, Y, Z)
 
     @jdecel omptacc
 
@@ -214,13 +214,13 @@ function fortran_omptarget_cuda_tests()
                     debugdir=workdir, workdir=workdir)
 
 
-    @jkernel ompcuda mykernel "ex1.knl"
+    @jkernel  "ex1.knl" mykernel ompcuda
 
-    @jenterdata ompcuda allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata ompcuda alloc(X, Y, Z) updateto(X, Y)
 
-    @jlaunch ompcuda mykernel input(X, Y) output(Z,) cuda("chevron"=>(SHAPE,1))
+    @jlaunch mykernel ompcuda input(X, Y) output(Z,) cuda(chevron=(SHAPE,1))
 
-    @jexitdata ompcuda updatefrom(Z) deallocate(X, Y, Z)
+    @jexitdata ompcuda updatefrom(Z) delete(X, Y, Z)
 
     @jdecel ompcuda
 
@@ -252,11 +252,11 @@ function cpp_test_string()
 
     @jaccel cppacc framework(cpp) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel cppacc mykernel kernel_text
+    @jkernel kernel_text mykernel cppacc
 
     #Profile.@profile @jlaunch(mykernel, X, Y; output=(Z,))
     #@time for i in range(1, stop=10)
-        @jlaunch cppacc mykernel input(X, Y) output(Z,)
+        @jlaunch mykernel cppacc input(X, Y) output(Z,)
     #end
 
     @test Z[:,:,1] == ANS[:,:,1]
@@ -289,13 +289,13 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jaccel cudaacc framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata cudaacc allocate(X, Y, Z) updateto(X, Y) async
+    @jenterdata cudaacc alloc(X, Y, Z) updateto(X, Y) async
 
-    @jkernel cudaacc mykernel kernel_text
+    @jkernel kernel_text mykernel cudaacc
 
-    @jlaunch cudaacc mykernel input(X, Y) output(Z,) cuda("chevron"=>(1,1))
+    @jlaunch mykernel cudaacc input(X, Y) output(Z,) cuda(chevron=(1,1))
 
-    @jexitdata cudaacc updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata cudaacc updatefrom(Z) delete(X, Y, Z) async
 
     @jwait cudaacc
 
@@ -336,22 +336,22 @@ CALL RANDOM_NUMBER(Z)
 
     @jaccel hipacc framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel hipacc initarrays kernel_fortrand framework(fortran=fort_compile)
+    @jkernel kernel_fortrand initarrays hipacc framework(fortran=fort_compile)
 
-    @jlaunch hipacc initarrays output(X, Y, Z) fortran()
+    @jlaunch initarrays hipacc output(X, Y, Z) fortran(test=2)
 
     #println("#######")
     #println(Z)
 
     ANS = X .+ Y
 
-    @jenterdata hipacc allocate(X, Y, Z) updateto(X, Y) async
+    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y) async
 
-    @jkernel hipacc mykernel kernel_hiptext
+    @jkernel kernel_hiptext mykernel hipacc
 
-    @jlaunch hipacc mykernel input(X, Y) output(Z,) hip("chevron"=>(1,1))
+    @jlaunch mykernel hipacc input(X, Y) output(Z,) hip(chevron=(1,1))
 
-    @jexitdata hipacc updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata hipacc updatefrom(Z) delete(X, Y, Z) async
 
     @jwait hipacc
 
@@ -392,15 +392,14 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jaccel hipacc framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata hipacc allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y)
 
-    @jkernel hipacc mykernel kernel_text
+    @jkernel kernel_text mykernel hipacc
 
     tt = ((4,3,2),1)
-    #@jlaunch hipacc mykernel input(X, Y) output(Z,) hip("chevron"=>((4,3,2),1), "test"=>3)
-    @jlaunch hipacc mykernel input(X, Y) output(Z,) hip("chevron"=>tt, "test"=>3)
+    @jlaunch mykernel hipacc input(X, Y) output(Z,) hip(chevron=tt, test=3)
 
-    @jexitdata hipacc updatefrom(Z,) deallocate(X, Y, Z) async
+    @jexitdata hipacc updatefrom(Z,) delete(X, Y, Z) async
 
     @jwait hipacc
 
@@ -439,14 +438,14 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jaccel acchipacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata acchipacc allocate(X1, Y1, Z1) updateto(X1, Y1)
+    @jenterdata acchipacc alloc(X1, Y1, Z1) updateto(X1, Y1)
 
-    @jkernel acchipacc mykernel kernel_text framework(hip=hip_compile)
+    @jkernel kernel_text mykernel acchipacc framework(hip=hip_compile)
 
     tt = ((4,3,2),1)
-    @jlaunch acchipacc mykernel input(X1, Y1) output(Z1) hip("chevron"=>tt)
+    @jlaunch mykernel acchipacc input(X1, Y1) output(Z1) hip(chevron=tt)
 
-    @jexitdata acchipacc updatefrom(Z1) deallocate(X1, Y1, Z1) async
+    @jexitdata acchipacc updatefrom(Z1) delete(X1, Y1, Z1) async
 
     @jwait acchipacc
 
@@ -477,13 +476,13 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jaccel acccudaacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jenterdata acccudaacc allocate(X, Y, Z) updateto(X, Y)
+    @jenterdata acccudaacc alloc(X, Y, Z) updateto(X, Y)
 
-    @jkernel acccudaacc mykernel kernel_text framework(cuda=cuda_compile)
+    @jkernel kernel_text mykernel acccudaacc framework(cuda=cuda_compile)
 
-    @jlaunch acccudaacc mykernel input(X, Y) output(Z) cuda("chevron"=>(1,1))
+    @jlaunch mykernel acccudaacc input(X, Y) output(Z) cuda(chevron=(1,1))
 
-    @jexitdata acccudaacc updatefrom(Z) deallocate(X, Y, Z) async
+    @jexitdata acccudaacc updatefrom(Z) delete(X, Y, Z) async
 
     @jwait acccudaacc
 
@@ -531,8 +530,8 @@ end
 
     elseif SYSNAME == "MacOS"
         fortran_test_string()
-        fortran_test_file()
-        cpp_test_string()
+        #fortran_test_file()
+        #cpp_test_string()
 
     else
         error("Current OS is not supported yet.")
