@@ -535,10 +535,6 @@ macro jdecel(clauses...)
 
     push!(fini.args, :jai_decel)
     push!(fini.args, accname)
-
-    #for clause in clauses
-    #end
-
     push!(fini.args, __source__.line)
     push!(fini.args, string(__source__.file))
 

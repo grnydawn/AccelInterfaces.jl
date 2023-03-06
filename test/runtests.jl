@@ -110,7 +110,7 @@ END DO
 
     @jkernel kernel_text mykernel fortacc framework(test, fortran=fort_compile)
 
-    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran() # fortran(test="1", tt="2")
+    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2")
 
     @jexitdata fortacc delete(X, Y, Z)
 

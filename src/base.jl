@@ -46,7 +46,7 @@ const JAI_CUDA                      = JAI_TYPE_CUDA()
 const JAI_HIP                       = JAI_TYPE_HIP()
 
 const JAI_SYMBOL_FRAMEWORKS = map(
-        (x) -> Symbol(lowercase(split(string(x), ".")[end][10:end])),
+        (x) -> Symbol(extract_name_from_frametype(x)),
         subtypes(JAI_TYPE_FRAMEWORK)
     )
 

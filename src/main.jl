@@ -28,6 +28,8 @@ function jai_accel(
     ctx = JAI_TYPE_CONTEXT_ACCEL(aname)
 
     push!(_ctx_accels, ctx)
+
+    gencode_accel(JAI_FORTRAN)
 end
 
 """
