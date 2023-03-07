@@ -15,6 +15,9 @@ include("base.jl")
 #includes common functions for framework interfaces
 include("framework.jl")
 
+#includes Jai KNL file handling functions
+include("kernel.jl")
+
 #includes functions for Fortran framework
 include("fortran.jl")
 

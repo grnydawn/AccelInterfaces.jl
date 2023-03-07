@@ -71,7 +71,7 @@ elseif SYSNAME == "Perlmutter"
 else
     const fort_compile = "gfortran -fPIC -shared -g"
     const cpp_compile  = "g++ -fPIC -shared -g"
-    const workdir = ".jaitmp"
+    const workdir = ".jworkdir"
 
 end
 
@@ -261,7 +261,7 @@ function cpp_test_string()
 
     @test Z[:,:,1] == ANS[:,:,1]
 
-    #open(".jaitmp/profile.txt", "w") do s
+    #open(".jworkdir/profile.txt", "w") do s
     #    Profile.print(s, format=:flat, sortedby=:count)
     #end
 

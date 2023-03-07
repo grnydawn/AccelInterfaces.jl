@@ -1,5 +1,33 @@
 # framework.jl: implement common functions for framework interfaces
 
+import InteractiveUtils.subtypes
+
+# Jai Framework types
+abstract type JAI_TYPE_FRAMEWORK end
+
+struct JAI_TYPE_FORTRAN             <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_FORTRAN_OPENACC     <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_FORTRAN_OMPTARGET   <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CPP                 <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CPP_OPENACC         <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CPP_OMPTARGET       <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CUDA                <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_HIP                 <: JAI_TYPE_FRAMEWORK end
+
+const JAI_FORTRAN                   = JAI_TYPE_FORTRAN()
+const JAI_FORTRAN_OPENACC           = JAI_TYPE_FORTRAN_OPENACC()
+const JAI_FORTRAN_OMPTARGET         = JAI_TYPE_FORTRAN_OMPTARGET()
+const JAI_CPP                       = JAI_TYPE_CPP()
+const JAI_CPP_OPENACC               = JAI_TYPE_CPP_OPENACC()
+const JAI_CPP_OMPTARGET             = JAI_TYPE_CPP_OMPTARGET()
+const JAI_CUDA                      = JAI_TYPE_CUDA()
+const JAI_HIP                       = JAI_TYPE_HIP()
+
+const JAI_SYMBOL_FRAMEWORKS = map(
+        (x) -> Symbol(extract_name_from_frametype(x)),
+        subtypes(JAI_TYPE_FRAMEWORK)
+    )
+
 """
     function gencode_accel(ftype)
 
