@@ -104,7 +104,8 @@ END DO
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel fortacc framework(test, fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
+    #jaccel fortacc framework(test, fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel fortacc set(debugdir=workdir, workdir=workdir)
 
     @jenterdata fortacc alloc(X, Y, Z)
 

@@ -49,3 +49,11 @@ end
 
 extract_name_from_frametype(x) = lowercase(split(string(x), ".")[end][10:end])
 
+JAI = Dict{String, Union{String, Number, Bool, Nothing}}(
+        "debug" => true
+    )
+
+macro jdebug(e) :(@info  sprint(showerror, $(esc(e)))) end
+macro jinfo(e)  :(@info  sprint(showerror, $(esc(e)))) end
+macro jwarn(e)  :(@warn  sprint(showerror, $(esc(e)))) end
+macro jerror(e) :(@error sprint(showerror, $(esc(e)))) end

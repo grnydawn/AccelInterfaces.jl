@@ -62,22 +62,29 @@ macro jaccel(clauses...)
         elseif clause.args[1] in (:framework, :set)
 
             d = :(Dict{String, JAI_TYPE_CONFIG}())
+            order = Vector{String}()
 
             for item in clause.args[2:end]
 
                 if item isa Symbol
-                    push!(d.args, Expr(:call, :(=>), string(item), :nothing))
+                    key = string(item)
+                    push!(order, key)
+                    push!(d.args, Expr(:call, :(=>), key, :nothing))
 
                 elseif item.head == :kw
-
+                    key = string(item.args[1])
+                    push!(order, key)
                     value = length(item.args)>1 ? esc(item.args[2]) : nothing
-                    push!(d.args, Expr(:call, :(=>), string(item.args[1]), value))
+                    push!(d.args, Expr(:call, :(=>), key, value))
 
                 else
                     error("Wrong jaccel syntax: " * string(clause))
                 end
             end
 
+            push!(d.args, Expr(:call, :(=>),
+                        "_order_"*string(clause.args[1]), order))
+            
             push!(init.args, Expr(:kw, clause.args[1], d))
 
         else

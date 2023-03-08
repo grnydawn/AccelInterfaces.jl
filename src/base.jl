@@ -29,10 +29,91 @@ const JAI_WAIT              = JAI_TYPE_WAIT()
 const JAI_TYPE_DATA  =   Union{T, String, NTuple{N, T}, AbstractArray{T, N}
                              } where {N, T<:Number}
 
-const JAI_TYPE_CONFIG  = Union{String, Nothing}
+const JAI_TYPE_CONFIG  = Union{Vector{String}, String, Nothing}
 const JAI_CONFIG_BLANK  = Dict{String, JAI_TYPE_CONFIG}()
 const JAI_ACCEL_CONFIGS = (
             ("pidfilename", ".jtask.pid"),
             ("debugdir",    nothing),
             ("workdir",     joinpath(pwd(), ".jworkdir"))
         )
+
+# Jai Framework types
+abstract type JAI_TYPE_FRAMEWORK end
+
+struct JAI_TYPE_FORTRAN             <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_FORTRAN_OPENACC     <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_FORTRAN_OMPTARGET   <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CPP                 <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CPP_OPENACC         <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CPP_OMPTARGET       <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_CUDA                <: JAI_TYPE_FRAMEWORK end
+struct JAI_TYPE_HIP                 <: JAI_TYPE_FRAMEWORK end
+
+# Jai context
+abstract type JAI_TYPE_CONTEXT end
+
+# Jai host context
+struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
+
+    acfg ::Dict{String, JAI_TYPE_CONFIG}
+
+    function JAI_TYPE_CONTEXT_HOST(acfg::Dict{String, JAI_TYPE_CONFIG})
+
+        for (name, default) in JAI_ACCEL_CONFIGS
+            if !haskey(acfg, name)
+                acfg[name] = default
+            end
+        end
+
+        new(acfg)
+    end
+end
+
+# accelerator context
+struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
+    aname           ::String
+    aid             ::UInt32
+    ctx_host        ::JAI_TYPE_CONTEXT_HOST
+    const_vars      ::Dict{String, JAI_TYPE_DATA}
+    devices         ::NTuple{N, Integer} where N
+
+    function JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host, framework,
+                                    cvars, cnames, device)
+
+        # create directories
+        workdir = ctx_host.acfg["workdir"]
+
+        if !isdir(workdir)
+            pidfile = joinpath(ctx_host.acfg["pidfilename"])
+            locked_filetask(pidfile, workdir, mkdir, workdir)
+        end
+
+        const_vars = Dict{String, JAI_TYPE_DATA}()
+        for (name, var) in zip(cnames, cvars)
+            const_vars[name] = var
+        end
+
+        # select data framework and generate a shared library for accel
+        fname, fslib = select_framework(framework, aname)
+
+        # init device and gather device information
+
+        new(aname, aid, ctx_host, const_vars, device)
+    end
+end
+
+# kernel context
+struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
+    kname           ::String
+    accelctx        ::JAI_TYPE_CONTEXT_ACCEL
+
+    function JAI_TYPE_CONTEXT_KERNEL(kname, actx)
+
+        # generate kernel context id
+        
+        # load kernel definition
+
+        new(kname, actx)
+    end
+end
+

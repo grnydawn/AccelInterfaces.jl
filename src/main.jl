@@ -1,64 +1,6 @@
 # main.jl: processes user requests from Jai API
 
 
-# Jai context
-abstract type JAI_TYPE_CONTEXT end
-
-# Jai host context
-struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
-
-    acfg ::Dict{String, JAI_TYPE_CONFIG}
-
-    function JAI_TYPE_CONTEXT_HOST(acfg::Dict{String, JAI_TYPE_CONFIG})
-
-        for (name, default) in JAI_ACCEL_CONFIGS
-            if !haskey(acfg, name)
-                acfg[name] = default
-            end
-        end
-
-        new(acfg)
-    end
-end
-
-# accelerator context
-struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
-    aname           ::String
-    aid             ::UInt32
-    ctx_host        ::JAI_TYPE_CONTEXT_HOST
-
-    function JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host)
-
-        # create directories
-        workdir = ctx_host.acfg["workdir"]
-
-        if !isdir(workdir)
-            pidfile = joinpath(ctx_host.acfg["pidfilename"])
-            locked_filetask(pidfile, workdir, mkdir, workdir)
-        end
-
-        # select data framework and generate a shared library for accel
-
-        # init device and gather device information
-
-        new(aname, aid, ctx_host)
-    end
-end
-
-# kernel context
-struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
-    kname           ::String
-    accelctx        ::JAI_TYPE_CONTEXT_ACCEL
-
-    function JAI_TYPE_CONTEXT_KERNEL(kname, actx)
-
-        # generate kernel context id
-        
-        # load kernel definition
-
-        new(kname, actx)
-    end
-end
 
 
 # accelerator context cache
@@ -126,7 +68,8 @@ function jai_accel(
         aname = string(aid, base = 16)
     end
 
-    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host)
+    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host, framework,
+                                       const_vars, const_names, device)
 
     push!(ctx_accels, ctx_accel)
 end
