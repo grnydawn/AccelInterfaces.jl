@@ -61,30 +61,29 @@ macro jaccel(clauses...)
 
         elseif clause.args[1] in (:framework, :set)
 
-            d = :(Dict{String, JAI_TYPE_CONFIG}())
-            order = Vector{String}()
+            d = :(JAI_TYPE_CONFIG())
 
             for item in clause.args[2:end]
 
                 if item isa Symbol
-                    key = string(item)
-                    push!(order, key)
-                    push!(d.args, Expr(:call, :(=>), key, :nothing))
+                    key = item
+                    value = :nothing
 
                 elseif item.head == :kw
-                    key = string(item.args[1])
-                    push!(order, key)
+                    key = item.args[1]
                     value = length(item.args)>1 ? esc(item.args[2]) : nothing
-                    push!(d.args, Expr(:call, :(=>), key, value))
 
                 else
                     error("Wrong jaccel syntax: " * string(clause))
                 end
+
+                if clause.args[1]== :framework
+                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
+                else
+                    push!(d.args, Expr(:call, :(=>), string(key), value))
+                end
             end
 
-            push!(d.args, Expr(:call, :(=>),
-                        "_order_"*string(clause.args[1]), order))
-            
             push!(init.args, Expr(:kw, clause.args[1], d))
 
         else
@@ -327,17 +326,17 @@ macro jkernel(kdef, clauses...)
 
         if clause.args[1] in (:framework,)
 
-            d = :(Dict{String, JAI_TYPE_CONFIG}())
+            d = :(JAI_TYPE_CONFIG())
 
             for item in clause.args[2:end]
 
                 if item isa Symbol
-                    push!(d.args, Expr(:call, :(=>), string(item), :nothing))
+                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item], :nothing))
 
                 elseif item.head == :kw
 
                     value = length(item.args)>1 ? esc(item.args[2]) : nothing
-                    push!(d.args, Expr(:call, :(=>), string(item.args[1]), value))
+                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item.args[1]], value))
 
                 else
                     error("Wrong jkernel syntax: " * string(clause))
@@ -411,7 +410,7 @@ macro jlaunch(clauses...)
     push!(tmp.args, string(knlname))
     push!(tmp.args, string(accname))
 
-    frames = :(Dict{String, Union{Dict{String, JAI_TYPE_CONFIG}, Nothing}}())
+    frames = :(JAI_TYPE_CONFIG())
 
     for clause in clauses[start_index:end]
         if clause.head == :call
@@ -425,19 +424,21 @@ macro jlaunch(clauses...)
                     push!(outnames, String(outvar))
                     push!(output.args, esc(outvar))
                 end
-            elseif clause.args[1] in JAI_SYMBOL_FRAMEWORKS
+            elseif clause.args[1] in keys(JAI_MAP_SYMBOL_FRAMEWORK)
                 
                 if length(clause.args) > 1
-                    frame = :(Dict{String, JAI_TYPE_CONFIG}())
+                    value = :(OrderedDict{String, JAI_TYPE_CONFIG_VALUE}())
 
                     for item in clause.args[2:end]
-                        push!(frame.args, Expr(:call, :(=>), String(item.args[1]), esc(item.args[2])))
+                        push!(value.args, Expr(:call, :(=>),
+                            String(item.args[1]), esc(item.args[2])))
                     end
-
-                    push!(frames.args, Expr(:call, :(=>), String(clause.args[1]), frame))
                 else
-                    push!(frames.args, Expr(:call, :(=>), String(clause.args[1]), nothing))
+                    value = nothing
                 end
+
+                push!(frames.args, Expr(:call, :(=>),
+                        JAI_MAP_SYMBOL_FRAMEWORK[clause.args[1]], value))
 
             else
                 error("Wrong jlaunch clause: " * string(clause.args[1]))

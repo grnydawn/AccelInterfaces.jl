@@ -1,6 +1,7 @@
 # framework.jl: implement common functions for framework interfaces
 
 import InteractiveUtils.subtypes
+import Libdl: dlopen, RTLD_LAZY, RTLD_DEEPBIND, RTLD_GLOBAL, dlext, dlsym, dlclose
 
 const JAI_FORTRAN                   = JAI_TYPE_FORTRAN()
 const JAI_FORTRAN_OPENACC           = JAI_TYPE_FORTRAN_OPENACC()
@@ -10,6 +11,20 @@ const JAI_CPP_OPENACC               = JAI_TYPE_CPP_OPENACC()
 const JAI_CPP_OMPTARGET             = JAI_TYPE_CPP_OMPTARGET()
 const JAI_CUDA                      = JAI_TYPE_CUDA()
 const JAI_HIP                       = JAI_TYPE_HIP()
+
+const JAI_FORTRAN_FRAMEWORKS        = (
+        JAI_FORTRAN_OMPTARGET,
+        JAI_FORTRAN_OPENACC,
+        JAI_FORTRAN
+    )
+ 
+const JAI_CPP_FRAMEWORKS        = (
+        JAI_CUDA,
+        JAI_HIP,
+        JAI_CPP_OMPTARGET,
+        JAI_CPP_OPENACC,
+        JAI_CPP
+    )
 
 # Jai supported frameworks with priority
 const JAI_SUPPORTED_FRAMEWORKS      = (
@@ -23,15 +38,21 @@ const JAI_SUPPORTED_FRAMEWORKS      = (
         JAI_CPP
     )
 
-const JAI_AVAILABLE_FRAMEWORKS      = Vector{JAI_TYPE_FRAMEWORK}()
-
-const JAI_SYMBOL_FRAMEWORKS = map(
-        (x) -> Symbol(extract_name_from_frametype(x)),
-        subtypes(JAI_TYPE_FRAMEWORK)
+const JAI_MAP_SYMBOL_FRAMEWORK = OrderedDict(
+        :cuda               => JAI_CUDA,
+        :hip                => JAI_HIP,
+        :fortran_omptarget  => JAI_FORTRAN_OMPTARGET,
+        :fortran_openacc    => JAI_FORTRAN_OPENACC,
+        :cpp_omptarget      => JAI_CPP_OMPTARGET,
+        :cpp_openacc        => JAI_CPP_OPENACC,
+        :fortran            => JAI_FORTRAN,
+        :cpp                => JAI_CPP
     )
 
-const _ccall_cache = Dict()
-const _dummyargs = ["a[$i]" for i in range(1, stop=200)]
+const JAI_AVAILABLE_FRAMEWORKS      = OrderedDict{JAI_TYPE_FRAMEWORK, Ptr{Nothing}}()
+
+const _ccall_cache = Dict{Int64, Function}()
+const _dummyargs = Tuple("a[$i]" for i in range(1, stop=200))
 const _ccs = ("(f,a) -> ccall(f, Int64, (", ",), " , ")")
 
 function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args) :: Int64
@@ -48,15 +69,17 @@ end
 
 
 """
-    function genslib_accel(ftype, actx)
+    function genslib_accel(frame, prefix, workdir, args)
 
 Generate framework shared library to drive device.
 
 Using the generated shared library from this function, Jai will access and configure the device.
 
 # Arguments
-- `ftype`::JAI_TYPE_FRAMEWORK: a framework type identifier
-- `actx`::JAI_TYPE_CONTEXT_ACCEL: a accel context
+- `frame`::JAI_TYPE_FRAMEWORK: a framework type identifier
+- `prefix`::String: a prefix for an accel ctx
+- `workdir`::String: workdir
+- `args`::JAI_TYPE_ARGS: Jai arguments
 
 See also [`@jaccel`](jaccel), [`genslib_kernel`](genslib_kernel), [`genslib_data`](genslib_data)
 
@@ -70,9 +93,11 @@ T.B.D.
 
 """
 function genslib_accel(
-        frame       ::JAI_TYPE_FRAMEWORK,
-        actx        ::JAI_TYPE_CONTEXT_ACCEL
-    ) :: String
+        frame       ::JAI_TYPE_FORTRAN,
+        prefix      ::String,               # prefix for libfunc names
+        workdir     ::String,
+        args        ::JAI_TYPE_ARGS
+    ) :: Ptr{Nothing}
 
     throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame))
 end
@@ -103,7 +128,7 @@ function genslib_data(
         frame       ::JAI_TYPE_FRAMEWORK
     ) :: String
 
-    error("ERROR: Framework-$(extract_name_from_frametype(typeof(frame))) " *
+    error("Framework-$(extract_name_from_frametype(typeof(frame))) " *
           "should implement 'genslib_data' function.")
 
 end
@@ -133,26 +158,31 @@ function genslib_kernel(
         frame       ::JAI_TYPE_FRAMEWORK
     ) :: String
 
-    error("ERROR: Framework-$(extract_name_from_frametype(typeof(frame))) " *
+    error("Framework-$(extract_name_from_frametype(typeof(frame))) " *
           "should implement 'genslib_kernel' function.")
 
 end
 
 function check_available_frameworks(
-        aname::String
+        prefix::String,
+        workdir::String
     ) ::Nothing
+
+    # (var, name, inout, shape)
+    args = JAI_TYPE_ARGS()
+    push!(args, pack_arg(fill(Int64(-1), 1)))
 
     for frame in JAI_SUPPORTED_FRAMEWORKS
 
         try
-            slib = genslib_accel(frame, aname)
+            slib = genslib_accel(frame, prefix, workdir, args)
+
+            JAI_AVAILABLE_FRAMEWORKS[frame] = slib
 
         catch err
 
-            if typeof(err) in (JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK,)
+            if typeof(err) in (JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK, MethodError)
                 JAI["debug"] && @jdebug err
-            elseif typeof(err) in (MethodError,)
-                JAI["debug"] && @jdebug "ERROR: no framework accel of " * string(typeof(frame))
             else
                 rethrow()
             end
@@ -167,43 +197,109 @@ function check_available_frameworks(
 end
 
 function select_framework(
-        userframe,
-        aname::String
-    )
+        userframe   ::JAI_TYPE_CONFIG,
+        prefix      ::String,
+        workdir     ::String
+    ) :: Tuple{JAI_TYPE_FRAMEWORK, Ptr{Nothing}, JAI_TYPE_CONFIG_VALUE}
 
     framename, frameslib = nothing, nothing
 
-    if !haskey(userframe, "_order_framework")
-        userframe["_order_framework"] = Vector{String}()
+    if length(JAI_AVAILABLE_FRAMEWORKS) == 0
+        check_available_frameworks(prefix, workdir)
     end
 
-    if length(userframe) == 1 && length(userframe["_order_framework"]) == 0
-        if length(JAI_AVAILABLE_FRAMEWORKS) == 0
-            check_available_frameworks(aname)
-        end
-
-        for (name, slib) in JAI_AVAILABLE_FRAMEWORKS
-            userframe[name] = slib
-            push!(userframe["_order_framework"], name)
+    if length(userframe) == 0
+        for (frame, slib) in JAI_AVAILABLE_FRAMEWORKS
+            userframe[frame] = nothing
         end
     end
 
-    for frame in userframe["_order_framework"]
-        println("WWWW", frame)
+    # TODO: how to select a frame
+    # TODO: can kernel frame type be detected beforehand
+    #
+    for (frame, config) in userframe
+        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
+            return (frame, JAI_AVAILABLE_FRAMEWORKS[frame], config)
+        end
     end
 
-    (framename, frameslib)
+    throw(JAI_ERROR_NOVALID_FRAMEWORK())
 end
 
 
-function invoke_slibfunc(frame, slib, fname, inargs, outargs, innames, outnames)
+function argsdtypes(
+        frame   ::JAI_TYPE_FRAMEWORK,
+        args    ::JAI_TYPE_ARGS
+    ) :: Vector{DataType}
 
-    dtypes = argsdtypes(frame, args...)
+    local N = length(args)
+
+    dtypes = Vector{DataType}(undef, N)
+
+    for (i, arg) in enumerate(args)
+
+        if typeof(arg) <: AbstractArray
+            dtype = Ptr{typeof(arg)}
+
+        elseif frame in JAI_CPP_FRAMEWORKS
+            dtype = typeof(arg)
+
+        elseif frame in JAI_FORTRAN_FRAMEWORKS
+            dtype = Ref{typeof(arg)}
+
+        end
+
+        dtypes[i] = dtype
+
+    end
+
+    dtypes
+end
+
+
+function compile_code(
+        code        ::String,
+        compile     ::String,
+        srcname     ::String,
+        outname     ::String,
+        workdir     ::String
+    ) ::String
+
+    curdir = pwd()
+
+    try
+        cd(workdir)
+
+        open(srcname, "w") do io
+            write(io, code)
+        end
+
+        output = read(run(`$(split(compile)) -o $outname $srcname`), String)
+
+        isfile(outname) || throw(JAI_ERROR_COMPILE_NOSHAREDLIB(compile, output))
+
+        return joinpath(workdir, outname)
+
+    catch e
+        rethrow(e)
+
+    finally
+        cd(curdir)
+    end
+end
+
+
+function load_sharedlib(libpath)
+    return dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
+end
+
+function invoke_slibfunc(frame, slib, fname, args)
+
+    dtypes = argsdtypes(frame, args)
     dtypestr = join([string(t) for t in dtypes], ",")
 
-    libfunc = dlsym(slib, Symbol("jai_launch_" * launchid[1:_IDLEN]))
+    libfunc = dlsym(slib, Symbol(fname))
 
-    # minimum check of device
     check_retval(jai_ccall(dtypestr, libfunc, args))
 
 end

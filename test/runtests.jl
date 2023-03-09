@@ -104,12 +104,12 @@ END DO
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    #jaccel fortacc framework(test, fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
-    @jaccel fortacc set(debugdir=workdir, workdir=workdir)
+    @jaccel fortacc framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
+    #@jaccel fortacc framework(cuda=fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jenterdata fortacc alloc(X, Y, Z)
 
-    @jkernel kernel_text mykernel fortacc framework(test, fortran=fort_compile)
+    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
 
     @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2")
 

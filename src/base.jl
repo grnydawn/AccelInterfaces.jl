@@ -1,6 +1,7 @@
 # base.jl: include common data types and variables
 
 import Pkg.TOML
+import DataStructures.OrderedDict
 
 const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 
@@ -29,14 +30,6 @@ const JAI_WAIT              = JAI_TYPE_WAIT()
 const JAI_TYPE_DATA  =   Union{T, String, NTuple{N, T}, AbstractArray{T, N}
                              } where {N, T<:Number}
 
-const JAI_TYPE_CONFIG  = Union{Vector{String}, String, Nothing}
-const JAI_CONFIG_BLANK  = Dict{String, JAI_TYPE_CONFIG}()
-const JAI_ACCEL_CONFIGS = (
-            ("pidfilename", ".jtask.pid"),
-            ("debugdir",    nothing),
-            ("workdir",     joinpath(pwd(), ".jworkdir"))
-        )
-
 # Jai Framework types
 abstract type JAI_TYPE_FRAMEWORK end
 
@@ -49,15 +42,32 @@ struct JAI_TYPE_CPP_OMPTARGET       <: JAI_TYPE_FRAMEWORK end
 struct JAI_TYPE_CUDA                <: JAI_TYPE_FRAMEWORK end
 struct JAI_TYPE_HIP                 <: JAI_TYPE_FRAMEWORK end
 
+const JAI_TYPE_CONFIG_KEY   = Union{JAI_TYPE_FRAMEWORK, String}
+const JAI_TYPE_CONFIG_VALUE = Union{Vector{String}, String, Nothing}
+const JAI_TYPE_CONFIG       = OrderedDict{JAI_TYPE_CONFIG_KEY, Union{
+    JAI_TYPE_CONFIG_VALUE, OrderedDict{String, JAI_TYPE_CONFIG_VALUE}}}
+const JAI_CONFIG_BLANK      = JAI_TYPE_CONFIG()
+
+const JAI_ACCEL_CONFIGS = (
+            ("pidfilename", ".jtask.pid"),
+            ("debugdir",    nothing),
+            ("workdir",     joinpath(pwd(), ".jworkdir"))
+           ) :: NTuple{N, Tuple{JAI_TYPE_CONFIG_KEY, JAI_TYPE_CONFIG_VALUE}} where N
+
+@enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
+
+const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, String, JAI_TYPE_INOUT, Tuple{<:Integer}}
+const JAI_TYPE_ARGS = Vector{JAI_TYPE_ARG}
+
 # Jai context
 abstract type JAI_TYPE_CONTEXT end
 
 # Jai host context
 struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
 
-    acfg ::Dict{String, JAI_TYPE_CONFIG}
+    acfg ::OrderedDict{String, JAI_TYPE_CONFIG_VALUE}
 
-    function JAI_TYPE_CONTEXT_HOST(acfg::Dict{String, JAI_TYPE_CONFIG})
+    function JAI_TYPE_CONTEXT_HOST(acfg::JAI_TYPE_CONFIG)
 
         for (name, default) in JAI_ACCEL_CONFIGS
             if !haskey(acfg, name)
@@ -73,12 +83,23 @@ end
 struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     aname           ::String
     aid             ::UInt32
+    prefix          ::String
     ctx_host        ::JAI_TYPE_CONTEXT_HOST
-    const_vars      ::Dict{String, JAI_TYPE_DATA}
+    const_vars      ::OrderedDict{String, JAI_TYPE_DATA}
     devices         ::NTuple{N, Integer} where N
+    frame           ::JAI_TYPE_FRAMEWORK
+    fslib           ::Ptr{Nothing}
+    fconfig         ::JAI_TYPE_CONFIG_VALUE
 
-    function JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host, framework,
-                                    cvars, cnames, device)
+    function JAI_TYPE_CONTEXT_ACCEL(
+            aname       ::String,
+            aid         ::UInt32,
+            ctx_host    ::JAI_TYPE_CONTEXT_HOST,
+            framework   ::JAI_TYPE_CONFIG,
+            cvars       ::NTuple{N, JAI_TYPE_DATA} where N,
+            cnames      ::NTuple{N, String} where N,
+            device      ::NTuple{N, Integer} where N
+        )
 
         # create directories
         workdir = ctx_host.acfg["workdir"]
@@ -88,17 +109,17 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
             locked_filetask(pidfile, workdir, mkdir, workdir)
         end
 
-        const_vars = Dict{String, JAI_TYPE_DATA}()
+        const_vars = OrderedDict{String, JAI_TYPE_DATA}()
         for (name, var) in zip(cnames, cvars)
             const_vars[name] = var
         end
 
+        prefix = join(["jai", aname, string(aid, base=16)], "_") * "_"
+
         # select data framework and generate a shared library for accel
-        fname, fslib = select_framework(framework, aname)
+        frame, fslib, fcfg = select_framework(framework, prefix, workdir)
 
-        # init device and gather device information
-
-        new(aname, aid, ctx_host, const_vars, device)
+        new(aname, aid, prefix, ctx_host, const_vars, device, frame, fslib, fcfg)
     end
 end
 

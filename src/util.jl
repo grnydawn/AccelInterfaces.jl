@@ -4,6 +4,7 @@
 import Pidfile.mkpidlock
 import Serialization.serialize
 import SHA.sha1
+import Random.randstring
 
 function locked_filetask(pidfile::String, target::String, fn::Function, args...) ::Nothing
 
@@ -47,13 +48,40 @@ function generate_jid(args...) ::UInt32
     return ret
 end
 
-extract_name_from_frametype(x) = lowercase(split(string(x), ".")[end][10:end])
+name_from_frame(x) = lowercase(split(string(typeof(x)), ".")[end][10:end])
 
+# Jai global configurations
 JAI = Dict{String, Union{String, Number, Bool, Nothing}}(
         "debug" => true
     )
 
+# TODO: customize for Jai
 macro jdebug(e) :(@info  sprint(showerror, $(esc(e)))) end
 macro jinfo(e)  :(@info  sprint(showerror, $(esc(e)))) end
 macro jwarn(e)  :(@warn  sprint(showerror, $(esc(e)))) end
 macro jerror(e) :(@error sprint(showerror, $(esc(e)))) end
+
+function pack_arg(
+        arg::JAI_TYPE_DATA;
+        name="",
+        argtype=JAI_ARG_IN,
+        shape=()
+    ) :: JAI_TYPE_ARG
+
+    if name == ""
+        name = "var_" * randstring(4) 
+    end
+
+    if arg isa AbstractArray
+        shape = size(arg)
+    end
+
+    return (arg, name, argtype, shape)
+end
+
+
+function check_retval(retval::Int64)
+    if retval != 0
+        throw(JAI_ERROR_NONZERO_RETURN())
+    end
+end

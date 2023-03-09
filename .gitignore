@@ -28,6 +28,7 @@ Manifest.toml
 *.mod
 core
 .jaitmp
+.jworkdir
 *.s
 *.o
 

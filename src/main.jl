@@ -54,10 +54,10 @@ function jai_accel(
         filepath    ::String;
         const_vars  ::NTuple{N, JAI_TYPE_DATA} where N   = (),
         const_names ::NTuple{N, String} where N         = (),
-        framework   ::Dict{String, JAI_TYPE_CONFIG}= JAI_CONFIG_BLANK,
+        framework   ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK,
         device      ::NTuple{N, Integer} where N        = (),
         compile     ::NTuple{N, String} where N         = (),
-        set         ::Dict{String, JAI_TYPE_CONFIG}= JAI_CONFIG_BLANK
+        set         ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK
     )
 
     ctx_host = JAI_TYPE_CONTEXT_HOST(set)
@@ -131,7 +131,7 @@ function jai_kernel(
         aname       ::String,
         lineno      ::Integer,
         filepath    ::String;
-        framework   ::Dict{String, JAI_TYPE_CONFIG}= JAI_CONFIG_BLANK
+        framework   ::JAI_TYPE_CONFIG= JAI_CONFIG_BLANK
     )
 
     # find ctx_accel
@@ -164,7 +164,7 @@ function jai_launch(
         outnames    ::Vector{String},
         lineno      ::Integer,
         filepath    ::String,
-        config      ::Dict{String, Union{Dict{String, JAI_TYPE_CONFIG}, Nothing}}
+        config      ::JAI_TYPE_CONFIG
     )
 
     # pack data and variable names

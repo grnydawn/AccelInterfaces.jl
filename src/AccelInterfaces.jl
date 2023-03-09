@@ -7,8 +7,8 @@ Julia Accelerator Interfaces(Jai) main module
 module AccelInterfaces
 
 include("base.jl")
-include("util.jl")
 include("error.jl")
+include("util.jl")
 include("framework.jl")
 include("kernel.jl")
 include("fortran.jl")
