@@ -131,7 +131,7 @@ function fortran_test_file()
     ANS = X .+ Y
 
 
-    @jaccel fortfileacc framework(fortran=(compile=fort_compile,)) constant(TEST1, TEST2
+    @jaccel fortfileacc framework(fortran=(compiler=fort_compile,)) constant(TEST1, TEST2
             ) set(debugdir=workdir, workdir=workdir)
 
     @jkernel  "ex1.knl" mykernel fortfileacc
@@ -151,8 +151,10 @@ function fortran_openacc_tests()
 
     ismaster = true
 
+    #@jconfig test compiler(gnu="testeg")
+
     @jaccel accacc framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
-                    ) compile(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
+                    ) compiler(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
 

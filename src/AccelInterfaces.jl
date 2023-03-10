@@ -2,7 +2,7 @@
 
 
 """
-Julia Accelerator Interfaces(Jai) main module
+Julia Accelerator Interfaces(Jai) module
 """
 module AccelInterfaces
 
@@ -15,7 +15,7 @@ include("fortran.jl")
 include("main.jl")
 include("api.jl")
 
-export @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel
+export @jconfig, @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel
 
 end
 

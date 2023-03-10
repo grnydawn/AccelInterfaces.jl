@@ -56,8 +56,15 @@ const JAI_ACCEL_CONFIGS = (
 
 @enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
 
-const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, String, JAI_TYPE_INOUT, Tuple{<:Integer}}
+const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, String, JAI_TYPE_INOUT, NTuple{N, T} where {N, T<:Integer}}
 const JAI_TYPE_ARGS = Vector{JAI_TYPE_ARG}
+
+const JAI_MAP_APITYPE_INOUT = Dict{JAI_TYPE_API, JAI_TYPE_INOUT}(
+        JAI_ALLOCATE    => JAI_ARG_IN,
+        JAI_DEALLOCATE  => JAI_ARG_IN,
+        JAI_UPDATETO    => JAI_ARG_IN,
+        JAI_UPDATEFROM  => JAI_ARG_OUT
+    )
 
 # Jai context
 abstract type JAI_TYPE_CONTEXT end
@@ -65,18 +72,23 @@ abstract type JAI_TYPE_CONTEXT end
 # Jai host context
 struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
 
-    acfg ::OrderedDict{String, JAI_TYPE_CONFIG_VALUE}
+    config  ::OrderedDict{String, JAI_TYPE_CONFIG_VALUE}
 
-    function JAI_TYPE_CONTEXT_HOST(acfg::JAI_TYPE_CONFIG)
+    function JAI_TYPE_CONTEXT_HOST(config::JAI_TYPE_CONFIG)
 
         for (name, default) in JAI_ACCEL_CONFIGS
-            if !haskey(acfg, name)
-                acfg[name] = default
+            if !haskey(config, name)
+                config[name] = default
             end
         end
 
-        new(acfg)
+        new(config)
     end
+end
+
+# kernel context
+struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
+    kname           ::String
 end
 
 # accelerator context
@@ -90,51 +102,19 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     frame           ::JAI_TYPE_FRAMEWORK
     fslib           ::Ptr{Nothing}
     fconfig         ::JAI_TYPE_CONFIG_VALUE
-
-    function JAI_TYPE_CONTEXT_ACCEL(
-            aname       ::String,
-            aid         ::UInt32,
-            ctx_host    ::JAI_TYPE_CONTEXT_HOST,
-            framework   ::JAI_TYPE_CONFIG,
-            cvars       ::NTuple{N, JAI_TYPE_DATA} where N,
-            cnames      ::NTuple{N, String} where N,
-            device      ::NTuple{N, Integer} where N
-        )
-
-        # create directories
-        workdir = ctx_host.acfg["workdir"]
-
-        if !isdir(workdir)
-            pidfile = joinpath(ctx_host.acfg["pidfilename"])
-            locked_filetask(pidfile, workdir, mkdir, workdir)
-        end
-
-        const_vars = OrderedDict{String, JAI_TYPE_DATA}()
-        for (name, var) in zip(cnames, cvars)
-            const_vars[name] = var
-        end
-
-        prefix = join(["jai", aname, string(aid, base=16)], "_") * "_"
-
-        # select data framework and generate a shared library for accel
-        frame, fslib, fcfg = select_framework(framework, prefix, workdir)
-
-        new(aname, aid, prefix, ctx_host, const_vars, device, frame, fslib, fcfg)
-    end
+    slibcache       ::Dict{UInt32, Ptr{Nothing}}
+    ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
 end
 
-# kernel context
-struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
-    kname           ::String
-    accelctx        ::JAI_TYPE_CONTEXT_ACCEL
 
-    function JAI_TYPE_CONTEXT_KERNEL(kname, actx)
-
-        # generate kernel context id
-        
-        # load kernel definition
-
-        new(kname, actx)
-    end
+struct JAI_TYPE_KERNELDEF
 end
+
+
+# Jai global configurations
+JAI = Dict{String, Union{Vector{JAI_TYPE_CONTEXT_ACCEL}, String, Number, Bool, Nothing}}(
+        "debug"         => true,
+        "ctx_accels"    => Vector{JAI_TYPE_CONTEXT_ACCEL}()
+    )
+
 

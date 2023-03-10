@@ -51,6 +51,15 @@ const JAI_MAP_SYMBOL_FRAMEWORK = OrderedDict(
 
 const JAI_AVAILABLE_FRAMEWORKS      = OrderedDict{JAI_TYPE_FRAMEWORK, Ptr{Nothing}}()
 
+const JAI_MAP_API_FUNCNAME = Dict{JAI_TYPE_API, String}(
+        JAI_ALLOCATE    => "allocate",
+        JAI_DEALLOCATE  => "deallocate",
+        JAI_UPDATETO    => "updateto",
+        JAI_UPDATEFROM  => "updatefrom",
+        JAI_LAUNCH      => "launch",
+        JAI_WAIT        => "wait"
+    )
+
 const _ccall_cache = Dict{Int64, Function}()
 const _dummyargs = Tuple("a[$i]" for i in range(1, stop=200))
 const _ccs = ("(f,a) -> ccall(f, Int64, (", ",), " , ")")
@@ -93,13 +102,13 @@ T.B.D.
 
 """
 function genslib_accel(
-        frame       ::JAI_TYPE_FORTRAN,
+        frame       ::JAI_TYPE_FRAMEWORK,
         prefix      ::String,               # prefix for libfunc names
         workdir     ::String,
         args        ::JAI_TYPE_ARGS
     ) :: Ptr{Nothing}
 
-    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame))
+    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_accel"))
 end
 
 
@@ -125,11 +134,13 @@ T.B.D.
 
 """
 function genslib_data(
-        frame       ::JAI_TYPE_FRAMEWORK
-    ) :: String
+        frame       ::JAI_TYPE_FORTRAN,
+        prefix      ::String,               # prefix for libfunc names
+        workdir     ::String,
+        args        ::JAI_TYPE_ARGS
+    ) :: Ptr{Nothing}
 
-    error("Framework-$(extract_name_from_frametype(typeof(frame))) " *
-          "should implement 'genslib_data' function.")
+    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_data"))
 
 end
 
@@ -158,8 +169,7 @@ function genslib_kernel(
         frame       ::JAI_TYPE_FRAMEWORK
     ) :: String
 
-    error("Framework-$(extract_name_from_frametype(typeof(frame))) " *
-          "should implement 'genslib_kernel' function.")
+    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_kernel"))
 
 end
 

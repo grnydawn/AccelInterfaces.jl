@@ -1,89 +1,94 @@
 # fortran.jl: implement functions for Fortran framework
 
+FORTRAN_TEMPLATE_MODULE = """
+MODULE {modname}
+USE, INTRINSIC :: ISO_C_BINDING
+
+{specpart}
+
+CONTAINS
+
+{subppart}
+
+END MODULE
+"""
+
+FORTRAN_TEMPLATE_FUNCTION = """
+INTEGER (C_INT64_T) FUNCTION {prefix}{name}({dargs}) BIND(C, name="{prefix}{name}")
+USE, INTRINSIC :: ISO_C_BINDING
+
+{specpart}
+
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+{execpart}
+
+{prefix}{name} = JAI_ERRORCODE
+
+END FUNCTION
+"""
+
 function gencode_accel(
         frame       ::JAI_TYPE_FORTRAN,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS
     ) :: String
 
-    return  """
-MODULE mod_$(prefix)accel
-USE, INTRINSIC :: ISO_C_BINDING
+    fnames = ("get_num_devices", "get_device_num", "set_device_num",
+                  "device_init", "device_fini", "wait")
 
-PUBLIC $(prefix)get_num_devices
-PUBLIC $(prefix)get_device_num
-PUBLIC $(prefix)set_device_num
-PUBLIC $(prefix)device_init
-PUBLIC $(prefix)device_fini
-PUBLIC $(prefix)wait
+    specs = Vector{String}(undef, length(fnames))
+    funcs = Vector{String}(undef, length(fnames))
 
-CONTAINS
+    for (i, name) in enumerate(fnames)
+        specs[i] = "PUBLIC $(prefix)$(name)"
+        dargs     = "buf"
+        specpart = "INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: $(dargs)"
+        execpart = ""
+        funcs[i] = jaifmt(FORTRAN_TEMPLATE_FUNCTION, prefix=prefix, name=name, dargs=dargs,
+                          specpart=specpart, execpart=execpart)
+    end
 
-INTEGER (C_INT64_T) FUNCTION $(prefix)device_init(buf) BIND(C, name="$(prefix)device_init")
-USE, INTRINSIC :: ISO_C_BINDING
+    modname  = "mod_" * prefix * "accel"
+    specpart = join(specs, "\n")
+    subppart = join(funcs, "\n\n")
 
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+    return jaifmt(FORTRAN_TEMPLATE_MODULE, modname=modname, specpart=specpart,
+                  subppart=subppart)
+end
 
-$(prefix)device_init_ = JAI_ERRORCODE
 
-END FUNCTION
+function gencode_data(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS
+    ) :: String
 
-INTEGER (C_INT64_T) FUNCTION $(prefix)device_fini(buf) BIND(C, name="$(prefix)device_fini")
-USE, INTRINSIC :: ISO_C_BINDING
+    apiname  = JAI_MAP_API_FUNCNAME[apitype]
+    funcname = prefix * apiname
 
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+    argnames = Vector{String}(undef, length(args))
+    typedecls   = Vector{String}(undef, length(args))
 
-$(prefix)device_fini = JAI_ERRORCODE
+    # merge args
+    for (i, (var, vname, vinout, vshape, voffset)) in enumerate(args)
+        argnames[i] = vname
+        typedecls[i] = "INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: " * vname
+    end
 
-END FUNCTION
+    dargs = join(argnames, ", ")
+    funcspecpart = join(typedecls, "\n")
+    funcexecpart = ""
 
-INTEGER (C_INT64_T) FUNCTION $(prefix)get_num_devices(buf) BIND(C, name="$(prefix)get_num_devices")
-USE, INTRINSIC :: ISO_C_BINDING
+    modsubppart = jaifmt(FORTRAN_TEMPLATE_FUNCTION, prefix=prefix, name=apiname,
+                      dargs=dargs, specpart=funcspecpart, execpart=funcexecpart)
 
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+    modname  = "mod_" * funcname
+    modspecpart = "PUBLIC " * funcname
 
-buf(1) = 1
-
-$(prefix)get_num_devices = JAI_ERRORCODE
-
-END FUNCTION
-
-INTEGER (C_INT64_T) FUNCTION $(prefix)get_device_num(buf) BIND(C, name="$(prefix)get_device_num")
-USE, INTRINSIC :: ISO_C_BINDING
-
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-buf(1) = 1
-
-$(prefix)get_device_num = JAI_ERRORCODE
-
-END FUNCTION
-
-INTEGER (C_INT64_T) FUNCTION $(prefix)set_device_num(buf) BIND(C, name="$(prefix)set_device_num")
-USE, INTRINSIC :: ISO_C_BINDING
-
-INTEGER (C_INT64_T), DIMENSION(1), INTENT(IN) :: buf
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-$(prefix)set_device_num = JAI_ERRORCODE
-
-END FUNCTION
-
-INTEGER (C_INT64_T) FUNCTION $(prefix)wait() BIND(C, name="$(prefix)wait")
-USE, INTRINSIC :: ISO_C_BINDING
-
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-$(prefix)wait = JAI_ERRORCODE
-
-END FUNCTION
-
-END MODULE
-"""
+    return jaifmt(FORTRAN_TEMPLATE_MODULE, modname=modname, specpart=modspecpart,
+                  subppart=modsubppart)
 end
 
 function compile_code(
@@ -119,6 +124,26 @@ function genslib_accel(
     invoke_slibfunc(frame, slib, prefix * "device_init", args)
 
     return slib
+
+end
+
+
+function genslib_data(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
+        workdir     ::String,
+        args        ::JAI_TYPE_ARGS
+    ) :: Ptr{Nothing}
+
+    code = gencode_data(frame, apitype, prefix, args)
+
+    srcname = prefix * "data.F90"
+    outname = prefix * "data." * dlext
+
+    slibpath = compile_code(frame, code, srcname, outname, workdir)
+
+    return load_sharedlib(slibpath)
 
 end
 

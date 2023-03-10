@@ -1,4 +1,61 @@
 # api.jl: implement user interface macros
+#
+"""
+    @jconfig [clauses...]
+
+Configure Jai environment
+
+
+# Arguments
+
+See also [`@jaecel`](@jaecel), [`@jdecel`](@jdecel)
+
+# Examples
+```julia-repl
+julia> @jconfig framework(fortran="gfortran -fPIC -shared -g")
+```
+
+# Implementation
+T.B.D.
+
+"""
+macro jconfig(clauses...)
+
+    block = Expr(:block)
+
+#Symbol test
+#Expr
+#  head: Symbol call
+#  args: Array{Any}((2,))
+#    1: Symbol compiler
+#    2: Expr
+#      head: Symbol kw
+#      args: Array{Any}((2,))
+#        1: Symbol gnu
+#        2: String "testeg"
+
+    # parse clauses
+    for clause in clauses
+
+        #dump(clause)
+
+        if clause isa Symbol
+            expr = :(JAI[$(string(clause))] = nothing)
+
+        elseif clause.head == :call
+            #named tuple = 
+            for item in clause.args
+            end
+
+            expr = :(JAI[$(string(clause.args[1]))] = named)
+        end
+
+        push!(block.args, expr)
+    end
+
+    return(block)
+end
+
 
 
 """
@@ -11,7 +68,9 @@ If `name` is not specified, this context can be accessed only as the currently a
 # Arguments
 - `name`::String: a unique name for this accelerator context
 - `framework`::NamedTuple: 
-- `devicenum`::Integer: 
+- `device`::Integer: 
+- `compiler`::Integer: 
+- `machine`::Integer: 
 - `constant`::Tuple of Variable literal :
 - `set`::Named Tuple: 
 
@@ -54,12 +113,12 @@ macro jaccel(clauses...)
             push!(init.args, Expr(:kw, :const_vars, const_vars))
             push!(init.args, Expr(:kw, :const_names, const_names))
 
-        elseif clause.args[1] in (:device, :compile)
+        elseif clause.args[1] in (:device,)
             t = (esc(d) for d in clause.args[2:end])
 
             push!(init.args, Expr(:kw, clause.args[1], t))
 
-        elseif clause.args[1] in (:framework, :set)
+        elseif clause.args[1] in (:framework, :set, :compiler, :machine)
 
             d = :(JAI_TYPE_CONFIG())
 

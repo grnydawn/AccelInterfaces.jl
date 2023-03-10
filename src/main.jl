@@ -1,40 +1,6 @@
 # main.jl: processes user requests from Jai API
 
 
-
-
-# accelerator context cache
-const ctx_accels = Vector{JAI_TYPE_CONTEXT_ACCEL}()
-
-# kernel context cache
-const ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
-
-
-function get_context(contexts, name)
-
-    ret = nothing
-
-    for ctx in contexts
-        if ctx.aname == name
-            ret = ctx
-            break
-        end
-    end
-
-    if name == "" && length(contexts) == 1
-        ret = contexts[1]
-    end
-
-    return ret
-end
-
-get_accel(name)     = get_context(ctx_accels, name)
-get_kernel(name)    = get_context(ctx_kernels, name)
-
-
-struct JAI_TYPE_KERNELDEF
-end
-
 """
     function jai_accel
 
@@ -54,9 +20,10 @@ function jai_accel(
         filepath    ::String;
         const_vars  ::NTuple{N, JAI_TYPE_DATA} where N   = (),
         const_names ::NTuple{N, String} where N         = (),
-        framework   ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK,
         device      ::NTuple{N, Integer} where N        = (),
-        compile     ::NTuple{N, String} where N         = (),
+        framework   ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK,
+        machine     ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK,
+        compiler    ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK,
         set         ::JAI_TYPE_CONFIG = JAI_CONFIG_BLANK
     )
 
@@ -68,11 +35,34 @@ function jai_accel(
         aname = string(aid, base = 16)
     end
 
-    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host, framework,
-                                       const_vars, const_names, device)
+    # create directories
+    workdir = ctx_host.config["workdir"]
 
-    push!(ctx_accels, ctx_accel)
+    if !isdir(workdir)
+        pidfile = joinpath(ctx_host.config["pidfilename"])
+        locked_filetask(pidfile, workdir, mkdir, workdir)
+    end
+
+    cvars = OrderedDict{String, JAI_TYPE_DATA}()
+    for (name, var) in zip(const_names, const_vars)
+        cvars[name] = var
+    end
+
+    prefix = join(["jai", aname, string(aid, base=16)], "_") * "_"
+
+    # select data framework and generate a shared library for accel
+    frame, fslib, fcfg = select_framework(framework, prefix, workdir)
+
+    slibcache = Dict{UInt32, Ptr{Nothing}}()
+
+    ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
+
+    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, prefix, ctx_host, cvars,
+                    device, frame, fslib, fcfg, slibcache, ctx_kernels)
+
+    push!(JAI["ctx_accels"], ctx_accel)
 end
+
 
 """
     function jai_data
@@ -99,16 +89,31 @@ function jai_data(
     )
 
     # pack data and variable names
+    args = JAI_TYPE_ARGS()
+    for (n, d) in zip(names, data)
+        arg = pack_arg(d, name=n, argtype=JAI_MAP_APITYPE_INOUT[apitype])
+        push!(args, arg)
+    end
 
-    # jai ccall if cached
+    ctx_accel   = get_accel(aname)
+    uid         = generate_jid(ctx_accel.aid, apitype, lineno, filepath)
+    prefix      = join(["jai", aname, string(uid, base=16)], "_") * "_"
+    workdir     = ctx_accel.ctx_host.config["workdir"]
 
-    # generate source file hash
+    try
+        # build if not cached
+        if !(uid in keys(ctx_accel.slibcache))
+            slib = genslib_data(ctx_accel.frame, apitype, prefix, workdir, args)
+            ctx_accel.slibcache[uid] = slib
+        end
 
-    # generate source file
+        # jai ccall and save it in cache
+        invoke_slibfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
+                        prefix * JAI_MAP_API_FUNCNAME[apitype], args)
 
-    # compile source file to shared library
-
-    # jai ccall and save it in cache
+    catch err
+        rethrow()
+    end
 
 end
 
@@ -136,6 +141,10 @@ function jai_kernel(
 
     # find ctx_accel
     ctx_accel = get_accel(aname)
+
+    # generate kernel context id
+        
+    # load kernel definition
 
     ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kname, ctx_accel)
 
@@ -223,23 +232,23 @@ function jai_decel(
     # jai ccall
 
     if aname == ""
-        if length(ctx_accels) > 0
-            pop!(ctx_accels)
+        if length(JAI["ctx_accels"]) > 0
+            pop!(JAI["ctx_accels"])
         else
             println("WARNING: no accel context exists")
         end
     else
         ctxidx = nothing
 
-        for idx in range(1, length(ctx_accels))
-            if ctx_accels[idx].aname == aname
+        for idx in range(1, length(JAI["ctx_accels"]))
+            if JAI["ctx_accels"][idx].aname == aname
                 ctxidx = idx
                 break
             end
         end
 
         if ctxidx isa Number
-            deleteat!(ctx_accels, ctxidx)
+            deleteat!(JAI["ctx_accels"], ctxidx)
         else
             println("WARNING: no accel context name: " * aname)
         end
