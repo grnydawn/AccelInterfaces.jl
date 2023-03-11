@@ -64,7 +64,7 @@ const _ccall_cache = Dict{Int64, Function}()
 const _dummyargs = Tuple("a[$i]" for i in range(1, stop=200))
 const _ccs = ("(f,a) -> ccall(f, Int64, (", ",), " , ")")
 
-function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args) :: Int64
+function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args::JAI_TYPE_ARGS) :: Int64
 
     funcstr = _ccs[1] * dtypestr * _ccs[2] * join(_dummyargs[1:length(args)], ",") * _ccs[3]
     fid = read(IOBuffer(sha1(funcstr)[1:8]), Int64)
@@ -73,7 +73,8 @@ function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args) :: Int64
         _ccall_cache[fid] = eval(Meta.parse(funcstr))
     end
 
-    Base.invokelatest(_ccall_cache[fid], libfunc, args)
+    actual_args = map(x -> x[1], args)
+    Base.invokelatest(_ccall_cache[fid], libfunc, actual_args)
 end
 
 
@@ -246,7 +247,7 @@ function argsdtypes(
 
     dtypes = Vector{DataType}(undef, N)
 
-    for (i, arg) in enumerate(args)
+    for (i, (arg, name, inout, addr, shape, offsets)) in enumerate(args)
 
         if typeof(arg) <: AbstractArray
             dtype = Ptr{typeof(arg)}
@@ -299,11 +300,16 @@ function compile_code(
 end
 
 
-function load_sharedlib(libpath)
+function load_sharedlib(libpath::String)
     return dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
 end
 
-function invoke_slibfunc(frame, slib, fname, args)
+function invoke_slibfunc(
+        frame   ::JAI_TYPE_FRAMEWORK,
+        slib    ::Ptr{Nothing},
+        fname   ::String,
+        args    ::JAI_TYPE_ARGS
+    )
 
     dtypes = argsdtypes(frame, args)
     dtypestr = join([string(t) for t in dtypes], ",")

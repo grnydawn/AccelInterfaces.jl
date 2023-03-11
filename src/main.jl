@@ -91,7 +91,7 @@ function jai_data(
     # pack data and variable names
     args = JAI_TYPE_ARGS()
     for (n, d) in zip(names, data)
-        arg = pack_arg(d, name=n, argtype=JAI_MAP_APITYPE_INOUT[apitype])
+        arg = pack_arg(d, name=n, inout=JAI_MAP_APITYPE_INOUT[apitype])
         push!(args, arg)
     end
 
@@ -142,13 +142,16 @@ function jai_kernel(
     # find ctx_accel
     ctx_accel = get_accel(aname)
 
+    if !(kdef isa JAI_TYPE_KERNELDEF)
+        kdef = parse_kerneldef(kdef)
+    end
+
     # generate kernel context id
+    kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath)
         
-    # load kernel definition
+    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, kdef)
 
-    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kname, ctx_accel)
-
-    push!(ctx_kernels, ctx_kernel)
+    push!(ctx_accel.ctx_kernels, ctx_kernel)
 
 end
 

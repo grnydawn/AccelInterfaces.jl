@@ -84,7 +84,7 @@ function fortran_test_string()
 
 
     kernel_text = """
-
+[kernel]
 test = 1
 
 [fortran]

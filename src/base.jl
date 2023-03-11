@@ -2,6 +2,7 @@
 
 import Pkg.TOML
 import DataStructures.OrderedDict
+import OffsetArrays.OffsetArray
 
 const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 
@@ -56,7 +57,9 @@ const JAI_ACCEL_CONFIGS = (
 
 @enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
 
-const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, String, JAI_TYPE_INOUT, NTuple{N, T} where {N, T<:Integer}}
+const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, String, JAI_TYPE_INOUT, Ptr{Clonglong},
+                           NTuple{N, T} where {N, T<:Integer},
+                           NTuple{N, T} where {N, T<:Integer}}
 const JAI_TYPE_ARGS = Vector{JAI_TYPE_ARG}
 
 const JAI_MAP_APITYPE_INOUT = Dict{JAI_TYPE_API, JAI_TYPE_INOUT}(
@@ -86,9 +89,30 @@ struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
     end
 end
 
+struct JAI_TYPE_KERNELHDR
+    header  ::String
+end
+
+struct JAI_TYPE_KERNELBODY
+    body    ::String
+end
+
+struct JAI_TYPE_KERNELSEC
+    ksid        ::UInt32
+    header  ::JAI_TYPE_KERNELHDR
+    body    ::JAI_TYPE_KERNELBODY
+end
+
+struct JAI_TYPE_KERNELDEF
+    kdid        ::UInt32
+    sections    :: Vector{JAI_TYPE_KERNELSEC}
+end
+
 # kernel context
 struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
+    kid             ::UInt32
     kname           ::String
+    kdef            ::JAI_TYPE_KERNELDEF
 end
 
 # accelerator context
@@ -104,10 +128,6 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     fconfig         ::JAI_TYPE_CONFIG_VALUE
     slibcache       ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
-end
-
-
-struct JAI_TYPE_KERNELDEF
 end
 
 

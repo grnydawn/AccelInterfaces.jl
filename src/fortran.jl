@@ -72,7 +72,7 @@ function gencode_data(
     typedecls   = Vector{String}(undef, length(args))
 
     # merge args
-    for (i, (var, vname, vinout, vshape, voffset)) in enumerate(args)
+    for (i, (var, vname, vinout, addr, vshape, voffset)) in enumerate(args)
         argnames[i] = vname
         typedecls[i] = "INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: " * vname
     end

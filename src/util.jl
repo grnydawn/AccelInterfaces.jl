@@ -59,21 +59,61 @@ macro jerror(e) :(@error sprint(showerror, $(esc(e)))) end
 function pack_arg(
         arg::JAI_TYPE_DATA;
         name="",
-        argtype=JAI_ARG_IN,
-        shape=()
+        inout=JAI_ARG_IN
     ) :: JAI_TYPE_ARG
 
     if name == ""
         name = "var_" * randstring(4) 
     end
 
-    if arg isa AbstractArray
+    if arg isa OffsetArray
         shape = size(arg)
+        offsets = arg.offsets
+        addr = Base.unsafe_convert(Ptr{Clonglong}, arg)
+    elseif arg isa AbstractArray
+        shape = size(arg)
+        offsets = Tuple(1 for _ in 1:length(arg))
+        addr = Base.unsafe_convert(Ptr{Clonglong}, arg)
+    else
+        shape = ()
+        offsets = ()
+        addr = nothing
     end
 
-    return (arg, name, argtype, shape)
+    return (arg, name, inout, addr, shape, offsets)
 end
 
+
+function pack_args(
+        innames     ::Vector{String},
+        indata      ::NTuple{N, JAI_TYPE_DATA} where N,
+        outnames    ::Vector{String},
+        outdata     ::NTuple{N, JAI_TYPE_DATA} where N
+    ) :: JAI_TYPE_ARGS
+
+    buf = OrderedDict()
+
+    for (n, d) in zip(innames, indata)
+        buf[n] = [d, JAI_ARG_IN]
+    end
+
+    for (n, d) in zip(outnames, outdata)
+        if n in keys(buf)
+            buf[n] = [d, JAI_ARG_INOUT]
+        else
+            buf[n] = [d, JAI_ARG_OUT]
+        end
+    end
+
+    args = JAI_TYPE_ARGS()
+
+    for (n, (d, inout)) in buf
+        arg = pack_arg(d, name=n, inout=inout)
+        push!(args, arg)
+    end
+
+    return args
+end
 
 function check_retval(retval::Int64)
     if retval != 0
