@@ -16,6 +16,10 @@ struct JAI_ERROR_NOVALID_FRAMEWORK <: Exception end
 Base.showerror(io::IO, e::JAI_ERROR_NOVALID_FRAMEWORK) = print(io,
     "None of the framework is selected.")
 
+struct JAI_ERROR_NOVALID_SECTION <: Exception end
+Base.showerror(io::IO, e::JAI_ERROR_NOVALID_SECTION) = print(io,
+    "None of the kernel section is selected.")
+
 struct JAI_ERROR_COMPILE_NOSHAREDLIB <: Exception
     compile ::String
     output  ::String

@@ -56,7 +56,7 @@ const JAI_MAP_API_FUNCNAME = Dict{JAI_TYPE_API, String}(
         JAI_DEALLOCATE  => "deallocate",
         JAI_UPDATETO    => "updateto",
         JAI_UPDATEFROM  => "updatefrom",
-        JAI_LAUNCH      => "launch",
+        JAI_LAUNCH      => "kernel",
         JAI_WAIT        => "wait"
     )
 
@@ -135,8 +135,9 @@ T.B.D.
 
 """
 function genslib_data(
-        frame       ::JAI_TYPE_FORTRAN,
-        prefix      ::String,               # prefix for libfunc names
+        frame       ::JAI_TYPE_FRAMEWORK,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
         workdir     ::String,
         args        ::JAI_TYPE_ARGS
     ) :: Ptr{Nothing}
@@ -167,8 +168,12 @@ T.B.D.
 
 """
 function genslib_kernel(
-        frame       ::JAI_TYPE_FRAMEWORK
-    ) :: String
+        frame       ::JAI_TYPE_FORTRAN,
+        prefix      ::String,               # prefix for libfunc names
+        workdir     ::String,
+        args        ::JAI_TYPE_ARGS,
+        knlbody     ::String
+    ) :: Ptr{Nothing}
 
     throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_kernel"))
 
@@ -213,8 +218,6 @@ function select_framework(
         workdir     ::String
     ) :: Tuple{JAI_TYPE_FRAMEWORK, Ptr{Nothing}, JAI_TYPE_CONFIG_VALUE}
 
-    framename, frameslib = nothing, nothing
-
     if length(JAI_AVAILABLE_FRAMEWORKS) == 0
         check_available_frameworks(prefix, workdir)
     end
@@ -232,6 +235,26 @@ function select_framework(
         if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
             return (frame, JAI_AVAILABLE_FRAMEWORKS[frame], config)
         end
+    end
+
+    throw(JAI_ERROR_NOVALID_FRAMEWORK())
+end
+
+
+function select_framework(
+        ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
+        userframe   ::JAI_TYPE_CONFIG
+    ) :: Tuple{JAI_TYPE_FRAMEWORK, JAI_TYPE_CONFIG_VALUE}
+
+    if length(userframe) == 0
+        userframe[ctx_accel.frame] = ctx_accel.fconfig
+    end
+
+    # TODO: how to select a frame
+    # TODO: can kernel frame type be detected beforehand
+    #
+    for (frame, config) in userframe
+        return (frame, config)
     end
 
     throw(JAI_ERROR_NOVALID_FRAMEWORK())

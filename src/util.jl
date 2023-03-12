@@ -124,7 +124,7 @@ end
 function get_context(
         contexts    ::Vector{JAI_TYPE_CONTEXT_ACCEL},
         aid         ::UInt32
-    )
+    ) :: Union{JAI_TYPE_CONTEXT_ACCEL, Nothing}
 
     for ctx in contexts
         if ctx.aid == aid
@@ -135,11 +135,28 @@ function get_context(
     return nothing
 end
 
+function get_context(
+        contexts    ::Vector{JAI_TYPE_CONTEXT_KERNEL},
+        kid         ::UInt32
+    ) :: Union{JAI_TYPE_CONTEXT_KERNEL, Nothing}
+
+    for ctx in contexts
+        if ctx.kid == kid
+            return ctx
+        end
+    end
+
+    return nothing
+end
 
 function get_context(
         contexts    ::Vector{JAI_TYPE_CONTEXT_ACCEL},
-        name        ::String
-    )
+        name         ::String
+    ) :: Union{JAI_TYPE_CONTEXT_ACCEL, Nothing}
+
+    if name == "" && length(contexts) == 1
+        return contexts[1]
+    end
 
     for ctx in contexts
         if ctx.aname == name
@@ -148,15 +165,31 @@ function get_context(
         end
     end
 
-    if name == "" && length(contexts) == 1
-        return contexts[1]
-    else
-        return nothing
-    end
+    return nothing
 end
 
-get_accel(arg)     = get_context(JAI["ctx_accels"], arg)
-get_kernel(arg)    = get_context(JAI["ctx_kernels"], arg)
+
+function get_context(
+        contexts    ::Vector{JAI_TYPE_CONTEXT_KERNEL},
+        name         ::String
+    ) :: Union{JAI_TYPE_CONTEXT_KERNEL, Nothing}
+
+    if name == "" && length(contexts) == 1
+        return contexts[1]
+    end
+
+    for ctx in contexts
+        if ctx.kname == name
+            return ctx
+            break
+        end
+    end
+
+    return nothing
+end
+
+get_accel(arg)          = get_context(JAI["ctx_accels"], arg)
+get_kernel(actx, arg)   = get_context(actx.ctx_kernels, arg)
 
 function jaifmt(_T; kwargs...)
 

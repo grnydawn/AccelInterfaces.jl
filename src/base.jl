@@ -90,28 +90,40 @@ struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
 end
 
 struct JAI_TYPE_KERNELHDR
-    header  ::String
+    frame   ::Union{JAI_TYPE_FRAMEWORK, Symbol}
+    argnames::Vector{String}
+    params  ::Union{Expr, Nothing}
 end
 
 struct JAI_TYPE_KERNELBODY
     body    ::String
 end
 
+struct JAI_TYPE_KERNELINITSEC
+    ksid    ::UInt32
+    argnames::Vector{String}
+    env     ::Module
+end
+
 struct JAI_TYPE_KERNELSEC
-    ksid        ::UInt32
+    ksid    ::UInt32
     header  ::JAI_TYPE_KERNELHDR
     body    ::JAI_TYPE_KERNELBODY
 end
 
 struct JAI_TYPE_KERNELDEF
-    kdid        ::UInt32
-    sections    :: Vector{JAI_TYPE_KERNELSEC}
+    kdid    ::UInt32
+    doc     ::String
+    init    ::Vector{JAI_TYPE_KERNELINITSEC}
+    sections::Vector{JAI_TYPE_KERNELSEC}
 end
 
 # kernel context
 struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
     kid             ::UInt32
     kname           ::String
+    frame           ::JAI_TYPE_FRAMEWORK
+    fconfig         ::JAI_TYPE_CONFIG_VALUE
     kdef            ::JAI_TYPE_KERNELDEF
 end
 

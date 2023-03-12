@@ -149,7 +149,9 @@ function jai_kernel(
     # generate kernel context id
     kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath)
         
-    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, kdef)
+    frame, fcfg = select_framework(ctx_accel, framework)
+
+    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, frame, fcfg, kdef)
 
     push!(ctx_accel.ctx_kernels, ctx_kernel)
 
@@ -178,18 +180,30 @@ function jai_launch(
         filepath    ::String,
         config      ::JAI_TYPE_CONFIG
     )
+    args = pack_args(innames, input, outnames, output)
+    apitype = JAI_LAUNCH
 
-    # pack data and variable names
+    ctx_accel   = get_accel(aname)
+    ctx_kernel  = get_kernel(ctx_accel, kname)
+    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
+    prefix      = join(["jai", kname, string(uid, base=16)], "_") * "_"
+    workdir     = ctx_accel.ctx_host.config["workdir"]
+    knlbody     = get_knlbody(ctx_kernel)
 
-    # jai ccall if cached
+    try
+        # build if not cached
+        if !(uid in keys(ctx_accel.slibcache))
+            slib = genslib_kernel(ctx_accel.frame, prefix, workdir, args, knlbody)
+            ctx_accel.slibcache[uid] = slib
+        end
 
-    # generate source file hash
+        # jai ccall and save it in cache
+        invoke_slibfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
+                        prefix * JAI_MAP_API_FUNCNAME[apitype], args)
 
-    # generate source file
-
-    # compile source file to shared library
-
-    # jai ccall and save it in cache
+    catch err
+        rethrow()
+    end
 
 
 end
@@ -206,10 +220,54 @@ Process @jwait
 """
 
 function jai_wait(
-        aname       ::String,
+        name       ::String,
         lineno      ::Integer,
         filepath    ::String
     )
+
+    slib = nothing
+    ctx_accel = nothing
+    ctx_kernel = nothing
+
+    if name == ""
+        ctx_accel   = get_accel(name)
+        ctx_kernel   = get_kernel(ctx_accel, name)
+        if ctx_kernel != nothing
+            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame]
+        else
+            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame]
+        end
+    else
+        ctx_accel   = get_accel(name)
+        if ctx_accel == nothing
+            ctx_kernel = nothing
+            for ctx_accel in JAI["ctx_accels"]
+                ctx_kernel = get_kernel(ctx_accel, name)
+                if ctx_kernel != nothing
+                    slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame]
+                    break
+                end
+            end
+
+            if slib == nothing
+                error("Can not find shared library for jwait with " * name)
+            end
+        else
+            ctx_kernel   = get_kernel(ctx_accel, name)
+            if ctx_kernel != nothing
+                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame]
+            else
+                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame]
+            end
+        end
+    end
+
+    args = JAI_TYPE_ARGS()
+    push!(args, pack_arg(fill(Int64(-1), 1)))
+
+    # jai ccall and save it in cache
+    invoke_slibfunc(ctx_accel.frame, slib,
+                    ctx_accel.prefix * JAI_MAP_API_FUNCNAME[JAI_WAIT], args)
 
     # jai ccall
 

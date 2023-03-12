@@ -84,10 +84,9 @@ function fortran_test_string()
 
 
     kernel_text = """
-[kernel]
-test = 1
-
-[fortran]
+[kernel: x, y=1, z=":e:"]
+X = 1
+[fortran: t=X, y=3]
 INTEGER i, j, k
 
 DO k=LBOUND(X, 3), UBOUND(X, 3)

@@ -520,7 +520,7 @@ end
 
 
 """
-    @jwait [kernelname|accelname, ][clauses...]
+    @jwait [kernelname[ accelname]]
 
 Wait to finish device operation
 
@@ -546,17 +546,14 @@ macro jwait(clauses...)
 
     nclauses = length(clauses)
 
-    # parse accelname
     if nclauses > 0 && clauses[1] isa Symbol
-        accname = string(clauses[1])
-        start_index = 2
+        name = string(clauses[1])
     else
-        accname = ""
-        start_index = 1
+        name = ""
     end
 
     push!(expr.args, :jai_wait)
-    push!(expr.args, accname)
+    push!(expr.args, name)
 
     push!(expr.args, __source__.line)
     push!(expr.args, string(__source__.file))
