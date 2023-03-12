@@ -67,20 +67,25 @@ function pack_arg(
     end
 
     if arg isa OffsetArray
-        shape = size(arg)
+        shape   = size(arg)
         offsets = arg.offsets
-        addr = Base.unsafe_convert(Ptr{Clonglong}, arg)
+        addr    = Base.unsafe_convert(Ptr{Clonglong}, arg)
+        dtype   = eltype(arg)
+
     elseif arg isa AbstractArray
-        shape = size(arg)
+        shape   = size(arg)
         offsets = Tuple(1 for _ in 1:length(arg))
-        addr = Base.unsafe_convert(Ptr{Clonglong}, arg)
+        addr    = Base.unsafe_convert(Ptr{Clonglong}, arg)
+        dtype   = eltype(arg)
+
     else
-        shape = ()
+        shape   = ()
         offsets = ()
-        addr = nothing
+        addr    = nothing
+        dtype   = typeof(arg)
     end
 
-    return (arg, name, inout, addr, shape, offsets)
+    return (arg, dtype, name, inout, addr, shape, offsets)
 end
 
 

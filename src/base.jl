@@ -18,6 +18,9 @@ struct JAI_TYPE_UPDATEFROM  <: JAI_TYPE_API end
 struct JAI_TYPE_LAUNCH      <: JAI_TYPE_API end
 struct JAI_TYPE_WAIT        <: JAI_TYPE_API end
 
+const JAI_TYPE_API_DATA = Union{JAI_TYPE_ALLOCATE, JAI_TYPE_DEALLOCATE,
+                                JAI_TYPE_UPDATETO, JAI_TYPE_UPDATEFROM}
+
 const JAI_ACCEL             = JAI_TYPE_ACCEL()
 const JAI_KERNEL            = JAI_TYPE_KERNEL()
 const JAI_ALLOCATE          = JAI_TYPE_ALLOCATE()
@@ -57,7 +60,8 @@ const JAI_ACCEL_CONFIGS = (
 
 @enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
 
-const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, String, JAI_TYPE_INOUT, Ptr{Clonglong},
+const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, DataType, String,
+                           JAI_TYPE_INOUT, Ptr{Clonglong},
                            NTuple{N, T} where {N, T<:Integer},
                            NTuple{N, T} where {N, T<:Integer}}
 const JAI_TYPE_ARGS = Vector{JAI_TYPE_ARG}

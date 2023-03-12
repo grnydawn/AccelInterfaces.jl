@@ -1,127 +1,39 @@
 # fortran.jl: implement functions for Fortran framework
-
-FORTRAN_TEMPLATE_MODULE = """
-MODULE {modname}
-USE, INTRINSIC :: ISO_C_BINDING
-
-{specpart}
-
-CONTAINS
-
-{subppart}
-
-END MODULE
-"""
-
-FORTRAN_TEMPLATE_FUNCTION = """
-INTEGER (C_INT64_T) FUNCTION {funcname}({dargs}) BIND(C, name="{funcname}")
-USE, INTRINSIC :: ISO_C_BINDING
-
-{specpart}
-
-INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
-
-{execpart}
-
-{funcname} = JAI_ERRORCODE
-
-END FUNCTION
-"""
-
-function gencode_accel(
-        frame       ::JAI_TYPE_FORTRAN,
-        prefix      ::String,
-        args        ::JAI_TYPE_ARGS
-    ) :: String
-
-    fnames = ("get_num_devices", "get_device_num", "set_device_num",
-                  "device_init", "device_fini", "wait")
-
-    specs = Vector{String}(undef, length(fnames))
-    funcs = Vector{String}(undef, length(fnames))
-
-    for (i, name) in enumerate(fnames)
-        funcname = prefix * name
-        specs[i] = "PUBLIC " * funcname
-        dargs     = "buf"
-        specpart = "INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: $(dargs)"
-        execpart = ""
-        funcs[i] = jaifmt(FORTRAN_TEMPLATE_FUNCTION, funcname=funcname, dargs=dargs,
-                          specpart=specpart, execpart=execpart)
-    end
-
-    modname  = "mod_" * prefix * "accel"
-    specpart = join(specs, "\n")
-    subppart = join(funcs, "\n\n")
-
-    return jaifmt(FORTRAN_TEMPLATE_MODULE, modname=modname, specpart=specpart,
-                  subppart=subppart)
-end
+# NOTE: (var, dtype, vname, vinout, addr, vshape, voffset) = arg
 
 
-function gencode_data(
-        frame       ::JAI_TYPE_FORTRAN,
-        apitype     ::JAI_TYPE_API,
-        prefix      ::String,
-        args        ::JAI_TYPE_ARGS
-    ) :: String
+const FORTRAN_ACCEL_FUNCNAMES = (
+        "get_num_devices",
+        "get_device_num",
+        "set_device_num",
+        "device_init",
+        "device_fini",
+        "wait"
+    )
 
-    apiname  = JAI_MAP_API_FUNCNAME[apitype]
-    funcname = prefix * apiname
+const JAI_MAP_JULIA_FORTRAN = Dict{DataType, String}(
+    Int8    => "INTEGER (C_INT8_T)",
+    Int16   => "INTEGER (C_INT16_T)",
+    Int32   => "INTEGER (C_INT32_T)",
+    Int64   => "INTEGER (C_INT64_T)",
+    Int128  => "INTEGER (C_INT128_T)",
+    UInt8   => "INTEGER (C_INT8_T)",
+    UInt16  => "INTEGER (C_INT16_T)",
+    UInt32  => "INTEGER (C_INT32_T)",
+    UInt64  => "INTEGER (C_INT64_T)",
+    UInt128 => "INTEGER (C_INT128_T)",
+    Float32 => "REAL (C_FLOAT)",
+    Float64 => "REAL (C_DOUBLE)"
+)
 
-    argnames = Vector{String}(undef, length(args))
-    typedecls   = Vector{String}(undef, length(args))
-
-    for (i, (var, vname, vinout, addr, vshape, voffset)) in enumerate(args)
-        argnames[i] = vname
-        typedecls[i] = "INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: " * vname
-    end
-
-    dargs = join(argnames, ", ")
-    funcspecpart = join(typedecls, "\n")
-    funcexecpart = ""
-
-    modsubppart = jaifmt(FORTRAN_TEMPLATE_FUNCTION, funcname=funcname,
-                      dargs=dargs, specpart=funcspecpart, execpart=funcexecpart)
-
-    modname  = "mod_" * funcname
-    modspecpart = "PUBLIC " * funcname
-
-    return jaifmt(FORTRAN_TEMPLATE_MODULE, modname=modname, specpart=modspecpart,
-                  subppart=modsubppart)
-end
+const JAI_MAP_FORTRAN_INOUT = Dict{JAI_TYPE_INOUT, String}(
+    JAI_ARG_IN      => "INTENT(IN)",
+    JAI_ARG_OUT     => "INTENT(OUT)",
+    JAI_ARG_INOUT   => "INTENT(INOUT)",
+)
 
 
-function gencode_kernel(
-        frame       ::JAI_TYPE_FORTRAN,
-        prefix      ::String,
-        args        ::JAI_TYPE_ARGS,
-        knlbody     ::String
-    ) :: String
-
-    funcname = prefix * "kernel"
-
-    argnames = Vector{String}(undef, length(args))
-    typedecls   = Vector{String}(undef, length(args))
-
-    for (i, (var, vname, vinout, addr, vshape, voffset)) in enumerate(args)
-        argnames[i] = vname
-        typedecls[i] = "INTEGER (C_INT64_T), DIMENSION(1), INTENT(OUT) :: " * vname
-    end
-
-    dargs = join(argnames, ", ")
-    funcspecpart = join(typedecls, "\n")
-    funcexecpart = ""
-
-    modsubppart = jaifmt(FORTRAN_TEMPLATE_FUNCTION, funcname=funcname,
-                      dargs=dargs, specpart=funcspecpart, execpart=funcexecpart)
-
-    modname  = "mod_" * funcname
-    modspecpart = "PUBLIC " * funcname
-
-    return jaifmt(FORTRAN_TEMPLATE_MODULE, modname=modname, specpart=modspecpart,
-                  subppart=modsubppart)
-end
+###### START of COMPILE #######
 
 function compile_code(
         frame       ::JAI_TYPE_FORTRAN,
@@ -136,65 +48,165 @@ function compile_code(
     return compile_code(code, compile, srcname, outname, workdir)
 end
 
-function genslib_accel(
-        frame       ::JAI_TYPE_FORTRAN,
-        prefix      ::String,               # prefix for libfunc names
-        workdir     ::String,
-        args        ::JAI_TYPE_ARGS
-    ) :: Ptr{Nothing}
+###### START of CODEGEN #######
 
-    code = gencode_accel(frame, prefix, args)
+function code_fortran_function(
+        prefix  ::String,
+        suffix  ::String,
+        dargs   ::String,
+        spec    ::String,
+        exec    ::String
+    ) ::String
 
-    srcname = prefix * "accel.F90"
-    outname = prefix * "accel." * dlext
-
-    slibpath = compile_code(frame, code, srcname, outname, workdir)
-
-    slib = load_sharedlib(slibpath)
-
-    # init device
-    invoke_slibfunc(frame, slib, prefix * "device_init", args)
-
-    return slib
+    return jaifmt(FORTRAN_TEMPLATE_FUNCTION, prefix=prefix, suffix=suffix,
+                          dummyargs=dargs, specpart=spec, execpart=exec)
 
 end
 
+function code_fortran_typedecl(
+        arg ::JAI_TYPE_ARG
+    ) :: String
 
-function genslib_data(
+    (var, dtype, vname, vinout, addr, vshape, voffset) = arg
+
+    type = JAI_MAP_JULIA_FORTRAN[dtype]
+    attrs = Vector{String}()
+
+    if var isa OffsetArray
+        dimlist = Vector{String}()
+        for (length, offset) in zip(vshape, voffset)
+            push!(dimlist, string(1+offset) * ":" * string(length+offset))
+        end
+        push!(attrs, "DIMENSION(" * join(dimlist, ", ") * ")")
+
+    elseif length(vshape) > 0
+        dimlist = Vector{String}()
+        for length in vshape
+            push!(dimlist, "1:" * string(length))
+        end
+        push!(attrs, "DIMENSION(" * join(dimlist, ", ") * ")")
+
+    end
+
+    push!(attrs, JAI_MAP_FORTRAN_INOUT[vinout])
+
+    return type * ", " * join(attrs, ", ") * " :: " * vname
+end
+
+
+###### START of ACCEL #######
+
+function code_module_specpart(
         frame       ::JAI_TYPE_FORTRAN,
-        apitype     ::JAI_TYPE_API,
+        apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
-        workdir     ::String,
-        args        ::JAI_TYPE_ARGS
-    ) :: Ptr{Nothing}
-
-    code = gencode_data(frame, apitype, prefix, args)
-
-    srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
-    outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
-
-    slibpath = compile_code(frame, code, srcname, outname, workdir)
-
-    return load_sharedlib(slibpath)
-
-end
-
-function genslib_kernel(
-        frame       ::JAI_TYPE_FORTRAN,
-        prefix      ::String,               # prefix for libfunc names
-        workdir     ::String,
         args        ::JAI_TYPE_ARGS,
-        knlbody     ::String
-    ) :: Ptr{Nothing}
+        data        ::NTuple{N, String} where N
+    ) :: String
 
-    code = gencode_kernel(frame, prefix, args, knlbody)
+    specs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCNAMES))
 
-    srcname = prefix * "kernel.F90"
-    outname = prefix * "kernel." * dlext
+    for (i, name) in enumerate(FORTRAN_ACCEL_FUNCNAMES)
+        funcname = prefix * name
+        specs[i] = "PUBLIC " * funcname
+    end
 
-    slibpath = compile_code(frame, code, srcname, outname, workdir)
+    return join(specs, "\n")
+end
 
-    return load_sharedlib(slibpath)
+function code_module_subppart(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_ACCEL,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    arg = args[1]
+    funcs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCNAMES))
+
+    for (i, name) in enumerate(FORTRAN_ACCEL_FUNCNAMES)
+        specpart = code_fortran_typedecl(arg)
+        funcs[i] = code_fortran_function(prefix, name, arg[3], specpart, "")
+    end
+
+    return  join(funcs, "\n\n")
 
 end
 
+###### START of DATA #######
+
+function code_module_specpart(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_API_DATA,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
+end
+
+function code_module_subppart(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_API_DATA,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    apiname  = JAI_MAP_API_FUNCNAME[apitype]
+
+    argnames = Vector{String}(undef, length(args))
+    typedecls   = Vector{String}(undef, length(args))
+
+    for (i, arg) in enumerate(args)
+        argnames[i] = arg[3]
+        typedecls[i] = code_fortran_typedecl(arg)
+    end
+
+    dargs = join(argnames, ", ")
+    specpart = join(typedecls, "\n")
+
+    return code_fortran_function(prefix, apiname, dargs, specpart, "")
+
+end
+
+###### START of LAUNCH #######
+
+function code_module_specpart(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_LAUNCH,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
+end
+
+function code_module_subppart(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_LAUNCH,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    apiname = JAI_MAP_API_FUNCNAME[apitype]
+
+    argnames = Vector{String}(undef, length(args))
+    typedecls   = Vector{String}(undef, length(args))
+
+    for (i, arg) in enumerate(args)
+        argnames[i]  = arg[3]
+        typedecls[i] = code_fortran_typedecl(arg)
+    end
+
+    dargs = join(argnames, ", ")
+    specpart = join(typedecls, "\n")
+
+    return code_fortran_function(prefix, apiname, dargs, specpart, data[1])
+end
+
+###### END of CODEGEN #######

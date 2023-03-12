@@ -103,12 +103,12 @@ function jai_data(
     try
         # build if not cached
         if !(uid in keys(ctx_accel.slibcache))
-            slib = genslib_data(ctx_accel.frame, apitype, prefix, workdir, args)
+            slib = generate_sharedlib(ctx_accel.frame, apitype, prefix, workdir, args)
             ctx_accel.slibcache[uid] = slib
         end
 
         # jai ccall and save it in cache
-        invoke_slibfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
+        invoke_sharedfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
                         prefix * JAI_MAP_API_FUNCNAME[apitype], args)
 
     catch err
@@ -195,12 +195,12 @@ function jai_launch(
     try
         # build if not cached
         if !(uid in keys(ctx_accel.slibcache))
-            slib = genslib_kernel(ctx_accel.frame, prefix, workdir, args, knlbody)
+            slib = generate_sharedlib(ctx_accel.frame, apitype, prefix, workdir, args, knlbody)
             ctx_accel.slibcache[uid] = slib
         end
 
         # jai ccall and save it in cache
-        invoke_slibfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
+        invoke_sharedfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
                         prefix * JAI_MAP_API_FUNCNAME[apitype], args)
 
     catch err
@@ -268,7 +268,7 @@ function jai_wait(
     push!(args, pack_arg(fill(Int64(-1), 1)))
 
     # jai ccall and save it in cache
-    invoke_slibfunc(ctx_accel.frame, slib,
+    invoke_sharedfunc(ctx_accel.frame, slib,
                     ctx_accel.prefix * JAI_MAP_API_FUNCNAME[JAI_WAIT], args)
 
     # jai ccall

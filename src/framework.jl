@@ -12,13 +12,27 @@ const JAI_CPP_OMPTARGET             = JAI_TYPE_CPP_OMPTARGET()
 const JAI_CUDA                      = JAI_TYPE_CUDA()
 const JAI_HIP                       = JAI_TYPE_HIP()
 
+const JAI_TYPE_FORTRAN_FRAMEWORKS   = Union{
+        JAI_TYPE_FORTRAN_OMPTARGET,
+        JAI_TYPE_FORTRAN_OPENACC,
+        JAI_TYPE_FORTRAN
+    }
+
 const JAI_FORTRAN_FRAMEWORKS        = (
         JAI_FORTRAN_OMPTARGET,
         JAI_FORTRAN_OPENACC,
         JAI_FORTRAN
     )
- 
-const JAI_CPP_FRAMEWORKS        = (
+  
+const JAI_TYPE_CPP_FRAMEWORKS       = Union{
+        JAI_TYPE_CUDA,
+        JAI_TYPE_HIP,
+        JAI_TYPE_CPP_OMPTARGET,
+        JAI_TYPE_CPP_OPENACC,
+        JAI_TYPE_CPP
+    }
+
+const JAI_CPP_FRAMEWORKS            = (
         JAI_CUDA,
         JAI_HIP,
         JAI_CPP_OMPTARGET,
@@ -52,13 +66,42 @@ const JAI_MAP_SYMBOL_FRAMEWORK = OrderedDict(
 const JAI_AVAILABLE_FRAMEWORKS      = OrderedDict{JAI_TYPE_FRAMEWORK, Ptr{Nothing}}()
 
 const JAI_MAP_API_FUNCNAME = Dict{JAI_TYPE_API, String}(
-        JAI_ALLOCATE    => "allocate",
-        JAI_DEALLOCATE  => "deallocate",
+        JAI_ACCEL       => "accel",
+        JAI_ALLOCATE    => "alloc",
+        JAI_DEALLOCATE  => "dealloc",
         JAI_UPDATETO    => "updateto",
         JAI_UPDATEFROM  => "updatefrom",
         JAI_LAUNCH      => "kernel",
         JAI_WAIT        => "wait"
     )
+
+FORTRAN_TEMPLATE_MODULE = """
+MODULE mod_{prefix}{suffix}
+USE, INTRINSIC :: ISO_C_BINDING
+
+{specpart}
+
+CONTAINS
+
+{subppart}
+
+END MODULE
+"""
+
+FORTRAN_TEMPLATE_FUNCTION = """
+INTEGER (C_INT64_T) FUNCTION {prefix}{suffix}({dummyargs}) BIND(C, name="{prefix}{suffix}")
+USE, INTRINSIC :: ISO_C_BINDING
+
+{specpart}
+
+INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
+
+{execpart}
+
+{prefix}{suffix} = JAI_ERRORCODE
+
+END FUNCTION
+"""
 
 const _ccall_cache = Dict{Int64, Function}()
 const _dummyargs = Tuple("a[$i]" for i in range(1, stop=200))
@@ -78,108 +121,6 @@ function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args::JAI_TYPE_ARGS)
 end
 
 
-"""
-    function genslib_accel(frame, prefix, workdir, args)
-
-Generate framework shared library to drive device.
-
-Using the generated shared library from this function, Jai will access and configure the device.
-
-# Arguments
-- `frame`::JAI_TYPE_FRAMEWORK: a framework type identifier
-- `prefix`::String: a prefix for an accel ctx
-- `workdir`::String: workdir
-- `args`::JAI_TYPE_ARGS: Jai arguments
-
-See also [`@jaccel`](jaccel), [`genslib_kernel`](genslib_kernel), [`genslib_data`](genslib_data)
-
-# Examples
-```julia-repl
-julia> genslib_accel(JAI_TYPE_FORTRAN, actx)
-```
-
-# Implementation
-T.B.D.
-
-"""
-
-function genslib_accel(
-        frame       ::JAI_TYPE_FRAMEWORK,
-        prefix      ::String,               # prefix for libfunc names
-        workdir     ::String,
-        args        ::JAI_TYPE_ARGS
-    ) :: Ptr{Nothing}
-
-    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_accel"))
-end
-
-
-"""
-    function genslib_data(ftype)
-
-Generate framework shared library to move data between host and device.
-
-Using the generated shared library from this function, Jai will move data between host and device
-
-# Arguments
-- `ftype`::JAI_TYPE_FRAMEWORK: a framework type identifier
-
-See also [`@jenterdata`](jenterdata), [`@jexitdata`](jexitdata), [`genslib_kernel`](genslib_kernel), [`genslib_accel`](genslib_accel)
-
-# Examples
-```julia-repl
-julia> genslib_data(JAI_TYPE_FORTRAN)
-```
-
-# Implementation
-T.B.D.
-
-"""
-function genslib_data(
-        frame       ::JAI_TYPE_FRAMEWORK,
-        apitype     ::JAI_TYPE_API,
-        prefix      ::String,
-        workdir     ::String,
-        args        ::JAI_TYPE_ARGS
-    ) :: Ptr{Nothing}
-
-    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_data"))
-
-end
-
-"""
-    function genslib_kernel(ftype)
-
-Generate framework shared library to launch a kernel on device
-
-Using the generated shared library from this function, Jai will launch a kernel on device
-
-# Arguments
-- `ftype`::JAI_TYPE_FRAMEWORK: a framework type identifier
-
-See also [`@jkernel`](jkernel), [`@jlaunch`](jlaunch), [`genslib_data`](genslib_data), [`genslib_accel`](genslib_accel)
-
-# Examples
-```julia-repl
-julia> genslib_kernel(JAI_TYPE_FRAMEWORK)
-```
-
-# Implementation
-T.B.D.
-
-"""
-function genslib_kernel(
-        frame       ::JAI_TYPE_FRAMEWORK,
-        prefix      ::String,               # prefix for libfunc names
-        workdir     ::String,
-        args        ::JAI_TYPE_ARGS,
-        knlbody     ::String
-    ) :: Ptr{Nothing}
-
-    throw(JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK(frame, "genslib_kernel"))
-
-end
-
 function check_available_frameworks(
         prefix::String,
         workdir::String
@@ -192,7 +133,7 @@ function check_available_frameworks(
     for frame in JAI_SUPPORTED_FRAMEWORKS
 
         try
-            slib = genslib_accel(frame, prefix, workdir, args)
+            slib = generate_sharedlib(frame, JAI_ACCEL, prefix, workdir, args)
 
             JAI_AVAILABLE_FRAMEWORKS[frame] = slib
 
@@ -328,7 +269,7 @@ function load_sharedlib(libpath::String)
     return dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
 end
 
-function invoke_slibfunc(
+function invoke_sharedfunc(
         frame   ::JAI_TYPE_FRAMEWORK,
         slib    ::Ptr{Nothing},
         fname   ::String,
@@ -343,4 +284,180 @@ function invoke_slibfunc(
     check_retval(jai_ccall(dtypestr, libfunc, args))
 
 end
+
+function generate_code(
+        frame       ::JAI_TYPE_FORTRAN_FRAMEWORKS,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    suffix   = JAI_MAP_API_FUNCNAME[apitype]
+    specpart = code_module_specpart(frame, apitype, prefix, args, data)
+    subppart = code_module_subppart(frame, apitype, prefix, args, data)
+
+    return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
+                  suffix=suffix, specpart=specpart, subppart=subppart)
+end
+
+
+include("fortran.jl")
+
+function generate_sharedlib(
+        frame       ::JAI_TYPE_FORTRAN,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,               # prefix for libfunc names
+        workdir     ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::Vararg{String, N} where N
+    ) :: Ptr{Nothing}
+
+    code = generate_code(frame, apitype, prefix, args, data)
+
+    srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
+    outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
+
+    slibpath = compile_code(frame, code, srcname, outname, workdir)
+
+    slib = load_sharedlib(slibpath)
+
+    # init device
+    if apitype == JAI_ACCEL
+        invoke_sharedfunc(frame, slib, prefix * "device_init", args)
+    end
+
+    return slib
+
+end
+
+#"""
+#    function genslib_accel(frame, prefix, workdir, args)
+#
+#Generate framework shared library to drive device.
+#
+#Using the generated shared library from this function, Jai will access and configure the device.
+#
+## Arguments
+#- `frame`::JAI_TYPE_FRAMEWORK: a framework type identifier
+#- `prefix`::String: a prefix for an accel ctx
+#- `workdir`::String: workdir
+#- `args`::JAI_TYPE_ARGS: Jai arguments
+#
+#See also [`@jaccel`](jaccel), [`genslib_kernel`](genslib_kernel), [`genslib_data`](genslib_data)
+#
+## Examples
+#```julia-repl
+#julia> genslib_accel(JAI_TYPE_FORTRAN, actx)
+#```
+#
+## Implementation
+#T.B.D.
+#
+#"""
+#
+#function genslib_accel(
+#        frame       ::JAI_TYPE_FORTRAN,
+#        prefix      ::String,               # prefix for libfunc names
+#        workdir     ::String,
+#        args        ::JAI_TYPE_ARGS
+#    ) :: Ptr{Nothing}
+#
+#    code = gencode_accel(frame, prefix, args)
+#
+#    srcname = prefix * "accel.F90"
+#    outname = prefix * "accel." * dlext
+#
+#    slibpath = compile_code(frame, code, srcname, outname, workdir)
+#
+#    slib = load_sharedlib(slibpath)
+#
+#    # init device
+#    invoke_sharedfunc(frame, slib, prefix * "device_init", args)
+#
+#    return slib
+#
+#end
+#
+#"""
+#    function genslib_data(ftype)
+#
+#Generate framework shared library to move data between host and device.
+#
+#Using the generated shared library from this function, Jai will move data between host and device
+#
+## Arguments
+#- `ftype`::JAI_TYPE_FRAMEWORK: a framework type identifier
+#
+#See also [`@jenterdata`](jenterdata), [`@jexitdata`](jexitdata), [`genslib_kernel`](genslib_kernel), [`genslib_accel`](genslib_accel)
+#
+## Examples
+#```julia-repl
+#julia> genslib_data(JAI_TYPE_FORTRAN)
+#```
+#
+## Implementation
+#T.B.D.
+#
+#"""
+#
+#function genslib_data(
+#        frame       ::JAI_TYPE_FORTRAN,
+#        apitype     ::JAI_TYPE_API,
+#        prefix      ::String,
+#        workdir     ::String,
+#        args        ::JAI_TYPE_ARGS
+#    ) :: Ptr{Nothing}
+#
+#    code = gencode_data(frame, apitype, prefix, args)
+#
+#    srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
+#    outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
+#
+#    slibpath = compile_code(frame, code, srcname, outname, workdir)
+#
+#    return load_sharedlib(slibpath)
+#
+#end
+#
+#"""
+#    function genslib_kernel(ftype)
+#
+#Generate framework shared library to launch a kernel on device
+#
+#Using the generated shared library from this function, Jai will launch a kernel on device
+#
+## Arguments
+#- `ftype`::JAI_TYPE_FRAMEWORK: a framework type identifier
+#
+#See also [`@jkernel`](jkernel), [`@jlaunch`](jlaunch), [`genslib_data`](genslib_data), [`genslib_accel`](genslib_accel)
+#
+## Examples
+#```julia-repl
+#julia> genslib_kernel(JAI_TYPE_FRAMEWORK)
+#```
+#
+## Implementation
+#T.B.D.
+#
+#"""
+#
+#function genslib_kernel(
+#        frame       ::JAI_TYPE_FORTRAN,
+#        prefix      ::String,               # prefix for libfunc names
+#        workdir     ::String,
+#        args        ::JAI_TYPE_ARGS,
+#        knlbody     ::String
+#    ) :: Ptr{Nothing}
+#
+#    code = gencode_kernel(frame, prefix, args, knlbody)
+#
+#    srcname = prefix * "kernel.F90"
+#    outname = prefix * "kernel." * dlext
+#
+#    slibpath = compile_code(frame, code, srcname, outname, workdir)
+#
+#    return load_sharedlib(slibpath)
+#
+#end
 
