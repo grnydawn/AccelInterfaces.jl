@@ -102,6 +102,7 @@ julia> genslib_accel(JAI_TYPE_FORTRAN, actx)
 T.B.D.
 
 """
+
 function genslib_accel(
         frame       ::JAI_TYPE_FRAMEWORK,
         prefix      ::String,               # prefix for libfunc names
@@ -160,7 +161,7 @@ See also [`@jkernel`](jkernel), [`@jlaunch`](jlaunch), [`genslib_data`](genslib_
 
 # Examples
 ```julia-repl
-julia> genslib_kernel(JAI_TYPE_FORTRAN)
+julia> genslib_kernel(JAI_TYPE_FRAMEWORK)
 ```
 
 # Implementation
@@ -168,7 +169,7 @@ T.B.D.
 
 """
 function genslib_kernel(
-        frame       ::JAI_TYPE_FORTRAN,
+        frame       ::JAI_TYPE_FRAMEWORK,
         prefix      ::String,               # prefix for libfunc names
         workdir     ::String,
         args        ::JAI_TYPE_ARGS,

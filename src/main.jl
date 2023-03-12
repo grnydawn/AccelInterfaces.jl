@@ -180,8 +180,10 @@ function jai_launch(
         filepath    ::String,
         config      ::JAI_TYPE_CONFIG
     )
-    args = pack_args(innames, input, outnames, output)
+
     apitype = JAI_LAUNCH
+
+    args = pack_args(innames, input, outnames, output)
 
     ctx_accel   = get_accel(aname)
     ctx_kernel  = get_kernel(ctx_accel, kname)
@@ -292,9 +294,11 @@ function jai_decel(
 
     # jai ccall
 
+    ctx_accel = nothing
+
     if aname == ""
         if length(JAI["ctx_accels"]) > 0
-            pop!(JAI["ctx_accels"])
+            ctx_accel = pop!(JAI["ctx_accels"])
         else
             println("WARNING: no accel context exists")
         end
@@ -309,9 +313,20 @@ function jai_decel(
         end
 
         if ctxidx isa Number
-            deleteat!(JAI["ctx_accels"], ctxidx)
+            ctx_accel = popat!(JAI["ctx_accels"], ctxidx)
         else
             println("WARNING: no accel context name: " * aname)
         end
+    end
+
+    if ctx_accel == nothing
+        println("WARNING: no accel context name: " * aname)
+    else
+
+        for ctx_kernel in ctx_accel.ctx_kernels
+            # TODO: terminate ctx_kernel
+        end
+
+        # TODO: terminate ctx_accel
     end
 end

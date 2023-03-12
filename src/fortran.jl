@@ -170,8 +170,8 @@ function genslib_data(
 
     code = gencode_data(frame, apitype, prefix, args)
 
-    srcname = prefix * "data.F90"
-    outname = prefix * "data." * dlext
+    srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
+    outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
     slibpath = compile_code(frame, code, srcname, outname, workdir)
 
