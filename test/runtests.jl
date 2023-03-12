@@ -104,7 +104,6 @@ END DO
     ANS = X .+ Y
 
     @jaccel fortacc framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
-    #@jaccel fortacc framework(cuda=fort_compile) set(debugdir=workdir, workdir=workdir)
 
     @jenterdata fortacc alloc(X, Y, Z)
 

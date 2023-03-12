@@ -122,129 +122,6 @@ function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args::JAI_TYPE_ARGS)
 end
 
 
-function check_available_frameworks(
-        config  ::JAI_TYPE_CONFIG,
-        compiler::JAI_TYPE_CONFIG,
-        prefix  ::String,
-        workdir ::String
-    ) ::Nothing
-
-    frameworks = Vector{JAI_TYPE_FRAMEWORK}()
-    for frame in keys(config)
-        if frame in JAI_SUPPORTED_FRAMEWORKS
-            push!(frameworks, frame)
-        end
-    end
-
-    if length(frameworks) == 0
-        frameworks = JAI_SUPPORTED_FRAMEWORKS
-    end
-
-    args = JAI_TYPE_ARGS()
-    push!(args, pack_arg(fill(Int64(-1), 1)))
-
-    for frame in frameworks
-
-        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
-            continue
-        end
-
-        if frame in keys(config)
-            value = config[frame]
-            if value isa String
-                compiles = [value]
-            elseif value isa Dict && "compile" in value
-                compiles = [value["compile"]]
-            else
-                compiles = get_compiles(frame, compilers)
-            end
-        else
-            compiles = get_compiles(frame, compilers)
-        end
-        
-        for compile in compiles
-            slib = generate_sharedlib(frame, JAI_ACCEL, compile, prefix, workdir, args)
-
-            if slib isa Ptr{Nothing}
-                JAI_AVAILABLE_FRAMEWORKS[frame] = (slib, compile)
-                break
-            end
-        end
-
-        #catch err
-#
-#            if typeof(err) in (JAI_ERROR_NOTIMPLEMENTED_FRAMEWORK, MethodError)
-#                JAI["debug"] && @jdebug err
-#            else
-#                rethrow()
-#            end
-#        end
-    end
-
-    if length(JAI_AVAILABLE_FRAMEWORKS) == 0
-        throw(JAI_ERROR_NOAVAILABLE_FRAMEWORK())
-    end
-
-    return nothing
-end
-
-function select_framework(
-        userframe   ::JAI_TYPE_CONFIG,
-        compiler    ::JAI_TYPE_CONFIG,
-        prefix      ::String,
-        workdir     ::String
-    ) :: Tuple{JAI_TYPE_FRAMEWORK, Ptr{Nothing}, JAI_TYPE_CONFIG_VALUE, String}
-
-    if length(JAI_AVAILABLE_FRAMEWORKS) == 0
-        check_available_frameworks(userframe, compiler, prefix, workdir)
-    end
-
-    if length(userframe) == 0
-        for (frame, value) in JAI_AVAILABLE_FRAMEWORKS
-            userframe[frame] = nothing
-        end
-    end
-
-    # TODO: how to select a frame
-    # TODO: can kernel frame type be detected beforehand
-    #
-    for (frame, config) in userframe
-        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
-            (slib, compile) = JAI_AVAILABLE_FRAMEWORKS[frame]
-            return (frame, slib, config, compile)
-        end
-    end
-
-    throw(JAI_ERROR_NOVALID_FRAMEWORK())
-end
-
-
-function select_framework(
-        ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
-        userframe   ::JAI_TYPE_CONFIG,
-        compiler    ::JAI_TYPE_CONFIG,
-        prefix      ::String,
-        workdir     ::String
-    ) :: Tuple{JAI_TYPE_FRAMEWORK, JAI_TYPE_CONFIG_VALUE, String}
-
-    # if not specified, select the same frame to Accel
-    if length(userframe) == 0
-        userframe[ctx_accel.frame] = nothing
-    end
-
-    check_available_frameworks(userframe, compiler, prefix, workdir)
-
-    for (frame, config) in userframe
-        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
-            (slib, compile) = JAI_AVAILABLE_FRAMEWORKS[frame]
-            return (frame, config, compile)
-        end
-    end
-
-    throw(JAI_ERROR_NOVALID_FRAMEWORK())
-end
-
-
 function argsdtypes(
         frame   ::JAI_TYPE_FRAMEWORK,
         args    ::JAI_TYPE_ARGS
@@ -312,6 +189,7 @@ function load_sharedlib(libpath::String)
     return dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
 end
 
+
 function invoke_sharedfunc(
         frame   ::JAI_TYPE_FRAMEWORK,
         slib    ::Ptr{Nothing},
@@ -346,6 +224,8 @@ end
 
 
 include("fortran.jl")
+include("compiler.jl")
+include("machine.jl")
 
 function generate_sharedlib(
         frame       ::JAI_TYPE_FORTRAN,
@@ -374,3 +254,118 @@ function generate_sharedlib(
     return slib
 
 end
+
+
+function check_available_frameworks(
+        config  ::JAI_TYPE_CONFIG,
+        compiler::JAI_TYPE_CONFIG,
+        prefix  ::String,
+        workdir ::String
+    ) ::Nothing
+
+    frameworks = Vector{JAI_TYPE_FRAMEWORK}()
+    for frame in keys(config)
+        if frame in JAI_SUPPORTED_FRAMEWORKS
+            push!(frameworks, frame)
+        end
+    end
+
+    if length(frameworks) == 0
+        frameworks = JAI_SUPPORTED_FRAMEWORKS
+    end
+
+    args = JAI_TYPE_ARGS()
+    push!(args, pack_arg(fill(Int64(-1), 1)))
+
+    for frame in frameworks
+
+        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
+            continue
+        end
+
+        if frame in keys(config)
+            value = config[frame]
+            if value isa String
+                compiles = [value]
+            elseif value isa Dict && "compile" in value
+                compiles = [value["compile"]]
+            else
+                compiles = get_compiles(frame, compiler)
+            end
+        else
+            compiles = get_compiles(frame, compiler)
+        end
+        
+        for compile in compiles
+            slib = generate_sharedlib(frame, JAI_ACCEL, compile, prefix, workdir, args)
+
+            if slib isa Ptr{Nothing}
+                JAI_AVAILABLE_FRAMEWORKS[frame] = (slib, compile)
+                break
+            end
+        end
+    end
+
+    if length(JAI_AVAILABLE_FRAMEWORKS) == 0
+        throw(JAI_ERROR_NOAVAILABLE_FRAMEWORK())
+    end
+
+    return nothing
+end
+
+function select_framework(
+        userframe   ::JAI_TYPE_CONFIG,
+        compiler    ::JAI_TYPE_CONFIG,
+        prefix      ::String,
+        workdir     ::String
+    ) :: Tuple{JAI_TYPE_FRAMEWORK, Ptr{Nothing}, JAI_TYPE_CONFIG_VALUE, String}
+
+    if length(JAI_AVAILABLE_FRAMEWORKS) == 0
+        check_available_frameworks(userframe, compiler, prefix, workdir)
+    end
+
+    if length(userframe) == 0
+        for (frame, value) in JAI_AVAILABLE_FRAMEWORKS
+            userframe[frame] = nothing
+        end
+    end
+
+    # TODO: how to select a frame
+    # TODO: can kernel frame type be detected beforehand
+    #
+    for (frame, config) in userframe
+        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
+            (slib, compile) = JAI_AVAILABLE_FRAMEWORKS[frame]
+            return (frame, slib, config, compile)
+        end
+    end
+
+    throw(JAI_ERROR_NOVALID_FRAMEWORK())
+end
+
+
+function select_framework(
+        ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
+        userframe   ::JAI_TYPE_CONFIG,
+        compiler    ::JAI_TYPE_CONFIG,
+        prefix      ::String,
+        workdir     ::String
+    ) :: Tuple{JAI_TYPE_FRAMEWORK, JAI_TYPE_CONFIG_VALUE, String}
+
+    # if not specified, select the same frame to Accel
+    if length(userframe) == 0
+        userframe[ctx_accel.frame] = nothing
+    end
+
+    check_available_frameworks(userframe, compiler, prefix, workdir)
+
+    for (frame, config) in userframe
+        if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
+            (slib, compile) = JAI_AVAILABLE_FRAMEWORKS[frame]
+            return (frame, config, compile)
+        end
+    end
+
+    throw(JAI_ERROR_NOVALID_FRAMEWORK())
+end
+

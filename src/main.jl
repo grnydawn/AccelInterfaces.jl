@@ -154,6 +154,7 @@ function jai_kernel(
     prefix  = join(["jai", kname, string(kid, base=16)], "_") * "_"
     workdir = ctx_accel.ctx_host.config["workdir"]
 
+    # TODO : investigate on keeping multiple shared librarys per each different compile in AVAILABLE FRAMEWORKS
     frame, fcfg, fcompile = select_framework(ctx_accel, framework, compiler, prefix, workdir)
 
     ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, frame, fcfg, fcompile, kdef)
