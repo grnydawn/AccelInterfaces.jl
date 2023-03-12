@@ -383,28 +383,59 @@ macro jkernel(kdef, clauses...)
 
     for clause in clauses[start_index:end]
 
-        if clause.args[1] in (:framework,)
+        if clause.args[1] in (:framework, :compiler)
 
             d = :(JAI_TYPE_CONFIG())
 
             for item in clause.args[2:end]
 
                 if item isa Symbol
-                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item], :nothing))
+                    key = item
+                    value = :nothing
 
                 elseif item.head == :kw
-
+                    key = item.args[1]
                     value = length(item.args)>1 ? esc(item.args[2]) : nothing
-                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item.args[1]], value))
 
                 else
-                    error("Wrong jkernel syntax: " * string(clause))
+                    error("Wrong jaccel syntax: " * string(clause))
+                end
+
+                if clause.args[1]== :framework
+                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
+                else
+                    push!(d.args, Expr(:call, :(=>), string(key), value))
                 end
             end
 
             push!(expr.args, Expr(:kw, clause.args[1], d))
 
+        else
+            error(string(clause.args[1]) * " is not supported.")
+
         end
+#
+#        if clause.args[1] in (:framework, :compiler)
+#
+#            d = :(JAI_TYPE_CONFIG())
+#
+#            for item in clause.args[2:end]
+#
+#                if item isa Symbol
+#                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item], :nothing))
+#
+#                elseif item.head == :kw
+#
+#                    value = length(item.args)>1 ? esc(item.args[2]) : nothing
+#                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item.args[1]], value))
+#
+#                else
+#                    error("Wrong jkernel syntax: " * string(clause))
+#                end
+#            end
+#
+#            push!(expr.args, Expr(:kw, clause.args[1], d))
+
     end
 
     #dump(expr)

@@ -51,14 +51,14 @@ function jai_accel(
     prefix = join(["jai", aname, string(aid, base=16)], "_") * "_"
 
     # select data framework and generate a shared library for accel
-    frame, fslib, fcfg = select_framework(framework, prefix, workdir)
+    frame, fslib, fcfg, fcompile = select_framework(framework, compiler, prefix, workdir)
 
     slibcache = Dict{UInt32, Ptr{Nothing}}()
 
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, prefix, ctx_host, cvars,
-                    device, frame, fslib, fcfg, slibcache, ctx_kernels)
+                    device, frame, fslib, fcfg, fcompile, slibcache, ctx_kernels)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -103,7 +103,8 @@ function jai_data(
     try
         # build if not cached
         if !(uid in keys(ctx_accel.slibcache))
-            slib = generate_sharedlib(ctx_accel.frame, apitype, prefix, workdir, args)
+            slib = generate_sharedlib(ctx_accel.frame, apitype, ctx_accel.fcompile,
+                                      prefix, workdir, args)
             ctx_accel.slibcache[uid] = slib
         end
 
@@ -136,7 +137,8 @@ function jai_kernel(
         aname       ::String,
         lineno      ::Integer,
         filepath    ::String;
-        framework   ::JAI_TYPE_CONFIG= JAI_CONFIG_BLANK
+        framework   ::JAI_TYPE_CONFIG= JAI_CONFIG_BLANK,
+        compiler    ::JAI_TYPE_CONFIG= JAI_CONFIG_BLANK
     )
 
     # find ctx_accel
@@ -149,9 +151,12 @@ function jai_kernel(
     # generate kernel context id
     kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath)
         
-    frame, fcfg = select_framework(ctx_accel, framework)
+    prefix  = join(["jai", kname, string(kid, base=16)], "_") * "_"
+    workdir = ctx_accel.ctx_host.config["workdir"]
 
-    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, frame, fcfg, kdef)
+    frame, fcfg, fcompile = select_framework(ctx_accel, framework, compiler, prefix, workdir)
+
+    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, frame, fcfg, fcompile, kdef)
 
     push!(ctx_accel.ctx_kernels, ctx_kernel)
 
@@ -195,7 +200,8 @@ function jai_launch(
     try
         # build if not cached
         if !(uid in keys(ctx_accel.slibcache))
-            slib = generate_sharedlib(ctx_accel.frame, apitype, prefix, workdir, args, knlbody)
+            slib = generate_sharedlib(ctx_kernel.frame, apitype, ctx_kernel.fcompile,
+                                      prefix, workdir, args, knlbody)
             ctx_accel.slibcache[uid] = slib
         end
 
@@ -235,9 +241,9 @@ function jai_wait(
         ctx_accel   = get_accel(name)
         ctx_kernel   = get_kernel(ctx_accel, name)
         if ctx_kernel != nothing
-            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame]
+            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame][1]
         else
-            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame]
+            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame][1]
         end
     else
         ctx_accel   = get_accel(name)
@@ -246,7 +252,7 @@ function jai_wait(
             for ctx_accel in JAI["ctx_accels"]
                 ctx_kernel = get_kernel(ctx_accel, name)
                 if ctx_kernel != nothing
-                    slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame]
+                    slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame][1]
                     break
                 end
             end
@@ -257,9 +263,9 @@ function jai_wait(
         else
             ctx_kernel   = get_kernel(ctx_accel, name)
             if ctx_kernel != nothing
-                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame]
+                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame][1]
             else
-                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame]
+                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame][1]
             end
         end
     end

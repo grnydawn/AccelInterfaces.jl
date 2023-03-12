@@ -73,6 +73,7 @@ const JAI_MAP_APITYPE_INOUT = Dict{JAI_TYPE_API, JAI_TYPE_INOUT}(
         JAI_UPDATEFROM  => JAI_ARG_OUT
     )
 
+
 # Jai context
 abstract type JAI_TYPE_CONTEXT end
 
@@ -128,6 +129,7 @@ struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
     kname           ::String
     frame           ::JAI_TYPE_FRAMEWORK
     fconfig         ::JAI_TYPE_CONFIG_VALUE
+    fcompile        ::String
     kdef            ::JAI_TYPE_KERNELDEF
 end
 
@@ -142,6 +144,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     frame           ::JAI_TYPE_FRAMEWORK
     fslib           ::Ptr{Nothing}
     fconfig         ::JAI_TYPE_CONFIG_VALUE
+    fcompile        ::String
     slibcache       ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
 end

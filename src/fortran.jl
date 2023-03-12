@@ -33,21 +33,6 @@ const JAI_MAP_FORTRAN_INOUT = Dict{JAI_TYPE_INOUT, String}(
 )
 
 
-###### START of COMPILE #######
-
-function compile_code(
-        frame       ::JAI_TYPE_FORTRAN,
-        code        ::String,
-        srcname     ::String,
-        outname     ::String,
-        workdir     ::String
-    )
-
-    compile = "gfortran -fPIC -shared -g -ffree-line-length-none"
-
-    return compile_code(code, compile, srcname, outname, workdir)
-end
-
 ###### START of CODEGEN #######
 
 function code_fortran_function(
