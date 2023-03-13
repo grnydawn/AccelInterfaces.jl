@@ -16,4 +16,5 @@ function get_compiles(
         compiler::JAI_TYPE_CONFIG
     )
 
+    return []
 end

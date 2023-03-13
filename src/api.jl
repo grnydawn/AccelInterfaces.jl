@@ -106,9 +106,16 @@ macro jaccel(clauses...)
     for clause in clauses[start_index:end]
 
         if clause.args[1] == :constant
-            const_vars = clause.args[2:end]
-            const_names = [string(n) for n in const_vars]
-            const_vars = (esc(c) for c in const_vars)
+            const_vars = :(())
+            const_names = :(())
+            for cvar in clause.args[2:end]
+                if cvar isa Symbol
+                    push!(const_vars.args, esc(cvar))
+                    push!(const_names.args, string(cvar))
+                else
+                    error("Wrong jaccel clause: " * string(clause.args))
+                end
+            end
 
             push!(init.args, Expr(:kw, :const_vars, const_vars))
             push!(init.args, Expr(:kw, :const_names, const_names))
@@ -414,27 +421,6 @@ macro jkernel(kdef, clauses...)
             error(string(clause.args[1]) * " is not supported.")
 
         end
-#
-#        if clause.args[1] in (:framework, :compiler)
-#
-#            d = :(JAI_TYPE_CONFIG())
-#
-#            for item in clause.args[2:end]
-#
-#                if item isa Symbol
-#                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item], :nothing))
-#
-#                elseif item.head == :kw
-#
-#                    value = length(item.args)>1 ? esc(item.args[2]) : nothing
-#                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[item.args[1]], value))
-#
-#                else
-#                    error("Wrong jkernel syntax: " * string(clause))
-#                end
-#            end
-#
-#            push!(expr.args, Expr(:kw, clause.args[1], d))
 
     end
 

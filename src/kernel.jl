@@ -137,11 +137,9 @@ function parse_kerneldef(kdef::String) :: JAI_TYPE_KERNELDEF
         for hdr in hdrs
             ksid = generate_jid(hdr, body.body)
             if hdr.frame == :kernel
-                # TODO: process kernel params: hdr.params such as enable=true
                 modname = Symbol(ksid)
                 modbody = Meta.parse(body.body)
                 env = @eval module $modname $modbody end
-                #println("WWW", names(env, all=true), getproperty(env, :X))
                 push!(ksecs, JAI_TYPE_KERNELINITSEC(ksid, hdr.argnames, env))
             else
                 push!(secs, JAI_TYPE_KERNELSEC(ksid, hdr, body))
@@ -162,12 +160,16 @@ function select_section(
     for sec in kdef.sections
         if sec.header.frame == frame
             expr = sec.header.params
-            for isec in kdef.init
-                params = @eval isec.env $expr
-                if (params isa Nothing || !haskey(params, :enable) ||
-                    getproperty(params, :enable))
-                    return sec
+            if length(kdef.init) > 0
+                for isec in kdef.init
+                    params = @eval isec.env $expr
+                    if (params isa Nothing || !haskey(params, :enable) ||
+                        getproperty(params, :enable))
+                        return sec
+                    end
                 end
+            else
+                return sec
             end
         end
     end

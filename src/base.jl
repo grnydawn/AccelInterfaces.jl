@@ -47,10 +47,10 @@ struct JAI_TYPE_CUDA                <: JAI_TYPE_FRAMEWORK end
 struct JAI_TYPE_HIP                 <: JAI_TYPE_FRAMEWORK end
 
 const JAI_TYPE_CONFIG_KEY   = Union{JAI_TYPE_FRAMEWORK, String}
-const JAI_TYPE_CONFIG_VALUE = Union{Vector{String}, String, Nothing}
+const JAI_TYPE_CONFIG_VALUE = Union{Dict{String, <:Union{String, Nothing}},
+                                    Vector{String}, String, Nothing}
 const JAI_TYPE_CONFIG       = OrderedDict{JAI_TYPE_CONFIG_KEY, Union{
     JAI_TYPE_CONFIG_VALUE, OrderedDict{String, JAI_TYPE_CONFIG_VALUE}}}
-const JAI_CONFIG_BLANK      = JAI_TYPE_CONFIG()
 
 const JAI_ACCEL_CONFIGS = (
             ("pidfilename", ".jtask.pid"),
@@ -82,7 +82,11 @@ struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
 
     config  ::OrderedDict{String, JAI_TYPE_CONFIG_VALUE}
 
-    function JAI_TYPE_CONTEXT_HOST(config::JAI_TYPE_CONFIG)
+    function JAI_TYPE_CONTEXT_HOST(config::Union{JAI_TYPE_CONFIG, Nothing})
+
+        if config isa Nothing
+            config = JAI_TYPE_CONFIG()
+        end
 
         for (name, default) in JAI_ACCEL_CONFIGS
             if !haskey(config, name)
@@ -137,7 +141,7 @@ end
 struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     aname           ::String
     aid             ::UInt32
-    prefix          ::String
+    #prefix          ::String
     ctx_host        ::JAI_TYPE_CONTEXT_HOST
     const_vars      ::OrderedDict{String, JAI_TYPE_DATA}
     devices         ::NTuple{N, Integer} where N

@@ -128,13 +128,17 @@ function fortran_test_file()
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
+    fcompile = Dict("compile" => fort_compile)
 
-    @jaccel fortfileacc framework(fortran=(compiler=fort_compile,)) constant(TEST1, TEST2
-            ) set(debugdir=workdir, workdir=workdir)
+    @jaccel framework(fortran=fcompile) constant(TEST1, TEST2) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel  "ex1.knl" mykernel fortfileacc
+    @jkernel "ex1.knl"
 
-    @jlaunch mykernel fortfileacc input(X, Y) output(Z,)
+    @jlaunch input(X, Y) output(Z,)
+
+    @jwait
+
+    @jdecel
 
     @test Z == ANS
 
@@ -211,7 +215,7 @@ function fortran_omptarget_cuda_tests()
     ismaster = true
 
     @jaccel ompcuda framework(fortran_omptarget=omp_compile, cuda=cuda_compile) constant(TEST1, TEST2
-                    ) device(1) set(master=ismaster,
+                    ) device(1, 2) set(master=ismaster,
                     debugdir=workdir, workdir=workdir)
 
 
@@ -531,7 +535,7 @@ end
 
     elseif SYSNAME == "MacOS"
         fortran_test_string()
-        #fortran_test_file()
+        fortran_test_file()
         #cpp_test_string()
 
     else

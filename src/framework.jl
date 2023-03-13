@@ -63,6 +63,17 @@ const JAI_MAP_SYMBOL_FRAMEWORK = OrderedDict(
         :cpp                => JAI_CPP
     )
 
+const JAI_MAP_FRAMEWORK_STRING = OrderedDict(
+        JAI_CUDA                => "cuda",
+        JAI_HIP                 => "hip",
+        JAI_FORTRAN_OMPTARGET   => "fortran_omptarget",
+        JAI_FORTRAN_OPENACC     => "fortran_openacc",
+        JAI_CPP_OMPTARGET       => "cpp_omptarget",
+        JAI_CPP_OPENACC         => "cpp_openacc",
+        JAI_FORTRAN             => "fortran",
+        JAI_CPP                 => "cpp"
+    )
+
 const JAI_AVAILABLE_FRAMEWORKS      = OrderedDict{JAI_TYPE_FRAMEWORK,
                                                   Tuple{Ptr{Nothing}, String}}()
 
@@ -259,7 +270,6 @@ end
 function check_available_frameworks(
         config  ::JAI_TYPE_CONFIG,
         compiler::JAI_TYPE_CONFIG,
-        prefix  ::String,
         workdir ::String
     ) ::Nothing
 
@@ -287,7 +297,7 @@ function check_available_frameworks(
             value = config[frame]
             if value isa String
                 compiles = [value]
-            elseif value isa Dict && "compile" in value
+            elseif value isa Dict && "compile" in keys(value)
                 compiles = [value["compile"]]
             else
                 compiles = get_compiles(frame, compiler)
@@ -296,6 +306,8 @@ function check_available_frameworks(
             compiles = get_compiles(frame, compiler)
         end
         
+        prefix = "jai_" * JAI_MAP_FRAMEWORK_STRING[frame] * "_accel_"
+
         for compile in compiles
             slib = generate_sharedlib(frame, JAI_ACCEL, compile, prefix, workdir, args)
 
@@ -316,12 +328,11 @@ end
 function select_framework(
         userframe   ::JAI_TYPE_CONFIG,
         compiler    ::JAI_TYPE_CONFIG,
-        prefix      ::String,
         workdir     ::String
     ) :: Tuple{JAI_TYPE_FRAMEWORK, Ptr{Nothing}, JAI_TYPE_CONFIG_VALUE, String}
 
     if length(JAI_AVAILABLE_FRAMEWORKS) == 0
-        check_available_frameworks(userframe, compiler, prefix, workdir)
+        check_available_frameworks(userframe, compiler, workdir)
     end
 
     if length(userframe) == 0
@@ -348,7 +359,6 @@ function select_framework(
         ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
         userframe   ::JAI_TYPE_CONFIG,
         compiler    ::JAI_TYPE_CONFIG,
-        prefix      ::String,
         workdir     ::String
     ) :: Tuple{JAI_TYPE_FRAMEWORK, JAI_TYPE_CONFIG_VALUE, String}
 
@@ -357,7 +367,7 @@ function select_framework(
         userframe[ctx_accel.frame] = nothing
     end
 
-    check_available_frameworks(userframe, compiler, prefix, workdir)
+    check_available_frameworks(userframe, compiler, workdir)
 
     for (frame, config) in userframe
         if frame in keys(JAI_AVAILABLE_FRAMEWORKS)
