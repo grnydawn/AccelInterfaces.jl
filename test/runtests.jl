@@ -107,7 +107,7 @@ END DO
 
     fcompile = Dict("compile" => fort_compile)
 
-    @jaccel fortacc framework(fortran=fcompile) set(debug=true, workdir=workdir)
+    @jaccel fortacc framework(fortran=fcompile) set(debug=true)
 
     @jenterdata fortacc alloc(X, Y, Z)
 

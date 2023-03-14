@@ -49,7 +49,7 @@ function generate_jid(args...) ::UInt32
 end
 
 function generate_prefix(name :: String, jid :: UInt32)
-    return "jai_" * name * string(jid, base=16)
+    return "jai_" * name * "_" * string(jid, base=16) * "_"
 end
 
 name_from_frame(x) = lowercase(split(string(typeof(x)), ".")[end][10:end])
