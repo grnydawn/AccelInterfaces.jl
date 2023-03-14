@@ -178,7 +178,7 @@ function select_section(
 end
 
 function get_knlbody(ctx::JAI_TYPE_CONTEXT_KERNEL) :: String
-    ksec = select_section(ctx.frame, ctx.kdef)
+    ksec = select_section(ctx.framework.type, ctx.kdef)
     return ksec.body.body
 end
 

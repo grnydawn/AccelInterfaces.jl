@@ -1,10 +1,7 @@
 # base.jl: include common data types and variables
 
-import Pkg.TOML
 import DataStructures.OrderedDict
 import OffsetArrays.OffsetArray
-
-const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 
 # Jai API types
 abstract type JAI_TYPE_API end
@@ -31,8 +28,8 @@ const JAI_LAUNCH            = JAI_TYPE_LAUNCH()
 const JAI_WAIT              = JAI_TYPE_WAIT()
 
 # Jai data types
-const JAI_TYPE_DATA  =   Union{T, String, NTuple{N, T}, AbstractArray{T, N}
-                             } where {N, T<:Number}
+const JAI_TYPE_DATA = Union{Nothing, String, T, NTuple{N, T}, AbstractArray{T, N}
+                           } where {N, T<:Number}
 
 # Jai Framework types
 abstract type JAI_TYPE_FRAMEWORK end
@@ -47,16 +44,10 @@ struct JAI_TYPE_CUDA                <: JAI_TYPE_FRAMEWORK end
 struct JAI_TYPE_HIP                 <: JAI_TYPE_FRAMEWORK end
 
 const JAI_TYPE_CONFIG_KEY   = Union{JAI_TYPE_FRAMEWORK, String}
-const JAI_TYPE_CONFIG_VALUE = Union{Dict{String, <:Union{String, Nothing}},
-                                    Vector{String}, String, Nothing}
+const JAI_TYPE_CONFIG_VALUE = Union{Dict{String, <:JAI_TYPE_DATA}, Dict{Symbol, Any},
+                                    <:JAI_TYPE_DATA}
 const JAI_TYPE_CONFIG       = OrderedDict{JAI_TYPE_CONFIG_KEY, Union{
     JAI_TYPE_CONFIG_VALUE, OrderedDict{String, JAI_TYPE_CONFIG_VALUE}}}
-
-const JAI_ACCEL_CONFIGS = (
-            ("pidfilename", ".jtask.pid"),
-            ("debugdir",    nothing),
-            ("workdir",     joinpath(pwd(), ".jworkdir"))
-           ) :: NTuple{N, Tuple{JAI_TYPE_CONFIG_KEY, JAI_TYPE_CONFIG_VALUE}} where N
 
 @enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
 
@@ -77,25 +68,12 @@ const JAI_MAP_APITYPE_INOUT = Dict{JAI_TYPE_API, JAI_TYPE_INOUT}(
 # Jai context
 abstract type JAI_TYPE_CONTEXT end
 
-# Jai host context
-struct JAI_TYPE_CONTEXT_HOST <: JAI_TYPE_CONTEXT
-
-    config  ::OrderedDict{String, JAI_TYPE_CONFIG_VALUE}
-
-    function JAI_TYPE_CONTEXT_HOST(config::Union{JAI_TYPE_CONFIG, Nothing})
-
-        if config isa Nothing
-            config = JAI_TYPE_CONFIG()
-        end
-
-        for (name, default) in JAI_ACCEL_CONFIGS
-            if !haskey(config, name)
-                config[name] = default
-            end
-        end
-
-        new(config)
-    end
+# Jai framework context
+struct JAI_TYPE_CONTEXT_FRAMEWORK <: JAI_TYPE_CONTEXT
+    type    ::JAI_TYPE_FRAMEWORK
+    slib    ::Ptr{Nothing}
+    compile ::String
+    prefix  ::String
 end
 
 struct JAI_TYPE_KERNELHDR
@@ -131,9 +109,8 @@ end
 struct JAI_TYPE_CONTEXT_KERNEL <: JAI_TYPE_CONTEXT
     kid             ::UInt32
     kname           ::String
-    frame           ::JAI_TYPE_FRAMEWORK
-    fconfig         ::JAI_TYPE_CONFIG_VALUE
-    fcompile        ::String
+    framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
+    launch_slibs    ::Dict{UInt32, Ptr{Nothing}}
     kdef            ::JAI_TYPE_KERNELDEF
 end
 
@@ -141,23 +118,10 @@ end
 struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     aname           ::String
     aid             ::UInt32
-    #prefix          ::String
-    ctx_host        ::JAI_TYPE_CONTEXT_HOST
     const_vars      ::OrderedDict{String, JAI_TYPE_DATA}
     devices         ::NTuple{N, Integer} where N
-    frame           ::JAI_TYPE_FRAMEWORK
-    fslib           ::Ptr{Nothing}
-    fconfig         ::JAI_TYPE_CONFIG_VALUE
-    fcompile        ::String
-    slibcache       ::Dict{UInt32, Ptr{Nothing}}
+    framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
+    data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
 end
-
-
-# Jai global configurations
-JAI = Dict{String, Union{Vector{JAI_TYPE_CONTEXT_ACCEL}, String, Number, Bool, Nothing}}(
-        "debug"         => true,
-        "ctx_accels"    => Vector{JAI_TYPE_CONTEXT_ACCEL}()
-    )
-
 

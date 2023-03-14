@@ -48,6 +48,10 @@ function generate_jid(args...) ::UInt32
     return ret
 end
 
+function generate_prefix(name :: String, jid :: UInt32)
+    return "jai_" * name * string(jid, base=16)
+end
+
 name_from_frame(x) = lowercase(split(string(typeof(x)), ".")[end][10:end])
 
 # TODO: customize for Jai
@@ -159,8 +163,11 @@ function get_context(
         name         ::String
     ) :: Union{JAI_TYPE_CONTEXT_ACCEL, Nothing}
 
-    if name == "" && length(contexts) == 1
-        return contexts[1]
+    if name == ""
+        if length(contexts) == 1
+            return contexts[1]
+        end
+        return nothing
     end
 
     for ctx in contexts
@@ -179,8 +186,11 @@ function get_context(
         name         ::String
     ) :: Union{JAI_TYPE_CONTEXT_KERNEL, Nothing}
 
-    if name == "" && length(contexts) == 1
-        return contexts[1]
+    if name == ""
+        if length(contexts) == 1
+            return contexts[1]
+        end
+        return nothing
     end
 
     for ctx in contexts

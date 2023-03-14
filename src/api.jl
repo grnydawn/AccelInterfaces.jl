@@ -1,5 +1,67 @@
 # api.jl: implement user interface macros
 #
+
+
+function _jaccel_clause_handler(output, clauses)
+
+    # parse clauses
+    for clause in clauses
+
+        if clause.args[1] == :constant
+            const_vars = :(())
+            const_names = :(())
+            for cvar in clause.args[2:end]
+                if cvar isa Symbol
+                    push!(const_vars.args, esc(cvar))
+                    push!(const_names.args, string(cvar))
+                else
+                    error("Wrong jaccel clause: " * string(clause.args))
+                end
+            end
+
+            push!(output.args, Expr(:kw, :const_vars, const_vars))
+            push!(output.args, Expr(:kw, :const_names, const_names))
+
+        elseif clause.args[1] in (:device,)
+            t = (esc(d) for d in clause.args[2:end])
+
+            push!(output.args, Expr(:kw, clause.args[1], t))
+
+        elseif clause.args[1] in (:framework, :set, :compiler, :machine)
+
+            d = :(JAI_TYPE_CONFIG())
+
+            for item in clause.args[2:end]
+
+                if item isa Symbol
+                    key = item
+                    value = :nothing
+
+                elseif item.head == :kw
+                    key = item.args[1]
+                    value = length(item.args)>1 ? esc(item.args[2]) : nothing
+
+                else
+                    error("Wrong syntax: " * string(clause))
+                end
+
+                if clause.args[1]== :framework
+                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
+                else
+                    push!(d.args, Expr(:call, :(=>), string(key), value))
+                end
+            end
+
+            push!(output.args, Expr(:kw, clause.args[1], d))
+
+        else
+            error(string(clause.args[1]) * " is not supported.")
+
+        end
+    end
+end
+
+
 """
     @jconfig [clauses...]
 
@@ -8,7 +70,7 @@ Configure Jai environment
 
 # Arguments
 
-See also [`@jaecel`](@jaecel), [`@jdecel`](@jdecel)
+See also [`@jaccel`](@jaccel), [`@jdecel`](@jdecel)
 
 # Examples
 ```julia-repl
@@ -21,39 +83,20 @@ T.B.D.
 """
 macro jconfig(clauses...)
 
-    block = Expr(:block)
+    config = Expr(:call)
+    push!(config.args, :jai_config)
+    
+    # handle jconfig specific inputs
 
-#Symbol test
-#Expr
-#  head: Symbol call
-#  args: Array{Any}((2,))
-#    1: Symbol compiler
-#    2: Expr
-#      head: Symbol kw
-#      args: Array{Any}((2,))
-#        1: Symbol gnu
-#        2: String "testeg"
+    # collect jaccel inputs
+    _jaccel_clause_handler(config, clauses)
 
-    # parse clauses
-    for clause in clauses
+    # exclude jaccel specific inputs
 
-        #dump(clause)
+    push!(config.args, __source__.line)
+    push!(config.args, string(__source__.file))
 
-        if clause isa Symbol
-            expr = :(JAI[$(string(clause))] = nothing)
-
-        elseif clause.head == :call
-            #named tuple = 
-            for item in clause.args
-            end
-
-            expr = :(JAI[$(string(clause.args[1]))] = named)
-        end
-
-        push!(block.args, expr)
-    end
-
-    return(block)
+    return(config)
 end
 
 
@@ -102,61 +145,7 @@ macro jaccel(clauses...)
         start_index = 1
     end
 
-    # parse clauses
-    for clause in clauses[start_index:end]
-
-        if clause.args[1] == :constant
-            const_vars = :(())
-            const_names = :(())
-            for cvar in clause.args[2:end]
-                if cvar isa Symbol
-                    push!(const_vars.args, esc(cvar))
-                    push!(const_names.args, string(cvar))
-                else
-                    error("Wrong jaccel clause: " * string(clause.args))
-                end
-            end
-
-            push!(init.args, Expr(:kw, :const_vars, const_vars))
-            push!(init.args, Expr(:kw, :const_names, const_names))
-
-        elseif clause.args[1] in (:device,)
-            t = (esc(d) for d in clause.args[2:end])
-
-            push!(init.args, Expr(:kw, clause.args[1], t))
-
-        elseif clause.args[1] in (:framework, :set, :compiler, :machine)
-
-            d = :(JAI_TYPE_CONFIG())
-
-            for item in clause.args[2:end]
-
-                if item isa Symbol
-                    key = item
-                    value = :nothing
-
-                elseif item.head == :kw
-                    key = item.args[1]
-                    value = length(item.args)>1 ? esc(item.args[2]) : nothing
-
-                else
-                    error("Wrong jaccel syntax: " * string(clause))
-                end
-
-                if clause.args[1]== :framework
-                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
-                else
-                    push!(d.args, Expr(:call, :(=>), string(key), value))
-                end
-            end
-
-            push!(init.args, Expr(:kw, clause.args[1], d))
-
-        else
-            error(string(clause.args[1]) * " is not supported.")
-
-        end
-    end
+    _jaccel_clause_handler(init, clauses[start_index:end])
 
     push!(init.args, __source__.line)
     push!(init.args, string(__source__.file))

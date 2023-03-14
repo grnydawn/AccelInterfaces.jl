@@ -1,5 +1,32 @@
 # main.jl: processes user requests from Jai API
 
+"""
+    function jai_config
+
+Process @jconfig macro
+
+# Implementation
+  * handles application-wide configurations
+
+"""
+
+function jai_config(
+        lineno      ::Integer,
+        filepath    ::String;
+        const_vars  ::Union{NTuple{N, JAI_TYPE_DATA} where N, Nothing}= nothing,
+        const_names ::Union{NTuple{N, String} where N, Nothing}       = nothing,
+        device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
+        framework   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        machine     ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        compiler    ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        set         ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
+    )
+
+    # allow multiple calls anywhere
+    println("CCCCC", lineno, filepath)
+
+end
+
 
 """
     function jai_accel
@@ -18,61 +45,44 @@ function jai_accel(
         aname       ::String,
         lineno      ::Integer,
         filepath    ::String;
-        const_vars  ::NTuple{N, JAI_TYPE_DATA} where N  = (),
-        const_names ::NTuple{N, String} where N         = (),
-        device      ::NTuple{N, Integer} where N        = (),
-        framework   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
-        machine     ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
-        compiler    ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
-        set         ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
+        const_vars  ::Union{NTuple{N, JAI_TYPE_DATA} where N, Nothing}= nothing,
+        const_names ::Union{NTuple{N, String} where N, Nothing}       = nothing,
+        device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
+        framework   ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
+        machine     ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
+        compiler    ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
+        set         ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing
     )
 
-    if framework == nothing
-        framework = JAI_TYPE_CONFIG()
+    if set != nothing
+        set_config(set)
     end
 
-    if machine == nothing
-        machine = JAI_TYPE_CONFIG()
+    if device == nothing
+        device = ()
     end
 
-    if compiler == nothing
-        compiler = JAI_TYPE_CONFIG()
-    end
-
-    if set == nothing
-        set = JAI_TYPE_CONFIG()
-    end
-
-    ctx_host = JAI_TYPE_CONTEXT_HOST(set)
-
+    # TODO: apply accel specific config in set
+    #
     aid = generate_jid(aname, Sys.STDLIB, JAI_VERSION, lineno, filepath)
 
     if aname == ""
         aname = string(aid, base = 16)
     end
 
-    # create directories
-    workdir = ctx_host.config["workdir"]
-
-    if !isdir(workdir)
-        pidfile = joinpath(ctx_host.config["pidfilename"])
-        locked_filetask(pidfile, workdir, mkdir, workdir)
-    end
-
     cvars = OrderedDict{String, JAI_TYPE_DATA}()
-    for (name, var) in zip(const_names, const_vars)
-        cvars[name] = var
+    if const_names != nothing && const_vars != nothing
+        for (name, var) in zip(const_names, const_vars)
+            cvars[name] = var
+        end
     end
 
-    # select data framework and generate a shared library for accel
-    frame, fslib, fcfg, fcompile = select_framework(framework, compiler, workdir)
-
-    slibcache = Dict{UInt32, Ptr{Nothing}}()
-
+    ctx_frame = select_framework(framework, compiler)
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
+    data_slibs = Dict{UInt32, Ptr{Nothing}}()
 
-    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, ctx_host, cvars,
-                    device, frame, fslib, fcfg, fcompile, slibcache, ctx_kernels)
+    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, cvars, device, ctx_frame,
+                                       data_slibs, ctx_kernels)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -110,26 +120,27 @@ function jai_data(
     end
 
     ctx_accel   = get_accel(aname)
-    uid         = generate_jid(ctx_accel.aid, apitype, lineno, filepath)
-    prefix      = join(["jai", aname, string(uid, base=16)], "_") * "_"
-    workdir     = ctx_accel.ctx_host.config["workdir"]
+    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
+    frame       = ctx_accel.framework.type
 
     try
-        # build if not cached
-        if !(uid in keys(ctx_accel.slibcache))
-            slib = generate_sharedlib(ctx_accel.frame, apitype, ctx_accel.fcompile,
-                                      prefix, workdir, args)
-            ctx_accel.slibcache[uid] = slib
+        if uid in keys(ctx_accel.data_slibs)
+            slib = ctx_accel.data_slibs[uid]
+        else
+            prefix  = generate_prefix(aname, uid)
+            compile = ctx_accel.framework.compile
+
+            slib    = generate_sharedlib(frame, apitype, prefix, compile, args)
+
+            ctx_accel.data_slibs[uid] = slib
         end
 
-        # jai ccall and save it in cache
-        invoke_sharedfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
-                        prefix * JAI_MAP_API_FUNCNAME[apitype], args)
+        funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
+        invoke_sharedfunc(frame, slib, funcname, args)
 
     catch err
         rethrow()
     end
-
 end
 
 
@@ -155,14 +166,6 @@ function jai_kernel(
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing}= nothing
     )
 
-    if framework == nothing
-        framework = JAI_TYPE_CONFIG()
-    end
-
-    if compiler == nothing
-        compiler = JAI_TYPE_CONFIG()
-    end
-
     # find ctx_accel
     ctx_accel = get_accel(aname)
 
@@ -172,16 +175,15 @@ function jai_kernel(
 
     # generate kernel context id
     kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath)
-        
-    #prefix  = join(["jai", kname, string(kid, base=16)], "_") * "_"
-    workdir = ctx_accel.ctx_host.config["workdir"]
+ 
+    if kname == ""
+        kname = string(kid, base = 16)
+    end
+       
+    ctx_frame   = select_framework(ctx_accel, framework, compiler)
+    launch_slibs= Dict{UInt32, Ptr{Nothing}}()
 
-    # TODO : investigate on keeping multiple shared librarys per each different compile in AVAILABLE FRAMEWORKS
-    framework = JAI_TYPE_CONFIG()
-
-    frame, fcfg, fcompile = select_framework(ctx_accel, framework, compiler, workdir)
-
-    ctx_kernel = JAI_TYPE_CONTEXT_KERNEL(kid, kname, frame, fcfg, fcompile, kdef)
+    ctx_kernel  = JAI_TYPE_CONTEXT_KERNEL(kid, kname, ctx_frame, launch_slibs, kdef)
 
     push!(ctx_accel.ctx_kernels, ctx_kernel)
 
@@ -211,36 +213,51 @@ function jai_launch(
         config      ::JAI_TYPE_CONFIG
     )
 
-    apitype = JAI_LAUNCH
-
-    args = pack_args(innames, input, outnames, output)
-
+    apitype     = JAI_LAUNCH
+    args        = pack_args(innames, input, outnames, output)
     ctx_accel   = get_accel(aname)
     ctx_kernel  = get_kernel(ctx_accel, kname)
     uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
-    prefix      = join(["jai", kname, string(uid, base=16)], "_") * "_"
-    workdir     = ctx_accel.ctx_host.config["workdir"]
-    knlbody     = get_knlbody(ctx_kernel)
+    frame       = ctx_kernel.framework.type
 
     try
-        # build if not cached
-        if !(uid in keys(ctx_accel.slibcache))
-            slib = generate_sharedlib(ctx_kernel.frame, apitype, ctx_kernel.fcompile,
-                                      prefix, workdir, args, knlbody)
-            ctx_accel.slibcache[uid] = slib
+        if uid in keys(ctx_kernel.launch_slibs)
+            slib    = ctx_kernel.launch_slibs[uid]
+        else
+            prefix  = generate_prefix(kname, uid)
+            compile = ctx_kernel.framework.compile
+            knlbody = get_knlbody(ctx_kernel)
+
+            slib    = generate_sharedlib(frame, apitype, prefix, compile, args, knlbody)
+
+            ctx_kernel.launch_slibs[uid] = slib
         end
 
-        # jai ccall and save it in cache
-        invoke_sharedfunc(ctx_accel.frame, ctx_accel.slibcache[uid],
-                        prefix * JAI_MAP_API_FUNCNAME[apitype], args)
+        funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
+        invoke_sharedfunc(frame, slib, funcname, args)
 
     catch err
         rethrow()
     end
 
+end
+
+
+function _jwait(framework::JAI_TYPE_CONTEXT_FRAMEWORK)
+
+    args = JAI_TYPE_ARGS()
+    push!(args, pack_arg(fill(Int64(-1), 1)))
+
+    frame   = framework.type
+    slib    = framework.slib
+
+    funcname = framework.prefix * JAI_MAP_API_FUNCNAME[JAI_WAIT]
+    invoke_sharedfunc(frame, slib, funcname, args)
 
 end
 
+_jwait(ctx::JAI_TYPE_CONTEXT_ACCEL)  = _jwait(ctx.framework)
+_jwait(ctx::JAI_TYPE_CONTEXT_KERNEL) = _jwait(ctx.framework)
 
 """
     function jai_wait
@@ -263,14 +280,8 @@ function jai_wait(
 
     if name == ""
         ctx_accel   = get_accel(name)
-        ctx_kernel   = get_kernel(ctx_accel, name)
-        if ctx_kernel != nothing
-            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame][1]
-            ctx = ctx_kernel
-        else
-            slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame][1]
-            ctx = ctx_accel
-        end
+        ctx_kernel  = get_kernel(ctx_accel, name)
+        ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
     else
         ctx_accel   = get_accel(name)
         if ctx_accel == nothing
@@ -278,36 +289,19 @@ function jai_wait(
             for ctx_accel in JAI["ctx_accels"]
                 ctx_kernel = get_kernel(ctx_accel, name)
                 if ctx_kernel != nothing
-                    slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame][1]
-                    ctx = ctx_kernel
+                    _jwait(ctx_kernel)
                     break
                 end
             end
 
-            if slib == nothing
+            if ctx_kernel == nothing
                 error("Can not find shared library for jwait with " * name)
             end
         else
             ctx_kernel   = get_kernel(ctx_accel, name)
-            if ctx_kernel != nothing
-                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_kernel.frame][1]
-                ctx = ctx_kernel
-            else
-                slib = JAI_AVAILABLE_FRAMEWORKS[ctx_accel.frame][1]
-                ctx = ctx_accel
-            end
+            ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
         end
     end
-
-    args = JAI_TYPE_ARGS()
-    push!(args, pack_arg(fill(Int64(-1), 1)))
-
-    prefix = "jai_" * JAI_MAP_FRAMEWORK_STRING[ctx.frame] * "_accel_"
-
-    # jai ccall and save it in cache
-    invoke_sharedfunc(ctx.frame, slib, prefix * JAI_MAP_API_FUNCNAME[JAI_WAIT], args)
-
-    # jai ccall
 
 end
 
@@ -330,41 +324,5 @@ function jai_decel(
 
     # jai ccall
 
-    ctx_accel = nothing
-
-    if aname == ""
-        if length(JAI["ctx_accels"]) > 0
-            ctx_accel = pop!(JAI["ctx_accels"])
-        else
-            println("WARNING: no accel context exists")
-        end
-    else
-        ctxidx = nothing
-
-        for idx in range(1, length(JAI["ctx_accels"]))
-            if JAI["ctx_accels"][idx].aname == aname
-                ctxidx = idx
-                break
-            end
-        end
-
-        if ctxidx isa Number
-            ctx_accel = popat!(JAI["ctx_accels"], ctxidx)
-        else
-            println("WARNING: no accel context name: " * aname)
-        end
-    end
-
-    if ctx_accel == nothing
-        println("WARNING: no accel context name: " * aname)
-    else
-
-        for ctx_kernel in ctx_accel.ctx_kernels
-            # TODO: terminate ctx_kernel
-        end
-
-        # call fini
-        #prefix = "jai_" * JAI_MAP_FRAMEWORK_STRING[ctx.frame] * "_accel_"
-        # TODO: terminate ctx_accel
-    end
+    delete_accel!(aname)
 end

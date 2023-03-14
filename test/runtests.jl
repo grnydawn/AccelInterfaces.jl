@@ -80,6 +80,8 @@ const TEST2 = (1, 2)
 const SHAPE = (2,3,4)
 #const SHAPE = (200,30,40)
 
+@jconfig constant(TEST1, TEST2)
+
 function fortran_test_string()
 
 
@@ -103,7 +105,9 @@ END DO
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel fortacc framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
+    fcompile = Dict("compile" => fort_compile)
+
+    @jaccel fortacc framework(fortran=fcompile) set(debugdir=workdir, workdir=workdir)
 
     @jenterdata fortacc alloc(X, Y, Z)
 
@@ -128,15 +132,17 @@ function fortran_test_file()
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    fcompile = Dict("compile" => fort_compile)
+    gfortran = Dict(
+                    :path => "gfortran",
+                    :opt_shared=>"-fPIC -shared",
+                    :opt_frameworks=>((:fortran, ""),)
+                    )
 
-    @jaccel framework(fortran=fcompile) constant(TEST1, TEST2) set(debugdir=workdir, workdir=workdir)
+    @jaccel compiler(gfortran=gfortran)
 
     @jkernel "ex1.knl"
 
-    @jlaunch input(X, Y) output(Z,)
-
-    @jwait
+    @jlaunch input(X, Y) output(Z)
 
     @jdecel
 
