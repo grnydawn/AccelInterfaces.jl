@@ -80,7 +80,7 @@ const TEST2 = (1, 2)
 const SHAPE = (2,3,4)
 #const SHAPE = (200,30,40)
 
-@jconfig constant(TEST1, TEST2)
+@jconfig constant(TEST1, TEST2) set(workdir=workdir)
 
 function fortran_test_string()
 
@@ -107,7 +107,7 @@ END DO
 
     fcompile = Dict("compile" => fort_compile)
 
-    @jaccel fortacc framework(fortran=fcompile) set(debugdir=workdir, workdir=workdir)
+    @jaccel fortacc framework(fortran=fcompile) set(debug=true, workdir=workdir)
 
     @jenterdata fortacc alloc(X, Y, Z)
 

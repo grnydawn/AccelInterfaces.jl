@@ -1,57 +1,89 @@
 # config.jl: include Jai configuration data and utilities
 
 import Pkg.TOML
-const JAI_VERSION = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
+
+const DEBUG         = true
+const JAI_VERSION   = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
+const _USER_CONFIGS = Tuple(string(n) for n in fieldnames(JAI_TYPE_CONFIG_USER))
 
 # Jai global configurations
 const JAI = Dict(
-        "debug"         => true,
+        "config"        => JAI_TYPE_CONFIG_USER(
+                                DEBUG,
+                                joinpath(pwd(), ".jworkdir")
+                           ),
         "pidfile"       => ".jtask.pid",
-        "workdir"       => joinpath(pwd(), ".jworkdir"),
-        "debugdir"      => nothing,
         "ctx_accels"    => Vector{JAI_TYPE_CONTEXT_ACCEL}(),
         "frameworks"    => OrderedDict{JAI_TYPE_FRAMEWORK,
                                        OrderedDict{UInt32, JAI_TYPE_CONTEXT_FRAMEWORK}}()
     )
 
-const _USER_CONFIGS = (
-        "debug", "workdir", "debugdir"
-    )
+function _find_accel(aname::String) ::Union{<:Integer, Nothing}
+    ctxidx = nothing
 
-function get_config(name::String)
-
-    if name == "workdir"
-        if !isdir(JAI["workdir"])
-            workdir = JAI["workdir"]
-            locked_filetask(JAI["pidfile"], workdir, mkdir, workdir)
+    for idx in range(1, length(JAI["ctx_accels"]))
+        if JAI["ctx_accels"][idx].aname == aname
+            ctxidx = idx
+            break
         end
-        ret = JAI["workdir"]
+    end
+
+    return ctxidx
+end
+
+function get_config(CFG::JAI_TYPE_CONFIG_USER, name::String)
+
+    if name in _USER_CONFIGS
+        ret = getproperty(CFG, Symbol(name))
+
+        if name == "workdir"
+            if ret isa String && !isdir(ret)
+                locked_filetask(JAI["pidfile"], ret, mkdir, ret)
+            end
+        end
     else
-        ret = JAI[name]
+        ret = CFG[name]
     end
 
     return ret
-
 end
 
-function set_config(name::String, value)
+function set_config(CFG::JAI_TYPE_CONFIG_USER, name::String, value)
     if name in _USER_CONFIGS
-        JAI[name] = value
+        type = fieldtype(JAI_TYPE_CONFIG_USER, Symbol(name))
+        setproperty!(CFG, Symbol(name), value::type)
     else
         println(name * " can not be changed.")
     end
 end
 
 
-function set_config(configs::JAI_TYPE_CONFIG)
+function set_config(CFG::JAI_TYPE_CONFIG_USER, configs::JAI_TYPE_CONFIG)
     for (key, value) in configs
         if key in _USER_CONFIGS
-            set_config(key, value)
+            set_config(CFG, key, value)
         end
     end
 end
 
-function get_sharedlib(jid::UInt32)
+get_config(name::String)                = get_config(JAI["config"], name)
+set_config(configs::JAI_TYPE_CONFIG)    = set_config(JAI["config"], configs)
+set_config(name::String, value::Any)    = get_config(JAI["config"], name, value)
+
+function get_config(ctx::JAI_TYPE_CONTEXT_ACCEL, name::String)
+    value = get_config(ctx.config, name)
+    if value == nothing
+        value = get_config(name)
+    end
+    return value
+end
+
+function set_config(ctx::JAI_TYPE_CONTEXT_ACCEL, name::String, value::Any)
+    get_config(ctx.config, name, value)
+end
+
+function set_config(ctx::JAI_TYPE_CONTEXT_ACCEL, configs::JAI_TYPE_CONFIG)
+    set_config(ctx.config, configs)
 end
 
 function delete_accel!(aname)
@@ -65,16 +97,9 @@ function delete_accel!(aname)
             println("WARNING: no accel context exists")
         end
     else
-        ctxidx = nothing
+        ctxidx = _find_accel(aname)
 
-        for idx in range(1, length(JAI["ctx_accels"]))
-            if JAI["ctx_accels"][idx].aname == aname
-                ctxidx = idx
-                break
-            end
-        end
-
-        if ctxidx isa Number
+        if ctxidx isa Integer
             ctx_accel = popat!(JAI["ctx_accels"], ctxidx)
         else
             println("WARNING: no accel context name: " * aname)

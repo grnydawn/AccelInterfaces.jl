@@ -21,9 +21,10 @@ function jai_config(
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
         set         ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     )
-
-    # allow multiple calls anywhere
-    println("CCCCC", lineno, filepath)
+ 
+    if set != nothing
+        set_config(set)
+    end
 
 end
 
@@ -54,8 +55,10 @@ function jai_accel(
         set         ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing
     )
 
+    config = JAI_TYPE_CONFIG_USER()
+    
     if set != nothing
-        set_config(set)
+        set_config(config, set)
     end
 
     if device == nothing
@@ -77,12 +80,17 @@ function jai_accel(
         end
     end
 
-    ctx_frame = select_framework(framework, compiler)
-    ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
-    data_slibs = Dict{UInt32, Ptr{Nothing}}()
+    workdir     = config.workdir
+    if workdir == nothing
+        workdir = get_config("workdir")
+    end
 
-    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, cvars, device, ctx_frame,
-                                       data_slibs, ctx_kernels)
+    ctx_frame   = select_framework(framework, compiler, workdir)
+    ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
+    data_slibs  = Dict{UInt32, Ptr{Nothing}}()
+
+    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
+                                       ctx_frame, data_slibs, ctx_kernels)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -129,8 +137,9 @@ function jai_data(
         else
             prefix  = generate_prefix(aname, uid)
             compile = ctx_accel.framework.compile
+            workdir = get_config(ctx_accel, "workdir")
 
-            slib    = generate_sharedlib(frame, apitype, prefix, compile, args)
+            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args)
 
             ctx_accel.data_slibs[uid] = slib
         end
@@ -180,7 +189,8 @@ function jai_kernel(
         kname = string(kid, base = 16)
     end
        
-    ctx_frame   = select_framework(ctx_accel, framework, compiler)
+    workdir     = get_config(ctx_accel, "workdir")
+    ctx_frame   = select_framework(ctx_accel, framework, compiler, workdir)
     launch_slibs= Dict{UInt32, Ptr{Nothing}}()
 
     ctx_kernel  = JAI_TYPE_CONTEXT_KERNEL(kid, kname, ctx_frame, launch_slibs, kdef)
@@ -226,9 +236,10 @@ function jai_launch(
         else
             prefix  = generate_prefix(kname, uid)
             compile = ctx_kernel.framework.compile
+            workdir = get_config(ctx_accel, "workdir")
             knlbody = get_knlbody(ctx_kernel)
 
-            slib    = generate_sharedlib(frame, apitype, prefix, compile, args, knlbody)
+            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args, knlbody)
 
             ctx_kernel.launch_slibs[uid] = slib
         end

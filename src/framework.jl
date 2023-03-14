@@ -166,12 +166,13 @@ function compile_code(
         compile ::String,
         srcname ::String,
         outname ::String,
+        workdir ::String
     ) ::String
 
     curdir = pwd()
 
     try
-        workdir = get_config("workdir")
+        #workdir = get_config("workdir")
 
         cd(workdir)
 
@@ -241,6 +242,7 @@ function generate_sharedlib(
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         compile     ::String,
+        workdir     ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::Vararg{String, N} where N
     ) :: Ptr{Nothing}
@@ -250,7 +252,7 @@ function generate_sharedlib(
     srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
-    slibpath = compile_code(frame, code, compile, srcname, outname)
+    slibpath = compile_code(frame, code, compile, srcname, outname, workdir)
 
     slib = load_sharedlib(slibpath)
 
@@ -267,7 +269,8 @@ end
 function get_framework(
         frametype   ::JAI_TYPE_FRAMEWORK,
         fconfig     ::JAI_TYPE_CONFIG_VALUE,
-        compiler    ::JAI_TYPE_CONFIG
+        compiler    ::JAI_TYPE_CONFIG,
+        workdir     ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
  
     if fconfig isa String
@@ -280,7 +283,7 @@ function get_framework(
         end
     end
 
-    frameworks = get_config("frameworks")
+    frameworks = JAI["frameworks"]
 
     if frametype in keys(frameworks)
         frames = frameworks[frametype]
@@ -312,7 +315,7 @@ function get_framework(
 
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
-        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile, args)
+        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile, workdir, args)
 
         if slib isa Ptr{Nothing}
             if frametype in keys(frameworks)
@@ -337,6 +340,7 @@ end
 function select_framework(
         userframe   ::Union{JAI_TYPE_CONFIG, Nothing},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
+        workdir     ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
 
     if userframe == nothing
@@ -354,7 +358,7 @@ function select_framework(
     end
 
     for (frame, config) in userframe
-        framework = get_framework(frame, config, compiler)
+        framework = get_framework(frame, config, compiler, workdir)
         if framework isa JAI_TYPE_CONTEXT_FRAMEWORK
             return framework
         end
@@ -369,6 +373,7 @@ function select_framework(
         ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
         userframe   ::Union{JAI_TYPE_CONFIG, Nothing},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
+        workdir     ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
 
     if userframe == nothing
@@ -379,5 +384,5 @@ function select_framework(
         userframe[ctx_accel.framework.type] = nothing
     end
 
-    return select_framework(userframe, compiler)
+    return select_framework(userframe, compiler, workdir)
 end

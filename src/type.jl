@@ -49,6 +49,21 @@ const JAI_TYPE_CONFIG_VALUE = Union{Dict{String, <:JAI_TYPE_DATA}, Dict{Symbol, 
 const JAI_TYPE_CONFIG       = OrderedDict{JAI_TYPE_CONFIG_KEY, Union{
     JAI_TYPE_CONFIG_VALUE, OrderedDict{String, JAI_TYPE_CONFIG_VALUE}}}
 
+# Jai user config type
+mutable struct JAI_TYPE_CONFIG_USER
+    debug   ::Union{Bool, Nothing}
+    workdir ::Union{String, Nothing}
+
+    function JAI_TYPE_CONFIG_USER()
+        new(nothing, nothing)
+    end
+
+    function JAI_TYPE_CONFIG_USER(debug, workdir)
+        new(debug, workdir)
+    end
+
+end
+
 @enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
 
 const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, DataType, String,
@@ -118,6 +133,7 @@ end
 struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     aname           ::String
     aid             ::UInt32
+    config          ::JAI_TYPE_CONFIG_USER
     const_vars      ::OrderedDict{String, JAI_TYPE_DATA}
     devices         ::NTuple{N, Integer} where N
     framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
