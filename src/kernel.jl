@@ -139,7 +139,7 @@ function parse_kerneldef(kdef::String) :: JAI_TYPE_KERNELDEF
             if hdr.frame == :kernel
                 modname = Symbol(ksid)
                 modbody = Meta.parse(body.body)
-                env = @eval module $modname $modbody end
+                env = @eval baremodule $modname $modbody end
                 push!(ksecs, JAI_TYPE_KERNELINITSEC(ksid, hdr.argnames, env))
             else
                 push!(secs, JAI_TYPE_KERNELSEC(ksid, hdr, body))
