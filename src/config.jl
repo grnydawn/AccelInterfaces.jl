@@ -21,7 +21,7 @@ const JAI = Dict(
 function _find_accel(aname::String) ::Union{<:Integer, Nothing}
     ctxidx = nothing
 
-    for idx in range(1, length(JAI["ctx_accels"]))
+    for idx in 1:length(JAI["ctx_accels"])
         if JAI["ctx_accels"][idx].aname == aname
             ctxidx = idx
             break

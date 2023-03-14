@@ -17,13 +17,17 @@ function parse_header(hdr::Union{String, SubString}) :: Vector{JAI_TYPE_KERNELHD
 
     hdr = hdr[2:end-1]
 
-    colons = findall(':', hdr)
+    colons = Vector{Int32}()
+    for r in findall(":", hdr)
+        push!(colons, r.start)
+    end
+
     if length(colons) == 0
         push!(colons, length(hdr)+1)
     end
 
     for colon in colons
-        expr = Meta.parse(hdr[1:colon-1])
+        expr = Meta.parse(hdr[1:(colon-1)])
 
         if expr isa Symbol
             push!(frames, get(JAI_MAP_SYMBOL_FRAMEWORK, expr, expr))

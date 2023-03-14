@@ -206,9 +206,11 @@ end
 get_accel(arg)          = get_context(JAI["ctx_accels"], arg)
 get_kernel(actx, arg)   = get_context(actx.ctx_kernels, arg)
 
-function jaifmt(_T; kwargs...)
+function jaifmt(_T::String; kwargs...)
 
-    T = replace(_T, "{{"=>"__JAI1__", "}}"=>"__JAI2__")
+    #T = replace(_T, "{{"=>"__JAI1__", "}}"=>"__JAI2__")
+    _T = replace(_T, "{{" => "__JAI1__")
+    T  = replace(_T, "}}" => "__JAI2__")
 
     names = Dict{Symbol, Any}(kwargs)
     output = Vector{String}()
@@ -252,5 +254,5 @@ function jaifmt(_T; kwargs...)
         end
     end
 
-    return replace(join(output), "__JAI1__"=>"{", "__JAI2__"=>"}")
+    return replace(replace(join(output), "__JAI1__"=>"{"), "__JAI2__"=>"}")
 end
