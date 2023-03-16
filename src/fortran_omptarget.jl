@@ -50,7 +50,7 @@ function code_module_subppart(
             execpart =  "CALL omp_set_device_num($dnames(1))\n"
 
         elseif fname == "wait"
-            execpart =  "!$omp taskwait"
+            execpart =  "!\$omp taskwait"
 
         end
 
