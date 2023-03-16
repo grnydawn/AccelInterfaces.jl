@@ -22,12 +22,14 @@ function _jaccel_clause_handler(output, clauses)
             push!(output.args, Expr(:kw, :const_vars, const_vars))
             push!(output.args, Expr(:kw, :const_names, const_names))
 
-        elseif clause.args[1] in (:device,)
-            t = (esc(d) for d in clause.args[2:end])
-
+        elseif clause.args[1] in (:device, :machine)
+            t = :(())
+            for d in clause.args[2:end]
+                push!(t.args, esc(d))
+            end
             push!(output.args, Expr(:kw, clause.args[1], t))
 
-        elseif clause.args[1] in (:framework, :set, :compiler, :machine)
+        elseif clause.args[1] in (:framework, :set, :compiler)
 
             d = :(JAI_TYPE_CONFIG())
 

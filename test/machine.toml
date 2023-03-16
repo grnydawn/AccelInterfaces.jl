@@ -1,0 +1,15 @@
+[crusher]
+desc = "TEST"
+regex_bindir = ".*crusher.*"
+module = [
+			"load rocm",
+			"load craype-accel-amd-gfx90a"
+		]
+
+[perlmutter]
+desc = "TEST"
+regex_env = "NERSC_HOST:perlmutter"
+module = [
+			"load rocm",
+			"load craype-accel-amd-gfx90a"
+		]

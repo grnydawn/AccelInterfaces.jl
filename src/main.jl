@@ -16,14 +16,20 @@ function jai_config(
         const_vars  ::Union{NTuple{N, JAI_TYPE_DATA} where N, Nothing}= nothing,
         const_names ::Union{NTuple{N, String} where N, Nothing}       = nothing,
         device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
+        machine     ::Union{NTuple{N, String} where N, Nothing}       = nothing,
         framework   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
-        machine     ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
         set         ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     )
  
     if set != nothing
         set_config(set)
+    end
+ 
+    if machine != nothing
+        for m in machine
+            set_machine(m)
+        end
     end
 
 end

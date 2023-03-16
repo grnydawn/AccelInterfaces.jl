@@ -2,13 +2,13 @@
 # NOTE: (var, dtype, vname, vinout, addr, vshape, voffset) = arg
 
 
-const FORTRAN_ACCEL_FUNCNAMES = (
-        "get_num_devices",
-        "get_device_num",
-        "set_device_num",
-        "device_init",
-        "device_fini",
-        "wait"
+const FORTRAN_ACCEL_FUNCTIONS = (
+        ("get_num_devices", JAI_ARG_OUT),
+        ("get_device_num",  JAI_ARG_OUT),
+        ("set_device_num",  JAI_ARG_IN ),
+        ("device_init",     JAI_ARG_IN ),
+        ("device_fini",     JAI_ARG_IN ),
+        ("wait",            JAI_ARG_IN )
     )
 
 const JAI_MAP_JULIA_FORTRAN = Dict{DataType, String}(
@@ -49,10 +49,15 @@ function code_fortran_function(
 end
 
 function code_fortran_typedecl(
-        arg ::JAI_TYPE_ARG
+        arg ::JAI_TYPE_ARG;
+        inout :: Union{JAI_TYPE_INOUT, Nothing} = nothing
     ) :: String
 
     (var, dtype, vname, vinout, addr, vshape, voffset) = arg
+
+    if inout isa JAI_TYPE_INOUT
+        vinout = inout
+    end
 
     type = JAI_MAP_JULIA_FORTRAN[dtype]
     attrs = Vector{String}()
@@ -89,9 +94,9 @@ function code_module_specpart(
         data        ::NTuple{N, String} where N
     ) :: String
 
-    specs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCNAMES))
+    specs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCTIONS))
 
-    for (i, name) in enumerate(FORTRAN_ACCEL_FUNCNAMES)
+    for (i, (name, inout)) in enumerate(FORTRAN_ACCEL_FUNCTIONS)
         funcname = prefix * name
         specs[i] = "PUBLIC " * funcname
     end
@@ -108,10 +113,10 @@ function code_module_subppart(
     ) :: String
 
     arg = args[1]
-    funcs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCNAMES))
+    funcs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCTIONS))
 
-    for (i, name) in enumerate(FORTRAN_ACCEL_FUNCNAMES)
-        specpart = code_fortran_typedecl(arg)
+    for (i, (name, inout)) in enumerate(FORTRAN_ACCEL_FUNCTIONS)
+        specpart = code_fortran_typedecl(arg, inout=inout)
         funcs[i] = code_fortran_function(prefix, name, arg[3], specpart, "")
     end
 

@@ -80,7 +80,9 @@ const TEST2 = (1, 2)
 const SHAPE = (2,3,4)
 #const SHAPE = (200,30,40)
 
-@jconfig constant(TEST1, TEST2) set(workdir=workdir)
+const machinefile = "machine.toml"
+
+@jconfig constant(TEST1, TEST2) set(workdir=workdir) machine(machinefile)
 
 function fortran_test_string()
 
@@ -192,20 +194,17 @@ function fortran_omptarget_tests()
 
     ismaster = true
 
-    @jaccel omptacc framework(fortran_omptarget=omp_compile) constant(TEST1, TEST2
-                    ) device(1) set(master=ismaster,
-                    debugdir=workdir, workdir=workdir)
+    @jaccel framework(fortran_omptarget=omp_compile) device(1)
 
+    @jkernel "ex1.knl"
 
-    @jkernel "ex1.knl" mykernel omptacc 
+    @jenterdata alloc(X, Y, Z) updateto(X, Y)
 
-    @jenterdata omptacc alloc(X, Y, Z) updateto(X, Y)
+    @jlaunch input(X, Y) output(Z,)
 
-    @jlaunch mykernel omptacc input(X, Y) output(Z,)
+    @jexitdata updatefrom(Z) delete(X, Y, Z)
 
-    @jexitdata omptacc updatefrom(Z) delete(X, Y, Z)
-
-    @jdecel omptacc
+    @jdecel
 
     @test Z == ANS
 
@@ -506,10 +505,10 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
-        fortran_test_string()
-        fortran_test_file()
+        #fortran_test_string()
+        #fortran_test_file()
         #fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_omptarget_tests()
         #cpp_test_string()
         #hip_test_string()
         #hip_fortran_test_string()

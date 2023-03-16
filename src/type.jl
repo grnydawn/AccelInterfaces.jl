@@ -141,3 +141,11 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
 end
 
+struct JAI_TYPE_OS
+    name    ::String
+end
+
+struct JAI_TYPE_MACHINE
+    desc    ::String
+    modules ::Vector{String}
+end

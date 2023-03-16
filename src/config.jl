@@ -15,7 +15,8 @@ const JAI = Dict(
         "pidfile"       => ".jtask.pid",
         "ctx_accels"    => Vector{JAI_TYPE_CONTEXT_ACCEL}(),
         "frameworks"    => OrderedDict{JAI_TYPE_FRAMEWORK,
-                                       OrderedDict{UInt32, JAI_TYPE_CONTEXT_FRAMEWORK}}()
+                                       OrderedDict{UInt32, JAI_TYPE_CONTEXT_FRAMEWORK}}(),
+        "machine"       => nothing
     )
 
 function _find_accel(aname::String) ::Union{<:Integer, Nothing}

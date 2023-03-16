@@ -2,6 +2,7 @@
 
 import InteractiveUtils.subtypes
 import Libdl: dlopen, RTLD_LAZY, RTLD_DEEPBIND, RTLD_GLOBAL, dlext, dlsym, dlclose
+import IOCapture
 
 const JAI_FORTRAN                   = JAI_TYPE_FORTRAN()
 const JAI_FORTRAN_OPENACC           = JAI_TYPE_FORTRAN_OPENACC()
@@ -172,14 +173,17 @@ function compile_code(
     curdir = pwd()
 
     try
-        #workdir = get_config("workdir")
-
         cd(workdir)
 
         open(srcname, "w") do io
             write(io, code)
         end
 
+        #cmds = get_prerun()
+        #cmd = Cmd(`bash -c "module load rocm; module load craype-accel-amd-gfx90a; $(compile) -o $(outname) $(srcname); env"`, dir=workdir)
+        #c = IOCapture.capture() do
+        #    run(cmd3)
+        #end
         output = read(run(`$(split(compile)) -o $outname $srcname`), String)
 
         isfile(outname) || throw(JAI_ERROR_COMPILE_NOSHAREDLIB(compile, output))
@@ -234,11 +238,12 @@ end
 
 
 include("fortran.jl")
+include("fortran_omptarget.jl")
 include("compiler.jl")
 include("machine.jl")
 
 function generate_sharedlib(
-        frame       ::JAI_TYPE_FORTRAN,
+        frame       ::JAI_TYPE_FRAMEWORK,
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         compile     ::String,
