@@ -323,6 +323,7 @@ end
 include("fortran.jl")
 include("fortran_omptarget.jl")
 include("cpp.jl")
+include("cpp_omptarget.jl")
 include("compiler.jl")
 include("machine.jl")
 

@@ -31,7 +31,7 @@ function code_cpp_header(
 end
 
 function code_c_header(
-        frame       ::JAI_TYPE_CPP,
+        frame       ::Union{JAI_TYPE_CPP, JAI_TYPE_CPP_OMPTARGET},
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
