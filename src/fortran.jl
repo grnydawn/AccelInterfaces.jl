@@ -2,15 +2,6 @@
 # NOTE: (var, dtype, vname, vinout, addr, vshape, voffset) = arg
 
 
-const FORTRAN_ACCEL_FUNCTIONS = (
-        ("get_num_devices", JAI_ARG_OUT),
-        ("get_device_num",  JAI_ARG_OUT),
-        ("set_device_num",  JAI_ARG_IN ),
-        ("device_init",     JAI_ARG_IN ),
-        ("device_fini",     JAI_ARG_IN ),
-        ("wait",            JAI_ARG_IN )
-    )
-
 const JAI_MAP_JULIA_FORTRAN = Dict{DataType, String}(
     Int8    => "INTEGER (C_INT8_T)",
     Int16   => "INTEGER (C_INT16_T)",
@@ -94,9 +85,9 @@ function code_module_specpart(
         data        ::NTuple{N, String} where N
     ) :: String
 
-    specs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCTIONS))
+    specs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
 
-    for (i, (name, inout)) in enumerate(FORTRAN_ACCEL_FUNCTIONS)
+    for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
         funcname = prefix * name
         specs[i] = "PUBLIC " * funcname
     end
@@ -113,9 +104,9 @@ function code_module_subppart(
     ) :: String
 
     arg = args[1]
-    funcs = Vector{String}(undef, length(FORTRAN_ACCEL_FUNCTIONS))
+    funcs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
 
-    for (i, (name, inout)) in enumerate(FORTRAN_ACCEL_FUNCTIONS)
+    for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
         specpart = code_fortran_typedecl(arg, inout=inout)
         funcs[i] = code_fortran_function(prefix, name, arg[3], specpart, "")
     end
@@ -127,7 +118,7 @@ end
 ###### START of DATA #######
 
 function code_module_specpart(
-        frame       ::JAI_TYPE_FORTRAN,
+        frame       ::Union{JAI_TYPE_FORTRAN, JAI_TYPE_FORTRAN_OMPTARGET},
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
@@ -165,7 +156,7 @@ end
 ###### START of LAUNCH #######
 
 function code_module_specpart(
-        frame       ::JAI_TYPE_FORTRAN,
+        frame       ::Union{JAI_TYPE_FORTRAN,JAI_TYPE_FORTRAN_OMPTARGET},
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,

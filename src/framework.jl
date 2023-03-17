@@ -85,6 +85,15 @@ const JAI_MAP_API_FUNCNAME = Dict{JAI_TYPE_API, String}(
         JAI_WAIT        => "wait"
     )
 
+const JAI_ACCEL_FUNCTIONS = (
+        ("get_num_devices", JAI_ARG_OUT),
+        ("get_device_num",  JAI_ARG_OUT),
+        ("set_device_num",  JAI_ARG_IN ),
+        ("device_init",     JAI_ARG_IN ),
+        ("device_fini",     JAI_ARG_IN ),
+        ("wait",            JAI_ARG_IN )
+    )
+
 FORTRAN_TEMPLATE_MODULE = """
 MODULE mod_{prefix}{suffix}
 USE, INTRINSIC :: ISO_C_BINDING
@@ -111,6 +120,34 @@ INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 {prefix}{suffix} = JAI_ERRORCODE
 
 END FUNCTION
+"""
+
+CPP_TEMPLATE_HEADER = """
+#include <stdint.h>
+
+{jmacros}
+
+{cpp_header}
+
+extern "C" {{
+
+{c_header}
+
+{functions}
+
+}}
+"""
+
+C_TEMPLATE_FUNCTION = """
+int64_t {name}({dargs}) {{
+
+int64_t jai_res;
+jai_res = 0;
+
+{body}
+
+return jai_res;
+}}
 """
 
 const _ccall_cache = Dict{Int64, Function}()
@@ -220,6 +257,35 @@ function invoke_sharedfunc(
 
 end
 
+function code_cpp_macros(
+        frame       ::JAI_TYPE_CPP_FRAMEWORKS,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    )
+
+    macros = Vector{String}()
+
+    push!(macros, "#define JLENGTH(varname, dim) $(prefix)length_##varname##dim")
+    push!(macros, "#define JSIZE(varname) $(prefix)size_##varname")
+
+    for (var, dtype, vname, vinout, addr, vshape, voffset) in args
+        if var isa AbstractArray
+            accum = 1
+            for (idx, len) in enumerate(reverse(vshape))
+                push!(macros, "uint32_t "*prefix*"length_"*vname*string(idx-1)*
+                        " = "*string(len)*";")
+                accum *= len
+            end
+            push!(macros, "uint32_t "*prefix*"size_"*vname*" = "*string(accum)*";" )
+        end
+    end
+
+    return join(macros, "\n")
+
+end
+
 function generate_code(
         frame       ::JAI_TYPE_FORTRAN_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
@@ -236,9 +302,27 @@ function generate_code(
                   suffix=suffix, specpart=specpart, subppart=subppart)
 end
 
+function generate_code(
+        frame       ::JAI_TYPE_CPP_FRAMEWORKS,
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    jmacros = code_cpp_macros(frame, apitype, prefix, args, data)
+    cpp_hdr = code_cpp_header(frame, apitype, prefix, args, data)
+    c_hdr   = code_c_header(frame, apitype, prefix, args, data)
+    funcs   = code_c_functions(frame, apitype, prefix, args, data)
+
+    return jaifmt(CPP_TEMPLATE_HEADER, jmacros=jmacros, cpp_header=cpp_hdr,
+                  c_header=c_hdr, functions=funcs)
+end
+
 
 include("fortran.jl")
 include("fortran_omptarget.jl")
+include("cpp.jl")
 include("compiler.jl")
 include("machine.jl")
 
@@ -254,7 +338,15 @@ function generate_sharedlib(
 
     code = generate_code(frame, apitype, prefix, args, data)
 
-    srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
+    if frame isa JAI_TYPE_FORTRAN_FRAMEWORKS
+        srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
+
+    elseif frame isa JAI_TYPE_CPP_FRAMEWORKS
+        srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".cpp"
+    else
+        error("Unknown language: " * string(frame))
+    end
+
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
     slibpath = compile_code(frame, code, compile, srcname, outname, workdir)

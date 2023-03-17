@@ -63,17 +63,6 @@ end
 
 ###### START of DATA #######
 
-function code_module_specpart(
-        frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
-        apitype     ::JAI_TYPE_API_DATA,
-        prefix      ::String,
-        args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
-    ) :: String
-
-    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
-end
-
 function code_module_subppart(
         frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
         apitype     ::JAI_TYPE_API_DATA,
@@ -84,33 +73,47 @@ function code_module_subppart(
 
     apiname  = JAI_MAP_API_FUNCNAME[apitype]
 
-    argnames = Vector{String}(undef, length(args))
+    argnames    = Vector{String}(undef, length(args))
     typedecls   = Vector{String}(undef, length(args))
+    directs     = Vector{String}(undef, length(args))
 
     for (i, arg) in enumerate(args)
-        argnames[i] = arg[3]
+        argname     = arg[3]
+        argnames[i] = argname
         typedecls[i] = code_fortran_typedecl(arg)
+
+        if apitype == JAI_ALLOCATE
+            # TODO: check if the following is preferred
+            #device = omp_get_default_device();
+            #ptr = omp_target_alloc(bytes,device);
+            #omp_target_associate_ptr(host_ptr,device_ptr,bytes,0device_offset,0device_num);
+
+            directs[i] = "!\$omp target enter data map(alloc: $(argname))"
+
+        elseif apitype == JAI_DEALLOCATE
+            directs[i] = "!\$omp target exit data map(delete: $(argname))"
+
+        elseif apitype == JAI_UPDATETO
+            directs[i] = "!\$omp target update to($(argname))"
+
+        elseif apitype == JAI_UPDATEFROM
+            directs[i] = "!\$omp target update from($(argname))"
+
+        else
+            error("Unknown api type: " * string(apitype))
+
+        end
     end
 
-    dargs = join(argnames, ", ")
-    specpart = join(typedecls, "\n")
+    dargs       = join(argnames, ", ")
+    specpart    = join(typedecls, "\n")
+    execpart    = join(directs, "\n")
 
-    return code_fortran_function(prefix, apiname, dargs, specpart, "")
+    return code_fortran_function(prefix, apiname, dargs, specpart, execpart)
 
 end
 
 ###### START of LAUNCH #######
-
-function code_module_specpart(
-        frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
-        apitype     ::JAI_TYPE_LAUNCH,
-        prefix      ::String,
-        args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
-    ) :: String
-
-    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
-end
 
 function code_module_subppart(
         frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
