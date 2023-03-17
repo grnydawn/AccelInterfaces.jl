@@ -115,40 +115,15 @@ end
 
 ###### START of DATA #######
 
-function code_module_specpart(
-        frame       ::Union{JAI_TYPE_FORTRAN, JAI_TYPE_FORTRAN_OMPTARGET},
+function code_c_functions(
+        frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
     ) :: String
 
-    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
-end
-
-function code_module_subppart(
-        frame       ::JAI_TYPE_FORTRAN,
-        apitype     ::JAI_TYPE_API_DATA,
-        prefix      ::String,
-        args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
-    ) :: String
-
-    apiname  = JAI_MAP_API_FUNCNAME[apitype]
-
-    argnames = Vector{String}(undef, length(args))
-    typedecls   = Vector{String}(undef, length(args))
-
-    for (i, arg) in enumerate(args)
-        argnames[i] = arg[3]
-        typedecls[i] = code_fortran_typedecl(arg)
-    end
-
-    dargs = join(argnames, ", ")
-    specpart = join(typedecls, "\n")
-
-    return code_fortran_function(prefix, apiname, dargs, specpart, "")
-
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, "")
 end
 
 ###### START of LAUNCH #######
@@ -162,7 +137,6 @@ function code_c_functions(
     ) :: String
 
     return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, data[1])
-
 end
 
 

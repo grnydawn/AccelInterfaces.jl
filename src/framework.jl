@@ -274,11 +274,11 @@ function code_cpp_macros(
         if var isa AbstractArray
             accum = 1
             for (idx, len) in enumerate(reverse(vshape))
-                push!(macros, "uint32_t "*prefix*"length_"*vname*string(idx-1)*
+                push!(macros, "uint64_t "*prefix*"length_"*vname*string(idx-1)*
                         " = "*string(len)*";")
                 accum *= len
             end
-            push!(macros, "uint32_t "*prefix*"size_"*vname*" = "*string(accum)*";" )
+            push!(macros, "uint64_t "*prefix*"size_"*vname*" = "*string(accum)*";" )
         end
     end
 
