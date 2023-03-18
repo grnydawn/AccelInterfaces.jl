@@ -12,7 +12,8 @@ const JAI_MAP_JULIA_C = Dict{DataType, String}(
     UInt32  => "uint32_t",
     UInt64  => "uint64_t",
     Float32 => "float",
-    Float64 => "double"
+    Float64 => "double",
+    PtrAny  => "void *"
 )
 
 
@@ -21,9 +22,10 @@ const JAI_MAP_JULIA_C = Dict{DataType, String}(
 function code_cpp_header(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
     return ""
@@ -33,9 +35,10 @@ end
 function code_c_header(
         frame       ::Union{JAI_TYPE_CPP, JAI_TYPE_CPP_OMPTARGET},
         apitype     ::JAI_TYPE_API,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
     return ""
@@ -98,9 +101,10 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_ACCEL,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     funcs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
@@ -118,9 +122,10 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API_DATA,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, "")
@@ -131,9 +136,10 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_LAUNCH,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, data[1])

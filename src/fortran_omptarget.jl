@@ -9,7 +9,7 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     fortran_spec = code_module_specpart(JAI_FORTRAN, apitype, prefix, args, data)
@@ -22,7 +22,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     # One dummy argument
@@ -68,7 +68,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     apiname  = JAI_MAP_API_FUNCNAME[apitype]
@@ -120,7 +120,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     apiname = JAI_MAP_API_FUNCNAME[apitype]

@@ -93,10 +93,11 @@ function jai_accel(
 
     ctx_frame   = select_framework(framework, compiler, workdir)
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
-    data_slibs  = Dict{UInt32, Ptr{Nothing}}()
+    data_slibs  = Dict{UInt32, PtrAny}()
+    device_memmap = Dict{PtrAny, PtrAny}()
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
-                                       ctx_frame, data_slibs, ctx_kernels)
+                           ctx_frame, data_slibs, ctx_kernels, device_memmap)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -127,11 +128,15 @@ function jai_data(
     )
 
     # pack data and variable names
+    ptrs = Vector{PtrAny}(undef, length(data))
     args = JAI_TYPE_ARGS()
-    for (n, d) in zip(names, data)
+    for (i, (n, d)) in enumerate(zip(names, data))
         arg = pack_arg(d, name=n, inout=JAI_MAP_APITYPE_INOUT[apitype])
         push!(args, arg)
+        ptrs[i] = pointer(d)
     end
+
+    push!(args, pack_arg(ptrs))
 
     ctx_accel   = get_accel(aname)
     uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
@@ -145,13 +150,27 @@ function jai_data(
             compile = ctx_accel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
 
-            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args)
+            # TODO : add interop frames
+            interop_frames  = Vector{JAI_TYPE_FRAMEWORK}()
+            for kctx in ctx_accel.ctx_kernels
+                push!(interop_frames, kctx.framework.type)
+            end
+
+            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args,
+                                        interop_frames=interop_frames)
 
             ctx_accel.data_slibs[uid] = slib
         end
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
         invoke_sharedfunc(frame, slib, funcname, args)
+
+        if apitype == JAI_ALLOCATE
+            save_device_pointers(ctx_accel.device_memmap, args[1:end-1], args[end][1])
+
+        elseif apitype == JAI_DEALLOCATE
+            delete_device_pointers(ctx_accel.device_memmap, args[1:end-1])
+        end
 
     catch err
         rethrow()
@@ -197,7 +216,7 @@ function jai_kernel(
        
     workdir     = get_config(ctx_accel, "workdir")
     ctx_frame   = select_framework(ctx_accel, framework, compiler, workdir)
-    launch_slibs= Dict{UInt32, Ptr{Nothing}}()
+    launch_slibs= Dict{UInt32, PtrAny}()
 
     ctx_kernel  = JAI_TYPE_CONTEXT_KERNEL(kid, kname, ctx_frame, launch_slibs, kdef)
 
@@ -236,6 +255,8 @@ function jai_launch(
     uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
     frame       = ctx_kernel.framework.type
 
+   init_device_pointers(ctx_accel.device_memmap, args)
+ 
     try
         if uid in keys(ctx_kernel.launch_slibs)
             slib    = ctx_kernel.launch_slibs[uid]
@@ -244,8 +265,14 @@ function jai_launch(
             compile = ctx_kernel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
             knlbody = get_knlbody(ctx_kernel)
+            config = "config" in keys(config) ? config["config"] : nothing
+            
+            # TODO interop frames
+            interop_frames  = Vector{JAI_TYPE_FRAMEWORK}()
+            push!(interop_frames, ctx_accel.framework.type)
 
-            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args, knlbody)
+            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args,
+                            knlbody, launch_config= config, interop_frames=interop_frames)
 
             ctx_kernel.launch_slibs[uid] = slib
         end

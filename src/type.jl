@@ -28,8 +28,9 @@ const JAI_LAUNCH            = JAI_TYPE_LAUNCH()
 const JAI_WAIT              = JAI_TYPE_WAIT()
 
 # Jai data types
-const JAI_TYPE_DATA = Union{Nothing, String, T, NTuple{N, T}, AbstractArray{T, N}
-                           } where {N, T<:Number}
+const PtrAny    = Ptr{Any}
+const JAI_TYPE_DATA = Union{Nothing, String, T, NTuple{N, T}, AbstractArray{T, N},
+                            AbstractArray{PtrAny, N}} where {N, T<:Number}
 
 # Jai Framework types
 abstract type JAI_TYPE_FRAMEWORK end
@@ -44,10 +45,19 @@ struct JAI_TYPE_CUDA                <: JAI_TYPE_FRAMEWORK end
 struct JAI_TYPE_HIP                 <: JAI_TYPE_FRAMEWORK end
 
 const JAI_TYPE_CONFIG_KEY   = Union{JAI_TYPE_FRAMEWORK, String}
-const JAI_TYPE_CONFIG_VALUE = Union{Dict{String, <:JAI_TYPE_DATA}, Dict{Symbol, Any},
-                                    <:JAI_TYPE_DATA}
-const JAI_TYPE_CONFIG       = OrderedDict{JAI_TYPE_CONFIG_KEY, Union{
-    JAI_TYPE_CONFIG_VALUE, OrderedDict{String, JAI_TYPE_CONFIG_VALUE}}}
+const JAI_TYPE_CONFIG_VALUE = Union{
+                                    <:JAI_TYPE_DATA,
+                                    Dict{Symbol, Any},
+                                    Dict{String, <:JAI_TYPE_DATA},
+                                    NTuple{N, Union{JAI_TYPE_DATA, NTuple{N, JAI_TYPE_DATA}}} where N
+                                }
+const JAI_TYPE_CONFIG       = OrderedDict{
+                                    JAI_TYPE_CONFIG_KEY,
+                                    Union{
+                                        JAI_TYPE_CONFIG_VALUE,
+                                        OrderedDict{String, JAI_TYPE_CONFIG_VALUE}
+                                    }
+                                }
 
 # Jai user config type
 mutable struct JAI_TYPE_CONFIG_USER
@@ -139,6 +149,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
+    device_memmap   ::Dict{PtrAny, PtrAny}
 end
 
 struct JAI_TYPE_OS

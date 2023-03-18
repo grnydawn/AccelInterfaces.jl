@@ -30,23 +30,28 @@ INTEGER i, j, k
 !$omp target
 !$omp teams distribute num_teams(UBOUND(X, 3)-LBOUND(X, 3)+1)
 DO k=LBOUND(X, 3), UBOUND(X, 3)
-    !$omp parallel do simd collapse(2) private(j, i)
+    !$omp parallel do collapse(2) private(j, i)
     DO j=LBOUND(X, 2), UBOUND(X, 2)
         DO i=LBOUND(X, 1), UBOUND(X, 1)
             Z(i, j, k) = X(i, j, k) + Y(i, j, k)
         END DO
     END DO
-    !$omp end parallel do simd
+    !$omp end parallel do
 END DO
 !$omp end teams distribute
 !$omp end target
 
 
-[cpp, cpp_openacc]
+[cpp, cpp_omptarget]
 
-#pragma acc parallel loop
-for (int i=0; i < JAI_LEN(x); i++) {
-	z[i] = x[i] + j[i]
+#pragma omp target
+#pragma omp parallel for
+for (int k=0; k<JLENGTH(A, 0); k++){
+	for (int j=0; j<JLENGTH(A, 1); j++){
+		for (int i=0; i<JLENGTH(A, 2); i++){
+            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+		}
+	}
 }
 
 [cuda, hip]

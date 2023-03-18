@@ -82,7 +82,7 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     specs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
@@ -100,7 +100,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     arg = args[1]
@@ -122,7 +122,7 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
@@ -133,7 +133,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     apiname  = JAI_MAP_API_FUNCNAME[apitype]
@@ -160,7 +160,7 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
@@ -171,7 +171,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     apiname = JAI_MAP_API_FUNCNAME[apitype]

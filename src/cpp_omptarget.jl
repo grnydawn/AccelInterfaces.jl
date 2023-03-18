@@ -7,12 +7,13 @@
 function code_cpp_header(
         frame       ::JAI_TYPE_CPP_OMPTARGET,
         apitype     ::JAI_TYPE_API,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, prefix, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, interop_frames, prefix, args, data)
 
     return "#include <omp.h>\n" * cpp_hdr
 
@@ -24,9 +25,10 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP_OMPTARGET,
         apitype     ::JAI_TYPE_ACCEL,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     argname   = args[1][3] 
@@ -66,9 +68,10 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API_DATA,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, "")
@@ -79,6 +82,7 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_LAUNCH,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N

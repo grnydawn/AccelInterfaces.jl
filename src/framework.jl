@@ -236,7 +236,7 @@ function compile_code(
 end
 
 
-function load_sharedlib(libpath::String)
+function load_sharedlib(libpath::String) :: Ptr{Nothing}
     return dlopen(libpath, RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL)
 end
 
@@ -246,7 +246,7 @@ function invoke_sharedfunc(
         slib    ::Ptr{Nothing},
         fname   ::String,
         args    ::JAI_TYPE_ARGS
-    )
+    ) :: Nothing
 
     dtypes = argsdtypes(frame, args)
     dtypestr = join([string(t) for t in dtypes], ",")
@@ -260,25 +260,28 @@ end
 function code_cpp_macros(
         frame       ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
-    )
+    ) :: String
 
     macros = Vector{String}()
 
     push!(macros, "#define JLENGTH(varname, dim) $(prefix)length_##varname##dim")
     push!(macros, "#define JSIZE(varname) $(prefix)size_##varname")
 
+    device = frame in (JAI_CUDA, JAI_HIP) ? "__device__ " : ""
+
     for (var, dtype, vname, vinout, addr, vshape, voffset) in args
         if var isa AbstractArray
             accum = 1
             for (idx, len) in enumerate(reverse(vshape))
-                push!(macros, "uint64_t "*prefix*"length_"*vname*string(idx-1)*
+                push!(macros, device*"const uint64_t "*prefix*"length_"*vname*string(idx-1)*
                         " = "*string(len)*";")
                 accum *= len
             end
-            push!(macros, "uint64_t "*prefix*"size_"*vname*" = "*string(accum)*";" )
+            push!(macros, device*"const uint64_t "*prefix*"size_"*vname*" = "*string(accum)*";" )
         end
     end
 
@@ -289,14 +292,16 @@ end
 function generate_code(
         frame       ::JAI_TYPE_FORTRAN_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, String} where N;
+        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing
     ) :: String
 
     suffix   = JAI_MAP_API_FUNCNAME[apitype]
-    specpart = code_module_specpart(frame, apitype, prefix, args, data)
-    subppart = code_module_subppart(frame, apitype, prefix, args, data)
+    specpart = code_module_specpart(frame, apitype, interop_frames, prefix, args, data)
+    subppart = code_module_subppart(frame, apitype, interop_frames, prefix, args, data)
 
     return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
                   suffix=suffix, specpart=specpart, subppart=subppart)
@@ -305,15 +310,25 @@ end
 function generate_code(
         frame       ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
+        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::NTuple{N, String} where N
+        data        ::NTuple{N, String} where N;
+        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing
     ) :: String
 
-    jmacros = code_cpp_macros(frame, apitype, prefix, args, data)
-    cpp_hdr = code_cpp_header(frame, apitype, prefix, args, data)
-    c_hdr   = code_c_header(frame, apitype, prefix, args, data)
-    funcs   = code_c_functions(frame, apitype, prefix, args, data)
+
+    jmacros = code_cpp_macros(frame, apitype, interop_frames, prefix, args, data)
+    cpp_hdr = code_cpp_header(frame, apitype, interop_frames, prefix, args, data)
+    c_hdr   = code_c_header(frame, apitype, interop_frames, prefix, args, data)
+
+    if frame in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
+        funcs   = code_c_functions(frame, apitype, interop_frames, prefix,
+                                        args, data, launch_config)
+    else
+        funcs   = code_c_functions(frame, apitype, interop_frames, prefix,
+                                        args, data)
+    end
 
     return jaifmt(CPP_TEMPLATE_HEADER, jmacros=jmacros, cpp_header=cpp_hdr,
                   c_header=c_hdr, functions=funcs)
@@ -324,6 +339,7 @@ include("fortran.jl")
 include("fortran_omptarget.jl")
 include("cpp.jl")
 include("cpp_omptarget.jl")
+include("hip.jl")
 include("compiler.jl")
 include("machine.jl")
 
@@ -334,10 +350,17 @@ function generate_sharedlib(
         compile     ::String,
         workdir     ::String,
         args        ::JAI_TYPE_ARGS,
-        data        ::Vararg{String, N} where N
+        data        ::Vararg{String, N} where N;
+        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing,
+        interop_frames  ::Union{Vector{JAI_TYPE_FRAMEWORK}, Nothing} = nothing
     ) :: Ptr{Nothing}
 
-    code = generate_code(frame, apitype, prefix, args, data)
+    if interop_frames == nothing
+        interop_frames = Vector{JAI_TYPE_FRAMEWORK}()
+    end
+
+    code = generate_code(frame, apitype, interop_frames, prefix, args, data,
+                    launch_config=launch_config)
 
     if frame isa JAI_TYPE_FORTRAN_FRAMEWORKS
         srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"

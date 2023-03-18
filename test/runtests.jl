@@ -27,8 +27,9 @@ if SYSNAME == "Crusher"
     const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
     #const acc_compile  = "ftn -shared -fPIC -fopenacc"
     #const omp_compile  = "ftn -shared -fPIC -fopenmp"
-
+#-fopenmp=libiomp5
     const cpp_compile  = "CC -fPIC -shared -g"
+    const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
@@ -243,39 +244,68 @@ function cpp_test_string()
     kernel_text = """
 
 [cpp]
-//for(int k=0; k<JSHAPE(X, 0); k++) {
-    int k = 0;
-    for(int j=0; j<JSHAPE(X, 1); j++) {
-        for(int i=0; i<JSHAPE(X, 2); i++) {
+for(int k=0; k<JLENGTH(X, 0); k++) {
+    for(int j=0; j<JLENGTH(X, 1); j++) {
+        for(int i=0; i<JLENGTH(X, 2); i++) {
             Z[k][j][i] = X[k][j][i] + Y[k][j][i];
         }
     }
-//}
+}
 """
     X = rand(Float64, SHAPE)
     Y = rand(Float64, SHAPE)
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    ENV["CXX"] = "g++"
-    ENV["CXXFLAGS"] = "-fPIC -shared -g"
+    @jaccel framework(cpp=cpp_compile)
 
-    @jaccel cppacc framework(cpp) set(debugdir=workdir, workdir=workdir)
+    @jkernel kernel_text
 
-    @jkernel kernel_text mykernel cppacc
+    @jlaunch input(X, Y) output(Z)
+
+    @test Z == ANS
+end
+
+function cpp_omptarget_test()
+
+    kernel_text = """
+
+[cpp]
+#pragma omp target
+#pragma omp parallel for
+for(int k=0; k<JLENGTH(X, 0); k++) {
+    for(int j=0; j<JLENGTH(X, 1); j++) {
+        for(int i=0; i<JLENGTH(X, 2); i++) {
+            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+        }
+    }
+}
+"""
+    X = rand(Float64, SHAPE)
+    Y = rand(Float64, SHAPE)
+    Z = fill(0.::Float64, SHAPE)
+    ANS = X .+ Y
+
+    @jaccel myacc  framework(cpp_omptarget=cpp_omp_compile)
+
+    @jkernel kernel_text mykernel
+
+    @jenterdata myacc alloc(X, Y, Z) updateto(X, Y)
 
     #Profile.@profile @jlaunch(mykernel, X, Y; output=(Z,))
     #@time for i in range(1, stop=10)
-        @jlaunch mykernel cppacc input(X, Y) output(Z,)
+    @jlaunch mykernel myacc input(X, Y) output(Z)
     #end
 
-    @test Z[:,:,1] == ANS[:,:,1]
+    @jexitdata myacc updatefrom(Z) delete(X, Y, Z)
+
+    @test Z == ANS
 
     #open(".jworkdir/profile.txt", "w") do s
     #    Profile.print(s, format=:flat, sortedby=:count)
     #end
 
-    @jdecel cppacc
+    @jdecel myacc
 end
 
 function cuda_test_string()
@@ -380,9 +410,9 @@ function hip_test_string()
 
 [hip]
 /*
-for(int k=0; k<JSHAPE(X, 0); k++) {
-    for(int j=0; j<JSHAPE(X, 1); j++) {
-        for(int i=0; i<JSHAPE(X, 2); i++) {
+for(int k=0; k<JLENGTH(X, 0); k++) {
+    for(int j=0; j<JLENGTH(X, 1); j++) {
+        for(int i=0; i<JLENGTH(X, 2); i++) {
             Z[k][j][i] = X[k][j][i] + Y[k][j][i];
         }
     }
@@ -400,22 +430,24 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel hipacc framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
-
-    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y)
+    @jaccel hipacc framework(hip=hip_compile)
 
     @jkernel kernel_text mykernel hipacc
 
-    tt = ((4,3,2),1)
-    @jlaunch mykernel hipacc input(X, Y) output(Z,) hip(chevron=tt, test=3)
+    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y)
+
+    #tt = ((4,3,2),1)
+    tt = ((1,), 2)
+    @jlaunch mykernel hipacc input(X, Y) output(Z) hip(chevron=tt, test=3)
 
     @jexitdata hipacc updatefrom(Z,) delete(X, Y, Z) async
 
     @jwait hipacc
 
+    @jdecel hipacc
+
     @test Z == ANS
 
-    @jdecel hipacc
 
 end
 
@@ -508,9 +540,10 @@ end
         #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
-        fortran_omptarget_tests()
+        #fortran_omptarget_tests()
         #cpp_test_string()
-        #hip_test_string()
+        #cpp_omptarget_test()
+        hip_test_string()
         #hip_fortran_test_string()
         #fortran_openacc_hip_test_string()
 

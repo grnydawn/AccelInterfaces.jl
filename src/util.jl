@@ -124,11 +124,51 @@ function pack_args(
     return args
 end
 
+function save_device_pointers(
+        memmap  ::Dict{PtrAny, PtrAny},
+        args    ::JAI_TYPE_ARGS,
+        ptrs    ::Vector{PtrAny}
+    )
+
+    for (i, arg) in enumerate(args)
+        memmap[convert(PtrAny, pointer(arg[1]))] = ptrs[i]
+    end
+end
+
+
+function delete_device_pointers(
+        memmap  ::Dict{PtrAny, PtrAny},
+        args    ::JAI_TYPE_ARGS
+    )
+
+    for (i, arg) in enumerate(args)
+        delete!(memmap, convert(PtrAny, pointer(arg[1])))
+    end
+end
+
+
+function init_device_pointers(
+        memmap  ::Dict{PtrAny, PtrAny},
+        args    ::JAI_TYPE_ARGS
+    )
+
+    #ptrs = Vector{PtrAny}(reinterpret(Ptr{Any}, 0), length(args))
+    ptrs = fill(reinterpret(Ptr{Any}, 0), length(args))
+
+    for (i, arg) in enumerate(args)
+        ptrs[i] = memmap[convert(PtrAny, pointer(arg[1]))]
+    end
+
+    push!(args, pack_arg(ptrs))
+end
+
+
 function check_retval(retval::Int64)
     if retval != 0
         throw(JAI_ERROR_NONZERO_RETURN())
     end
 end
+
 
 function get_context(
         contexts    ::Vector{JAI_TYPE_CONTEXT_ACCEL},
@@ -143,6 +183,7 @@ function get_context(
 
     return nothing
 end
+
 
 function get_context(
         contexts    ::Vector{JAI_TYPE_CONTEXT_KERNEL},
