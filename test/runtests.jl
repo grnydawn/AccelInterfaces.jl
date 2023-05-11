@@ -5,6 +5,9 @@ using Test
 if occursin("crusher", Sys.BINDIR)
     const SYSNAME = "Crusher"
 
+elseif occursin("frontier", Sys.BINDIR)
+    const SYSNAME = "Frontier"
+
 elseif get!(ENV, "NERSC_HOST", "") == "perlmutter"
     const SYSNAME = "Perlmutter"
 
@@ -31,7 +34,20 @@ if SYSNAME == "Crusher"
     const cpp_compile  = "CC -fPIC -shared -g"
     const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
-    const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
+    const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
+    #const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
+
+elseif SYSNAME == "Frontier" 
+    const fort_compile = "ftn -fPIC -shared -g"
+    const acc_compile  = "ftn -shared -fPIC -h acc,noomp"
+    const omp_compile  = "ftn -shared -fPIC -h omp,noacc"
+    #const acc_compile  = "ftn -shared -fPIC -fopenacc"
+    #const omp_compile  = "ftn -shared -fPIC -fopenmp"
+#-fopenmp=libiomp5
+    const cpp_compile  = "CC -fPIC -shared -g"
+    const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
+    const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
+    const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Summit" 
 
@@ -229,7 +245,7 @@ function fortran_omptarget_cuda_tests()
 
     @jenterdata ompcuda alloc(X, Y, Z) updateto(X, Y)
 
-    @jlaunch mykernel ompcuda input(X, Y) output(Z,) cuda(chevron=(SHAPE,1))
+    @jlaunch mykernel ompcuda input(X, Y) output(Z,) cuda(threads=(SHAPE,1))
 
     @jexitdata ompcuda updatefrom(Z) delete(X, Y, Z)
 
@@ -333,7 +349,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jkernel kernel_text mykernel cudaacc
 
-    @jlaunch mykernel cudaacc input(X, Y) output(Z,) cuda(chevron=(1,1))
+    @jlaunch mykernel cudaacc input(X, Y) output(Z,) cuda(threads=(1,1))
 
     @jexitdata cudaacc updatefrom(Z) delete(X, Y, Z) async
 
@@ -389,7 +405,7 @@ CALL RANDOM_NUMBER(Z)
 
     @jkernel kernel_hiptext mykernel hipacc
 
-    @jlaunch mykernel hipacc input(X, Y) output(Z,) hip(chevron=(1,1))
+    @jlaunch mykernel hipacc input(X, Y) output(Z,) hip(threads=(1,1))
 
     @jexitdata hipacc updatefrom(Z) delete(X, Y, Z) async
 
@@ -410,10 +426,10 @@ function hip_test_string()
 
 [hip]
 /*
-for(int k=0; k<JLENGTH(X, 0); k++) {
+for(int i=0; i<JLENGTH(X, 0); i++) {
     for(int j=0; j<JLENGTH(X, 1); j++) {
-        for(int i=0; i<JLENGTH(X, 2); i++) {
-            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
+        for(int k=0; k<JLENGTH(X, 2); k++) {
+            Z[i][j][k] = X[i][j][k] + Y[i][j][k];
         }
     }
 }
@@ -437,10 +453,11 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
     @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y)
 
     #tt = ((4,3,2),1)
-    tt = ((1,), 2)
-    @jlaunch mykernel hipacc input(X, Y) output(Z) hip(chevron=tt, test=3)
+    tt = (SHAPE,1)
+    #tt = ((1,), 2)
+    @jlaunch mykernel hipacc input(X, Y) output(Z) hip(threads=tt, test=3)
 
-    @jexitdata hipacc updatefrom(Z,) delete(X, Y, Z) async
+    @jexitdata hipacc updatefrom(Z) delete(X, Y, Z) async
 
     @jwait hipacc
 
@@ -485,7 +502,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     @jkernel kernel_text mykernel acchipacc framework(hip=hip_compile)
 
     tt = ((4,3,2),1)
-    @jlaunch mykernel acchipacc input(X1, Y1) output(Z1) hip(chevron=tt)
+    @jlaunch mykernel acchipacc input(X1, Y1) output(Z1) hip(threads=tt)
 
     @jexitdata acchipacc updatefrom(Z1) delete(X1, Y1, Z1) async
 
@@ -522,7 +539,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
     @jkernel kernel_text mykernel acccudaacc framework(cuda=cuda_compile)
 
-    @jlaunch mykernel acccudaacc input(X, Y) output(Z) cuda(chevron=(1,1))
+    @jlaunch mykernel acccudaacc input(X, Y) output(Z) cuda(threads=(1,1))
 
     @jexitdata acccudaacc updatefrom(Z) delete(X, Y, Z) async
 
@@ -537,6 +554,17 @@ end
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
+        #fortran_test_string()
+        #fortran_test_file()
+        #fortran_openacc_tests()
+        #fortran_omptarget_tests()
+        #cpp_test_string()
+        #cpp_omptarget_test()
+        hip_test_string()
+        #hip_fortran_test_string()
+        #fortran_openacc_hip_test_string()
+
+    elseif SYSNAME == "Frontier"
         #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()

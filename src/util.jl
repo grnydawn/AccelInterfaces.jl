@@ -70,26 +70,25 @@ function pack_arg(
         name = "var_" * randstring(4) 
     end
 
-    if arg isa OffsetArray
-        shape   = size(arg)
-        offsets = arg.offsets
-        addr    = Base.unsafe_convert(Ptr{Clonglong}, arg)
-        dtype   = eltype(arg)
+    if arg isa AbstractArray
 
-    elseif arg isa AbstractArray
         shape   = size(arg)
-        offsets = Tuple(1 for _ in 1:length(arg))
-        addr    = Base.unsafe_convert(Ptr{Clonglong}, arg)
         dtype   = eltype(arg)
+        bytes   = sizeof(arg)
 
+        if arg isa OffsetArray
+            offsets = arg.offsets
+        else
+            offsets = Tuple(1 for _ in 1:length(arg))
+        end
     else
         shape   = ()
         offsets = ()
-        addr    = nothing
         dtype   = typeof(arg)
+        bytes   = Int64(0)
     end
 
-    return (arg, dtype, name, inout, addr, shape, offsets)
+    return (arg, dtype, name, inout, bytes, shape, offsets)
 end
 
 
@@ -122,44 +121,6 @@ function pack_args(
     end
 
     return args
-end
-
-function save_device_pointers(
-        memmap  ::Dict{PtrAny, PtrAny},
-        args    ::JAI_TYPE_ARGS,
-        ptrs    ::Vector{PtrAny}
-    )
-
-    for (i, arg) in enumerate(args)
-        memmap[convert(PtrAny, pointer(arg[1]))] = ptrs[i]
-    end
-end
-
-
-function delete_device_pointers(
-        memmap  ::Dict{PtrAny, PtrAny},
-        args    ::JAI_TYPE_ARGS
-    )
-
-    for (i, arg) in enumerate(args)
-        delete!(memmap, convert(PtrAny, pointer(arg[1])))
-    end
-end
-
-
-function init_device_pointers(
-        memmap  ::Dict{PtrAny, PtrAny},
-        args    ::JAI_TYPE_ARGS
-    )
-
-    #ptrs = Vector{PtrAny}(reinterpret(Ptr{Any}, 0), length(args))
-    ptrs = fill(reinterpret(Ptr{Any}, 0), length(args))
-
-    for (i, arg) in enumerate(args)
-        ptrs[i] = memmap[convert(PtrAny, pointer(arg[1]))]
-    end
-
-    push!(args, pack_arg(ptrs))
 end
 
 

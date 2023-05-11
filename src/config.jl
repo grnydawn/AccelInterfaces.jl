@@ -2,7 +2,7 @@
 
 import Pkg.TOML
 
-const DEBUG         = true
+const DEBUG         = true # true
 const JAI_VERSION   = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["version"]
 const _USER_CONFIGS = Tuple(string(n) for n in fieldnames(JAI_TYPE_CONFIG_USER))
 

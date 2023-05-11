@@ -94,10 +94,9 @@ function jai_accel(
     ctx_frame   = select_framework(framework, compiler, workdir)
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
     data_slibs  = Dict{UInt32, PtrAny}()
-    device_memmap = Dict{PtrAny, PtrAny}()
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
-                           ctx_frame, data_slibs, ctx_kernels, device_memmap)
+                           ctx_frame, data_slibs, ctx_kernels)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -127,20 +126,17 @@ function jai_data(
         data        ::Vararg{JAI_TYPE_DATA, N} where N
     )
 
+    ctx_accel   = get_accel(aname)
+
     # pack data and variable names
-    ptrs = Vector{PtrAny}(undef, length(data))
     args = JAI_TYPE_ARGS()
     for (i, (n, d)) in enumerate(zip(names, data))
         arg = pack_arg(d, name=n, inout=JAI_MAP_APITYPE_INOUT[apitype])
         push!(args, arg)
-        ptrs[i] = pointer(d)
     end
 
-    push!(args, pack_arg(ptrs))
-
-    ctx_accel   = get_accel(aname)
     uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
-    frame       = ctx_accel.framework.type
+    frametype   = ctx_accel.framework.type
 
     try
         if uid in keys(ctx_accel.data_slibs)
@@ -151,26 +147,19 @@ function jai_data(
             workdir = get_config(ctx_accel, "workdir")
 
             # TODO : add interop frames
-            interop_frames  = Vector{JAI_TYPE_FRAMEWORK}()
+            interop_frametypes  = Vector{JAI_TYPE_FRAMEWORK}()
             for kctx in ctx_accel.ctx_kernels
-                push!(interop_frames, kctx.framework.type)
+                push!(interop_frametypes, kctx.framework.type)
             end
 
-            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args,
-                                        interop_frames=interop_frames)
+            slib    = generate_sharedlib(frametype, apitype, prefix, compile,
+                            workdir, args, interop_frametypes=interop_frametypes)
 
             ctx_accel.data_slibs[uid] = slib
         end
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
-        invoke_sharedfunc(frame, slib, funcname, args)
-
-        if apitype == JAI_ALLOCATE
-            save_device_pointers(ctx_accel.device_memmap, args[1:end-1], args[end][1])
-
-        elseif apitype == JAI_DEALLOCATE
-            delete_device_pointers(ctx_accel.device_memmap, args[1:end-1])
-        end
+        invoke_sharedfunc(frametype, slib, funcname, args)
 
     catch err
         rethrow()
@@ -253,10 +242,8 @@ function jai_launch(
     ctx_accel   = get_accel(aname)
     ctx_kernel  = get_kernel(ctx_accel, kname)
     uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
-    frame       = ctx_kernel.framework.type
+    frametype   = ctx_kernel.framework.type
 
-   init_device_pointers(ctx_accel.device_memmap, args)
- 
     try
         if uid in keys(ctx_kernel.launch_slibs)
             slib    = ctx_kernel.launch_slibs[uid]
@@ -265,20 +252,21 @@ function jai_launch(
             compile = ctx_kernel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
             knlbody = get_knlbody(ctx_kernel)
-            config = "config" in keys(config) ? config["config"] : nothing
             
             # TODO interop frames
-            interop_frames  = Vector{JAI_TYPE_FRAMEWORK}()
-            push!(interop_frames, ctx_accel.framework.type)
+            interop_frametypes  = Vector{JAI_TYPE_FRAMEWORK}()
+            push!(interop_frametypes, ctx_accel.framework.type)
 
-            slib    = generate_sharedlib(frame, apitype, prefix, compile, workdir, args,
-                            knlbody, launch_config= config, interop_frames=interop_frames)
+            slib    = generate_sharedlib(frametype, apitype, prefix, compile,
+                            workdir, args, knlbody, launch_config=config,
+                            interop_frametypes=interop_frametypes)
 
             ctx_kernel.launch_slibs[uid] = slib
         end
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
-        invoke_sharedfunc(frame, slib, funcname, args)
+        #invoke_sharedfunc(frame, apitype, slib, funcname, args)
+        invoke_sharedfunc(frametype, slib, funcname, args)
 
     catch err
         rethrow()

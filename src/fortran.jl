@@ -1,5 +1,5 @@
 # fortran.jl: implement functions for Fortran framework
-# NOTE: (var, dtype, vname, vinout, addr, vshape, voffset) = arg
+# NOTE: (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
 
 
 const JAI_MAP_JULIA_FORTRAN = Dict{DataType, String}(
@@ -44,7 +44,7 @@ function code_fortran_typedecl(
         inout :: Union{JAI_TYPE_INOUT, Nothing} = nothing
     ) :: String
 
-    (var, dtype, vname, vinout, addr, vshape, voffset) = arg
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
 
     if inout isa JAI_TYPE_INOUT
         vinout = inout
@@ -78,8 +78,9 @@ end
 ###### START of ACCEL #######
 
 function code_module_specpart(
-        frame       ::JAI_TYPE_FORTRAN,
+        frametype   ::JAI_TYPE_FORTRAN,
         apitype     ::JAI_TYPE_ACCEL,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -96,8 +97,9 @@ function code_module_specpart(
 end
 
 function code_module_subppart(
-        frame       ::JAI_TYPE_FORTRAN,
+        frametype   ::JAI_TYPE_FORTRAN,
         apitype     ::JAI_TYPE_ACCEL,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -118,8 +120,9 @@ end
 ###### START of DATA #######
 
 function code_module_specpart(
-        frame       ::Union{JAI_TYPE_FORTRAN, JAI_TYPE_FORTRAN_OMPTARGET},
+        frametype   ::Union{JAI_TYPE_FORTRAN, JAI_TYPE_FORTRAN_OMPTARGET},
         apitype     ::JAI_TYPE_API_DATA,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -129,8 +132,9 @@ function code_module_specpart(
 end
 
 function code_module_subppart(
-        frame       ::JAI_TYPE_FORTRAN,
+        frametype   ::JAI_TYPE_FORTRAN,
         apitype     ::JAI_TYPE_API_DATA,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -156,8 +160,9 @@ end
 ###### START of LAUNCH #######
 
 function code_module_specpart(
-        frame       ::Union{JAI_TYPE_FORTRAN,JAI_TYPE_FORTRAN_OMPTARGET},
+        frametype   ::Union{JAI_TYPE_FORTRAN,JAI_TYPE_FORTRAN_OMPTARGET},
         apitype     ::JAI_TYPE_LAUNCH,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -167,8 +172,9 @@ function code_module_specpart(
 end
 
 function code_module_subppart(
-        frame       ::JAI_TYPE_FORTRAN,
+        frametype   ::JAI_TYPE_FORTRAN,
         apitype     ::JAI_TYPE_LAUNCH,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N

@@ -11,38 +11,82 @@ __global__ void {kname}({kargs}) {{
 
 
 ###### START of CODEGEN #######
+function code_cpp_macros(
+        frametype   ::JAI_TYPE_HIP,
+        apitype     ::JAI_TYPE_API,
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        prefix      ::String,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N
+    ) :: String
+
+    return code_cpp_macros(JAI_CPP, apitype, interop_frametypes, prefix,
+                            args, data)
+end
+
 
 function code_cpp_header(
-        frame       ::JAI_TYPE_HIP,
+        frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, interop_frames, prefix, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, interop_frametypes, prefix, args, data)
 
-    return "#include \"hip/hip_runtime.h\"\n" * cpp_hdr
+    lines = Vector{String}()
+
+    push!(lines, "#include \"hip/hip_runtime.h\"")
+    push!(lines, "#define HIP_ASSERT(x) (assert((x)==hipSuccess))")
+
+    return  join(lines, "\n") * cpp_hdr
 
 end
 
 function code_c_header(
-        frame       ::JAI_TYPE_HIP,
+        frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    return ""
+    buf     = Vector{String}()
+
+    for arg in args
+        typestr, vname, dimstr = code_c_typedecl(arg)
+        addr = repr(UInt64(pointer_from_objref(arg[1])))
+        ename = "jai_extern_$(addr)_$(vname)"
+
+        if apitype == JAI_ALLOCATE
+            #push!(buf, "$typestr * $(ename)$(dimstr);")
+            push!(buf, "$typestr * $(ename);")
+
+        elseif apitype == JAI_UPDATETO
+            #push!(buf, "extern $typestr * $(ename)$(dimstr);")
+            push!(buf, "extern $typestr * $(ename);")
+
+        elseif apitype == JAI_LAUNCH
+            push!(buf, "extern $typestr * $(ename);")
+
+        elseif apitype == JAI_UPDATEFROM
+            #push!(buf, "extern $typestr * $(ename)$(dimstr);")
+            push!(buf, "extern $typestr * $(ename);")
+
+        else
+        end
+    end
+
+    return  join(buf, "\n")
 
 end
 
 function code_c_typedecl(arg::JAI_TYPE_ARG) :: Tuple{String, String, String}
 
-    (var, dtype, vname, vinout, addr, vshape, voffset) = arg
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
 
     if var isa AbstractArray
 
@@ -95,9 +139,9 @@ end
 ###### START of ACCEL #######
 
 function code_c_functions(
-        frame       ::JAI_TYPE_HIP,
+        frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_ACCEL,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,
@@ -116,35 +160,45 @@ end
 ###### START of DATA #######
 
 function code_c_functions(
-        frame       ::JAI_TYPE_HIP,
+        frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API_DATA,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, "")
+    buf     = Vector{String}()
+
+    for (i, arg) in enumerate(args)
+        aname = arg[3]
+        asize = arg[5]
+
+        addr = repr(UInt64(pointer_from_objref(arg[1])))
+        ename = "jai_extern_$(addr)_$(aname)"
+
+        if apitype == JAI_ALLOCATE
+            push!(buf, "HIP_ASSERT(hipMalloc((void**)&$ename, $asize));")
+
+        elseif apitype == JAI_UPDATETO
+            push!(buf, "HIP_ASSERT(hipMemcpy((void *)$ename, (void *)$aname,
+                    $asize, hipMemcpyHostToDevice));")
+
+        elseif apitype == JAI_UPDATEFROM
+            push!(buf, "HIP_ASSERT(hipMemcpy((void *)$aname, (void *)$ename,
+                    $asize, hipMemcpyDeviceToHost));")
+
+        else
+        end
+    end
+
+    body = join(buf, "\n")
+
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, body)
 end
 
 ###### START of LAUNCH #######
 
-#__global__ void 
-#vectoradd_float(float* __restrict__ a, const float* __restrict__ b, const float* __restrict__ c, int width, int height) 
-#
-#  {
-# 
-#      int x = hipBlockDim_x * hipBlockIdx_x + hipThreadIdx_x;
-#      int y = hipBlockDim_y * hipBlockIdx_y + hipThreadIdx_y;
-#
-#      int i = y * width + x;
-#      if ( i < (width * height)) {
-#        a[i] = b[i] + c[i];
-#      }
-#
-#
-#
-#  }
 
 function code_hip_kernel(
         kname       ::String,
@@ -159,9 +213,9 @@ end
 
 
 function code_hip_driver_body(
-        kname      ::String,
-        args        ::JAI_TYPE_ARGS,
-        config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing
+        kname   ::String,
+        args    ::JAI_TYPE_ARGS,
+        config  ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
 
     out = Vector{String}()
@@ -172,47 +226,75 @@ function code_hip_driver_body(
 
     lcfg = ["1", "1", "0", "0"]
 
-    if config == nothing
+    if config != nothing
         
-    elseif config isa Integer
-        lcfg[2] = string(config)
+        if JAI_HIP in keys(config)
+            hipcfg = config[JAI_HIP]
 
-    elseif config isa Tuple && length(config) > 0
+            if "threads" in keys(hipcfg)
+                threads = hipcfg["threads"]
 
-        for (i, cfg) in config
-            if cfg isa Tuple
-                lcfg[i] = join((string(c) for c in cfg), ", ")
-            else
-                lcfg[i] = string(cfg)
+                if threads isa Integer
+                    lcfg[2] = string(threads)
+
+                elseif threads isa Tuple && length(threads) > 0
+
+                    for (i, cfg) in enumerate(threads)
+                        if cfg isa Tuple
+                            lcfg[i] = join((string(c) for c in reverse(cfg)), ", ")
+                        else
+                            lcfg[i] = string(cfg)
+                        end
+                    end
+
+                else
+                    error("Wrong launch config syntax: " * string(threads))
+                end
             end
         end
-
-    else
-        error("Wrong launch config syntax: " * string(config))
     end
 
     grid, block, shared, stream = lcfg
 
-    nargs   = length(args) - 1
+    nargs   = length(args)
     buf     = fill("", nargs)
+    dbuf    = fill("", nargs)
     anames  = fill("", nargs)
-    dname   = args[end][3]
+    #dname   = args[end][3]
 
     # (var, dtype, vname, vinout, addr, vshape, voffset)
-    for (i, arg) in enumerate(args[1:end-1])
+    for (i, arg) in enumerate(args)
+
+        aname= arg[3] 
+
 
         if arg[1] isa AbstractArray
             t, n, d = code_c_typedecl(arg)
-            buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($dname[$(i-1)]);"
+            addr = repr(UInt64(pointer_from_objref(arg[1])))
+            ename = "jai_extern_$(addr)_$(n)"
+
+            #buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($dname[$(i-1)]);"
+            buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($ename);"
+            anames[i] = "(*ptr_$n)" 
+        else
+            anames[i] = aname
         end
 
-        anames[i] = "*ptr_" * arg[3] 
+        #anames[i] = "*ptr_" * arg[3] 
+        #anames[i] = "$dname[$(i-1)]"
+        #dbuf[i] = "printf(\"AT LAUNCH, $aname: dptr= %p\\n\", (void *)$aname);"
+
     end
 
     reintepret  = join(buf, "\n")
+    #reintepret  = ""
     dvarnames   = join(anames, ", \n")
+    debug       = join(dbuf, "\n")
 
     push!(out, """
+
+$debug
+
 $reintepret
 
 hipLaunchKernelGGL(
@@ -227,19 +309,19 @@ end
 
 
 function code_c_functions(
-        frame       ::JAI_TYPE_HIP,
+        frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_LAUNCH,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,
-        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
 
     kname = prefix * "device"
 
     # kernel function
-    kfunc = code_hip_kernel(kname, args[1:end-1], data[1])
+    kfunc = code_hip_kernel(kname, args, data[1])
 
     # driver function
     dbody = code_hip_driver_body(kname, args, launch_config)

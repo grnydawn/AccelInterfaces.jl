@@ -124,6 +124,7 @@ END FUNCTION
 
 CPP_TEMPLATE_HEADER = """
 #include <stdint.h>
+#include <stdio.h>
 
 {jmacros}
 
@@ -165,8 +166,23 @@ function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args::JAI_TYPE_ARGS)
 
     actual_args = map(x -> x[1], args)
     Base.invokelatest(_ccall_cache[fid], libfunc, actual_args)
+#    jai_ccall2(dtypestr, libfunc, actual_args)
 end
 
+
+#function jai_ccall2(dtypestr::String, libfunc::Ptr{Nothing}, args::Vector{Ptr{Any}}) :: Int64
+#
+#    funcstr = _ccs[1] * dtypestr * _ccs[2] * join(_dummyargs[1:length(args)], ",") * _ccs[3]
+#    fid = read(IOBuffer(sha1(funcstr)[1:8]), Int64)
+#
+#    if ! haskey(_ccall_cache, fid)
+#        _ccall_cache[fid] = eval(Meta.parse(funcstr))
+#    end
+#
+#    #actual_args = map(x -> x[1], args)
+#    #Base.invokelatest(_ccall_cache[fid], libfunc, actual_args)
+#    Base.invokelatest(_ccall_cache[fid], libfunc, args)
+#end
 
 function argsdtypes(
         frame   ::JAI_TYPE_FRAMEWORK,
@@ -199,7 +215,7 @@ end
 
 
 function compile_code(
-        frame   ::JAI_TYPE_FRAMEWORK,
+        frametype   ::JAI_TYPE_FRAMEWORK,
         code    ::String,
         compile ::String,
         srcname ::String,
@@ -241,12 +257,44 @@ function load_sharedlib(libpath::String) :: Ptr{Nothing}
 end
 
 
+#function invoke_sharedfunc(
+#        frame   ::JAI_TYPE_FRAMEWORK,
+#        apitype     ::JAI_TYPE_LAUNCH,
+#        slib    ::Ptr{Nothing},
+#        fname   ::String,
+#        args    ::JAI_TYPE_ARGS
+#    ) :: Nothing
+#
+#    if DEBUG
+#        println("Enter invoke_sharedfunc2: \n    " * string(frame) * "\n    " * fname)
+#    end
+#
+#    dtypes = argsdtypes(frame, args[1:end-1])
+#    dtypestr = join([string(t) for t in dtypes], ",")
+#
+#    println("DTYPESTR: ", dtypestr)
+#    println("args last: ", args)
+#
+#
+#    libfunc = dlsym(slib, Symbol(fname))
+#
+#    check_retval(jai_ccall2(dtypestr, libfunc, args[end][1]))
+#
+#    if DEBUG
+#    #    println("Exit invoke_sharedfunc2")
+#    end
+#end
+
 function invoke_sharedfunc(
         frame   ::JAI_TYPE_FRAMEWORK,
         slib    ::Ptr{Nothing},
         fname   ::String,
         args    ::JAI_TYPE_ARGS
     ) :: Nothing
+
+    if DEBUG
+        println("Enter invoke_sharedfunc: \n    " * string(frame) * "\n    " * fname)
+    end
 
     dtypes = argsdtypes(frame, args)
     dtypestr = join([string(t) for t in dtypes], ",")
@@ -255,12 +303,15 @@ function invoke_sharedfunc(
 
     check_retval(jai_ccall(dtypestr, libfunc, args))
 
+    if DEBUG
+        println("Exit invoke_sharedfunc")
+    end
 end
 
 function code_cpp_macros(
-        frame       ::JAI_TYPE_CPP_FRAMEWORKS,
+        frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
@@ -271,7 +322,7 @@ function code_cpp_macros(
     push!(macros, "#define JLENGTH(varname, dim) $(prefix)length_##varname##dim")
     push!(macros, "#define JSIZE(varname) $(prefix)size_##varname")
 
-    device = frame in (JAI_CUDA, JAI_HIP) ? "__device__ " : ""
+    device = frametype in (JAI_CUDA, JAI_HIP) ? "__device__ " : ""
 
     for (var, dtype, vname, vinout, addr, vshape, voffset) in args
         if var isa AbstractArray
@@ -290,43 +341,43 @@ function code_cpp_macros(
 end
 
 function generate_code(
-        frame       ::JAI_TYPE_FORTRAN_FRAMEWORKS,
+        frametype   ::JAI_TYPE_FORTRAN_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
-        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
 
     suffix   = JAI_MAP_API_FUNCNAME[apitype]
-    specpart = code_module_specpart(frame, apitype, interop_frames, prefix, args, data)
-    subppart = code_module_subppart(frame, apitype, interop_frames, prefix, args, data)
+    specpart = code_module_specpart(frametype, apitype, interop_frametypes, prefix, args, data)
+    subppart = code_module_subppart(frametype, apitype, interop_frametypes, prefix, args, data)
 
     return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
                   suffix=suffix, specpart=specpart, subppart=subppart)
 end
 
 function generate_code(
-        frame       ::JAI_TYPE_CPP_FRAMEWORKS,
+        frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
-        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
 
 
-    jmacros = code_cpp_macros(frame, apitype, interop_frames, prefix, args, data)
-    cpp_hdr = code_cpp_header(frame, apitype, interop_frames, prefix, args, data)
-    c_hdr   = code_c_header(frame, apitype, interop_frames, prefix, args, data)
+    jmacros = code_cpp_macros(frametype, apitype, interop_frametypes, prefix, args, data)
+    cpp_hdr = code_cpp_header(frametype, apitype, interop_frametypes, prefix, args, data)
+    c_hdr   = code_c_header(frametype, apitype, interop_frametypes, prefix, args, data)
 
-    if frame in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
-        funcs   = code_c_functions(frame, apitype, interop_frames, prefix,
+    if frametype in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
+        funcs   = code_c_functions(frametype, apitype, interop_frametypes, prefix,
                                         args, data, launch_config)
     else
-        funcs   = code_c_functions(frame, apitype, interop_frames, prefix,
+        funcs   = code_c_functions(frametype, apitype, interop_frametypes, prefix,
                                         args, data)
     end
 
@@ -344,44 +395,56 @@ include("compiler.jl")
 include("machine.jl")
 
 function generate_sharedlib(
-        frame       ::JAI_TYPE_FRAMEWORK,
+        frametype   ::JAI_TYPE_FRAMEWORK,
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         compile     ::String,
         workdir     ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::Vararg{String, N} where N;
-        launch_config   ::Union{OrderedDict{String, JAI_TYPE_CONFIG_VALUE}, Nothing} = nothing,
-        interop_frames  ::Union{Vector{JAI_TYPE_FRAMEWORK}, Nothing} = nothing
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        interop_frametypes  ::Union{Vector{JAI_TYPE_FRAMEWORK},
+                                Nothing} = nothing
     ) :: Ptr{Nothing}
 
-    if interop_frames == nothing
-        interop_frames = Vector{JAI_TYPE_FRAMEWORK}()
+    # NOTE: interop_frames: 1) jai_launch case -> accel framework
+    #                       2) jai_data case -> kernel frameworks
+
+    if DEBUG
+        println("Enter generate_sharedlib: \n    " * string(frametype) *
+                "\n    " * string(apitype))
     end
 
-    code = generate_code(frame, apitype, interop_frames, prefix, args, data,
-                    launch_config=launch_config)
+    if interop_frametypes == nothing
+        interop_frametypes = Vector{JAI_TYPE_FRAMEWORK}()
+    end
 
-    if frame isa JAI_TYPE_FORTRAN_FRAMEWORKS
+    code = generate_code(frametype, apitype, interop_frametypes, prefix, args,
+                    data, launch_config=launch_config)
+
+    if frametype isa JAI_TYPE_FORTRAN_FRAMEWORKS
         srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
 
-    elseif frame isa JAI_TYPE_CPP_FRAMEWORKS
+    elseif frametype isa JAI_TYPE_CPP_FRAMEWORKS
         srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".cpp"
     else
-        error("Unknown language: " * string(frame))
+        error("Unknown language: " * string(frametype))
     end
 
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
-    slibpath = compile_code(frame, code, compile, srcname, outname, workdir)
+    slibpath = compile_code(frametype, code, compile, srcname, outname, workdir)
 
     slib = load_sharedlib(slibpath)
 
     # init device
     if apitype == JAI_ACCEL
-        invoke_sharedfunc(frame, slib, prefix * "device_init", args)
+        invoke_sharedfunc(frametype, slib, prefix * "device_init", args)
     end
 
+    if DEBUG
+        println("Exit generate_sharedlib")
+    end
     return slib
 
 end
@@ -407,6 +470,8 @@ function get_framework(
     frameworks = JAI["frameworks"]
 
     if frametype in keys(frameworks)
+
+        # per each frametype, there could be multiple compiler command lines
         frames = frameworks[frametype]
 
         if length(frames) > 0
@@ -416,6 +481,7 @@ function get_framework(
                     return frames[cid]
                 end
             elseif compile == nothing
+                # frames Pair(Int64, JAI_TYPE_CONTEXT_FRAMEWORK)
                 return first(frames)[2]
             else
                 error("Wrong compile type: " * string(typeof(compile)))
@@ -478,8 +544,8 @@ function select_framework(
         end
     end
 
-    for (frame, config) in userframe
-        framework = get_framework(frame, config, compiler, workdir)
+    for (frametype, config) in userframe
+        framework = get_framework(frametype, config, compiler, workdir)
         if framework isa JAI_TYPE_CONTEXT_FRAMEWORK
             return framework
         end
@@ -489,7 +555,7 @@ function select_framework(
 end
 
 
-
+# accel context
 function select_framework(
         ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
         userframe   ::Union{JAI_TYPE_CONFIG, Nothing},

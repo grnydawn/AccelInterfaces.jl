@@ -76,10 +76,14 @@ end
 
 @enum JAI_TYPE_INOUT JAI_ARG_IN=1 JAI_ARG_OUT=2 JAI_ARG_INOUT=3 JAI_ARG_UNKNOWN=4
 
-const JAI_TYPE_ARG = Tuple{JAI_TYPE_DATA, DataType, String,
-                           JAI_TYPE_INOUT, Ptr{Clonglong},
-                           NTuple{N, T} where {N, T<:Integer},
-                           NTuple{N, T} where {N, T<:Integer}}
+const JAI_TYPE_ARG = Tuple{ JAI_TYPE_DATA,
+                            DataType,
+                            String,
+                            JAI_TYPE_INOUT,
+                            Int64,
+                            NTuple{N, T} where {N, T<:Integer},
+                            NTuple{N, T} where {N, T<:Integer}
+                        }
 const JAI_TYPE_ARGS = Vector{JAI_TYPE_ARG}
 
 const JAI_MAP_APITYPE_INOUT = Dict{JAI_TYPE_API, JAI_TYPE_INOUT}(
@@ -149,7 +153,6 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
-    device_memmap   ::Dict{PtrAny, PtrAny}
 end
 
 struct JAI_TYPE_OS

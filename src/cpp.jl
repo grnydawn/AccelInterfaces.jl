@@ -47,7 +47,7 @@ end
 
 function code_c_typedecl(arg::JAI_TYPE_ARG) :: String
 
-    (var, dtype, vname, vinout, addr, vshape, voffset) = arg
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
 
     if var isa AbstractArray
 
