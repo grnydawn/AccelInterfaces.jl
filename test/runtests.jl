@@ -45,7 +45,7 @@ elseif SYSNAME == "Frontier"
     #const omp_compile  = "ftn -shared -fPIC -fopenmp"
 #-fopenmp=libiomp5
     const cpp_compile  = "CC -fPIC -shared -g"
-    const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
+    const cpp_omp_compile  = "CC -shared -fPIC -fopenmp"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
 
@@ -279,6 +279,8 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
 
     @jlaunch input(X, Y) output(Z)
 
+    @jdecel
+
     @test Z == ANS
 end
 
@@ -286,9 +288,9 @@ function cpp_omptarget_test()
 
     kernel_text = """
 
-[cpp]
-#pragma omp target
-#pragma omp parallel for
+[cpp_omptarget]
+#pragma omp target data map(to:X[0:JLENGTH(X,0)], Y[0:JLENGTH(Y,0)]) map(from: Z[0:JLENGTH(Z,0)])
+#pragma omp target parallel for
 for(int k=0; k<JLENGTH(X, 0); k++) {
     for(int j=0; j<JLENGTH(X, 1); j++) {
         for(int i=0; i<JLENGTH(X, 2); i++) {
@@ -567,12 +569,12 @@ end
     elseif SYSNAME == "Frontier"
         #fortran_test_string()
         #fortran_test_file()
-        #fortran_openacc_tests()
+        ##fortran_openacc_tests()
         #fortran_omptarget_tests()
         #cpp_test_string()
         #cpp_omptarget_test()
-        hip_test_string()
-        #hip_fortran_test_string()
+        #hip_test_string()
+        hip_fortran_test_string()
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"

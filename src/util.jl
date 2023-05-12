@@ -166,8 +166,8 @@ function get_context(
     ) :: Union{JAI_TYPE_CONTEXT_ACCEL, Nothing}
 
     if name == ""
-        if length(contexts) == 1
-            return contexts[1]
+        if length(contexts) > 0
+            return contexts[end]
         end
         return nothing
     end
@@ -189,8 +189,8 @@ function get_context(
     ) :: Union{JAI_TYPE_CONTEXT_KERNEL, Nothing}
 
     if name == ""
-        if length(contexts) == 1
-            return contexts[1]
+        if length(contexts) > 0
+            return contexts[end]
         end
         return nothing
     end

@@ -5,7 +5,7 @@
 ###### START of CODEGEN #######
 
 function code_cpp_header(
-        frame       ::JAI_TYPE_CPP_OMPTARGET,
+        frametype   ::JAI_TYPE_CPP_OMPTARGET,
         apitype     ::JAI_TYPE_API,
         interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
@@ -23,7 +23,7 @@ end
 ###### START of ACCEL #######
 
 function code_c_functions(
-        frame       ::JAI_TYPE_CPP_OMPTARGET,
+        frametype   ::JAI_TYPE_CPP_OMPTARGET,
         apitype     ::JAI_TYPE_ACCEL,
         interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
@@ -66,7 +66,7 @@ end
 ###### START of DATA #######
 
 function code_c_functions(
-        frame       ::JAI_TYPE_CPP,
+        frametype   ::JAI_TYPE_CPP_OMPTARGET,
         apitype     ::JAI_TYPE_API_DATA,
         interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
@@ -80,7 +80,7 @@ end
 ###### START of LAUNCH #######
 
 function code_c_functions(
-        frame       ::JAI_TYPE_CPP,
+        frametype   ::JAI_TYPE_CPP_OMPTARGET,
         apitype     ::JAI_TYPE_LAUNCH,
         interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
         prefix      ::String,
