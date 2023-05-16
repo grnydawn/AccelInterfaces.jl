@@ -151,6 +151,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     const_vars      ::OrderedDict{String, JAI_TYPE_DATA}
     devices         ::NTuple{N, Integer} where N
     framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
+    data_framework  ::Vector{Tuple{JAI_TYPE_FRAMEWORK, String}}
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
 end

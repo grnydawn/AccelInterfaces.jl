@@ -35,7 +35,6 @@ if SYSNAME == "Crusher"
     const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
-    #const workdir = "/gpfs/alpine/cli133/proj-shared/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Frontier" 
     const fort_compile = "ftn -fPIC -shared -g"
@@ -48,6 +47,7 @@ elseif SYSNAME == "Frontier"
     const cpp_omp_compile  = "CC -shared -fPIC -fopenmp"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
+    #const workdir = "/ccs/home/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Summit" 
 
@@ -127,10 +127,9 @@ END DO
     fcompile = Dict("compile" => fort_compile)
 
     @jaccel fortacc framework(fortran=fcompile) set(debug=true)
+    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
 
     @jenterdata fortacc alloc(X, Y, Z)
-
-    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
 
     @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2")
 
@@ -331,9 +330,9 @@ function cuda_test_string()
     kernel_text = """
 
 [cuda]
-for(int k=0; k<JSHAPE(X, 0); k++) {
-    for(int j=0; j<JSHAPE(X, 1); j++) {
-        for(int i=0; i<JSHAPE(X, 2); i++) {
+for(int k=0; k<JLENGTH(X, 0); k++) {
+    for(int j=0; j<JLENGTH(X, 1); j++) {
+        for(int i=0; i<JLENGTH(X, 2); i++) {
             Z[k][j][i] = X[k][j][i] + Y[k][j][i];
         }
     }
@@ -346,10 +345,9 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     ANS = X .+ Y
 
     @jaccel cudaacc framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
+    @jkernel kernel_text mykernel cudaacc
 
     @jenterdata cudaacc alloc(X, Y, Z) updateto(X, Y) async
-
-    @jkernel kernel_text mykernel cudaacc
 
     @jlaunch mykernel cudaacc input(X, Y) output(Z,) cuda(threads=(1,1))
 
@@ -366,19 +364,19 @@ end
 
 function hip_fortran_test_string()
 
-    kernel_hiptext = """
+    kernel_hip = """
 
 [hip]
-for(int k=0; k<JSHAPE(X, 0); k++) {
-    for(int j=0; j<JSHAPE(X, 1); j++) {
-        for(int i=0; i<JSHAPE(X, 2); i++) {
+for(int k=0; k<JLENGTH(X, 0); k++) {
+    for(int j=0; j<JLENGTH(X, 1); j++) {
+        for(int i=0; i<JLENGTH(X, 2); i++) {
             Z[k][j][i] = X[k][j][i] + Y[k][j][i];
         }
     }
 }
 """
 
-    kernel_fortrand = """
+    kernel_fortran = """
 [fortran]
 CALL RANDOM_NUMBER(X)
 CALL RANDOM_NUMBER(Y)
@@ -392,33 +390,33 @@ CALL RANDOM_NUMBER(Z)
     #println("#######")
     #println(Z)
 
-    @jaccel hipacc framework(hip=hip_compile) set(debugdir=workdir, workdir=workdir)
+    @jaccel fortran_hip framework(fortran=fort_compile) set(debugdir=workdir, workdir=workdir)
 
-    @jkernel kernel_fortrand initarrays hipacc framework(fortran=fort_compile)
+    @jkernel kernel_fortran initarrays fortran_hip
+    @jkernel kernel_hip vecadd fortran_hip framework(hip=hip_compile)
 
-    @jlaunch initarrays hipacc output(X, Y, Z) fortran(test=2)
+    @jlaunch initarrays fortran_hip output(X, Y, Z)
 
     #println("#######")
     #println(Z)
 
     ANS = X .+ Y
 
-    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y) async
+    @jenterdata fortran_hip alloc(X, Y, Z) updateto(X, Y)
 
-    @jkernel kernel_hiptext mykernel hipacc
+    @jlaunch vecadd fortran_hip input(X, Y) output(Z) hip(threads=(SHAPE,1))
 
-    @jlaunch mykernel hipacc input(X, Y) output(Z,) hip(threads=(1,1))
+    @jexitdata fortran_hip updatefrom(Z) delete(X, Y, Z)
 
-    @jexitdata hipacc updatefrom(Z) delete(X, Y, Z) async
+    @jwait fortran_hip
 
-    @jwait hipacc
+    @jdecel fortran_hip
 
     #println("#######")
     #println(Z)
 
     @test Z == ANS
 
-    @jdecel hipacc
 
 
 end
@@ -498,10 +496,9 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     ANS = X1 .+ Y1
 
     @jaccel acchipacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
+    @jkernel kernel_text mykernel acchipacc framework(hip=hip_compile)
 
     @jenterdata acchipacc alloc(X1, Y1, Z1) updateto(X1, Y1)
-
-    @jkernel kernel_text mykernel acchipacc framework(hip=hip_compile)
 
     tt = ((4,3,2),1)
     @jlaunch mykernel acchipacc input(X1, Y1) output(Z1) hip(threads=tt)
@@ -536,10 +533,9 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     ANS = X .+ Y
 
     @jaccel acccudaacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
+    @jkernel kernel_text mykernel acccudaacc framework(cuda=cuda_compile)
 
     @jenterdata acccudaacc alloc(X, Y, Z) updateto(X, Y)
-
-    @jkernel kernel_text mykernel acccudaacc framework(cuda=cuda_compile)
 
     @jlaunch mykernel acccudaacc input(X, Y) output(Z) cuda(threads=(1,1))
 

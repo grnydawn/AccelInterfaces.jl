@@ -14,13 +14,13 @@ __global__ void {kname}({kargs}) {{
 function code_cpp_macros(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
     ) :: String
 
-    return code_cpp_macros(JAI_CPP, apitype, interop_frametypes, prefix,
+    return code_cpp_macros(JAI_CPP, apitype, data_frametype, prefix,
                             args, data)
 end
 
@@ -28,13 +28,13 @@ end
 function code_cpp_header(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, interop_frametypes, prefix, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, data_frametype, prefix, args, data)
 
     lines = Vector{String}()
 
@@ -48,7 +48,7 @@ end
 function code_c_header(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -141,7 +141,7 @@ end
 function code_c_functions(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_ACCEL,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,
@@ -162,7 +162,7 @@ end
 function code_c_functions(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API_DATA,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -311,7 +311,7 @@ end
 function code_c_functions(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_LAUNCH,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,

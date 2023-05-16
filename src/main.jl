@@ -42,7 +42,7 @@ Process @jaccel macro
 
 # Implementation
   * creates AccelContext and save it in a stack
-  * select a framework for data transfer
+  * select a framework type
   * save constant variables
   * configure accel parameters
 
@@ -91,79 +91,15 @@ function jai_accel(
         workdir = get_config("workdir")
     end
 
-    ctx_frame   = select_framework(framework, compiler, workdir)
+    ctx_framework   = select_framework(framework, compiler, workdir)
+    data_framework  = Vector{Tuple{JAI_TYPE_FRAMEWORK, String}}()
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
     data_slibs  = Dict{UInt32, PtrAny}()
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
-                           ctx_frame, data_slibs, ctx_kernels)
+                       ctx_framework, data_framework, data_slibs, ctx_kernels)
 
     push!(JAI["ctx_accels"], ctx_accel)
-end
-
-
-"""
-    function jai_data
-
-Process @jenterdata and @jexitdata macros
-
-# Implementation
-  * drive the generation of data transfer source files based on the framework selected at jai_accel
-  * compile and load a shared library
-  * invoke data transfer and memory allocation/deallocation functions
-  * make aliases of device variables for inter-operability to kernels
-
-"""
-
-function jai_data(
-        aname       ::String,
-        apitype     ::JAI_TYPE_API,
-        apicount    ::Integer,
-        names       ::Vector{String},
-        control     ::Vector{String},
-        lineno      ::Integer,
-        filepath    ::String,
-        data        ::Vararg{JAI_TYPE_DATA, N} where N
-    )
-
-    ctx_accel   = get_accel(aname)
-
-    # pack data and variable names
-    args = JAI_TYPE_ARGS()
-    for (i, (n, d)) in enumerate(zip(names, data))
-        arg = pack_arg(d, name=n, inout=JAI_MAP_APITYPE_INOUT[apitype])
-        push!(args, arg)
-    end
-
-    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
-    frametype   = ctx_accel.framework.type
-
-    try
-        if uid in keys(ctx_accel.data_slibs)
-            slib = ctx_accel.data_slibs[uid]
-        else
-            prefix  = generate_prefix(aname, uid)
-            compile = ctx_accel.framework.compile
-            workdir = get_config(ctx_accel, "workdir")
-
-            # TODO : add interop frames
-            interop_frametypes  = Vector{JAI_TYPE_FRAMEWORK}()
-            for kctx in ctx_accel.ctx_kernels
-                push!(interop_frametypes, kctx.framework.type)
-            end
-
-            slib    = generate_sharedlib(frametype, apitype, prefix, compile,
-                            workdir, args, interop_frametypes=interop_frametypes)
-
-            ctx_accel.data_slibs[uid] = slib
-        end
-
-        funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
-        invoke_sharedfunc(frametype, slib, funcname, args)
-
-    catch err
-        rethrow()
-    end
 end
 
 
@@ -215,6 +151,72 @@ end
 
 
 """
+    function jai_data
+
+Process @jenterdata and @jexitdata macros
+
+# Implementation
+  * drive the generation of data transfer source files based on the framework selected at jai_accel
+  * compile and load a shared library
+  * invoke data transfer and memory allocation/deallocation functions
+  * make aliases of device variables for inter-operability to kernels
+
+"""
+
+function jai_data(
+        aname       ::String,
+        apitype     ::JAI_TYPE_API,
+        apicount    ::Integer,
+        names       ::Vector{String},
+        control     ::Vector{String},
+        lineno      ::Integer,
+        filepath    ::String,
+        data        ::Vararg{JAI_TYPE_DATA, N} where N
+    )
+
+    ctx_accel   = get_accel(aname)
+
+    # pack data and variable names
+    args = JAI_TYPE_ARGS()
+    for (i, (n, d)) in enumerate(zip(names, data))
+        arg = pack_arg(d, name=n, inout=JAI_MAP_APITYPE_INOUT[apitype])
+        push!(args, arg)
+    end
+
+    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
+    frametype   = ctx_accel.framework.type
+
+    try
+        if uid in keys(ctx_accel.data_slibs)
+            slib = ctx_accel.data_slibs[uid]
+        else
+            prefix  = generate_prefix(aname, uid)
+            compile = ctx_accel.framework.compile
+            workdir = get_config(ctx_accel, "workdir")
+
+#            interop_frametypes  = Vector{JAI_TYPE_FRAMEWORK}()
+#            for kctx in ctx_accel.ctx_kernels
+#                push!(interop_frametypes, kctx.framework.type)
+#            end
+
+            data_frametype, data_compile = select_data_framework(ctx_accel)
+
+            slib    = generate_sharedlib(frametype, apitype, data_frametype,
+                        prefix, data_compile, workdir, args)
+
+            ctx_accel.data_slibs[uid] = slib
+        end
+
+        funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
+        invoke_sharedfunc(frametype, slib, funcname, args)
+
+    catch err
+        rethrow()
+    end
+end
+
+
+"""
     function jai_launch
 
 Process @jlaunch
@@ -252,14 +254,12 @@ function jai_launch(
             compile = ctx_kernel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
             knlbody = get_knlbody(ctx_kernel)
-            
-            # TODO interop frames
-            interop_frametypes  = Vector{JAI_TYPE_FRAMEWORK}()
-            push!(interop_frametypes, ctx_accel.framework.type)
 
-            slib    = generate_sharedlib(frametype, apitype, prefix, compile,
-                            workdir, args, knlbody, launch_config=config,
-                            interop_frametypes=interop_frametypes)
+            data_frametype, data_compile = select_data_framework(ctx_accel)
+
+            slib    = generate_sharedlib(frametype, apitype, data_frametype,
+                        prefix, compile, workdir, args, knlbody,
+                        launch_config=config)
 
             ctx_kernel.launch_slibs[uid] = slib
         end

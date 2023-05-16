@@ -22,7 +22,7 @@ const JAI_MAP_JULIA_C = Dict{DataType, String}(
 function code_cpp_header(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -35,7 +35,7 @@ end
 function code_c_header(
         frame       ::Union{JAI_TYPE_CPP, JAI_TYPE_CPP_OMPTARGET},
         apitype     ::JAI_TYPE_API,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -101,7 +101,7 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_ACCEL,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -122,7 +122,7 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API_DATA,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -136,7 +136,7 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_LAUNCH,
-        interop_frames  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N

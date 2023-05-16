@@ -7,14 +7,14 @@
 function code_module_specpart(
         frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
         apitype     ::JAI_TYPE_ACCEL,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     fortran_spec = code_module_specpart(JAI_FORTRAN, apitype,
-                        interop_frametypes, prefix, args, data)
+                        data_frametype, prefix, args, data)
 
     return "USE OMP_LIB\n" * fortran_spec
 end
@@ -22,7 +22,7 @@ end
 function code_module_subppart(
         frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
         apitype     ::JAI_TYPE_ACCEL,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -69,7 +69,7 @@ end
 function code_module_subppart(
         frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
         apitype     ::JAI_TYPE_API_DATA,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -122,7 +122,7 @@ end
 function code_module_subppart(
         frame       ::JAI_TYPE_FORTRAN_OMPTARGET,
         apitype     ::JAI_TYPE_LAUNCH,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N

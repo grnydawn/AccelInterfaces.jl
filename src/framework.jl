@@ -64,6 +64,51 @@ const JAI_MAP_SYMBOL_FRAMEWORK = OrderedDict(
         :cpp                => JAI_CPP
     )
 
+# mapping what data framework can interoperate with other frameworks
+# accel/kernel framework => [data frameworks]
+# step 1: union accel/kernel frameworks, and union data frameworks
+# step 2: loop over data frameworks that supports union of accel/kernels
+const JAI_MAP_INTEROP_FRAMEWORK = OrderedDict(
+        JAI_FORTRAN             => [
+                            JAI_FORTRAN,
+                            JAI_CPP,
+                            JAI_FORTRAN_OMPTARGET,
+                            JAI_FORTRAN_OPENACC,
+                            JAI_CPP_OMPTARGET,
+                            JAI_CPP_OPENACC,
+                            JAI_CUDA,
+                            JAI_HIP
+                        ],
+        JAI_CPP                 => [
+                            JAI_CPP,
+                            JAI_FORTRAN,
+                            JAI_FORTRAN_OMPTARGET,
+                            JAI_FORTRAN_OPENACC,
+                            JAI_CPP_OMPTARGET,
+                            JAI_CPP_OPENACC,
+                            JAI_CUDA,
+                            JAI_HIP
+                        ],
+        JAI_CUDA                => [
+                            JAI_CUDA
+                        ],
+        JAI_HIP                 => [
+                            JAI_HIP
+                        ],
+        JAI_FORTRAN_OMPTARGET   => [  
+                            JAI_FORTRAN_OMPTARGET
+                        ],
+        JAI_FORTRAN_OPENACC     => [  
+                            JAI_FORTRAN_OPENACC
+                        ],
+        JAI_CPP_OMPTARGET   => [  
+                            JAI_CPP_OMPTARGET
+                        ],
+        JAI_CPP_OPENACC     => [  
+                            JAI_CPP_OPENACC
+                        ]
+    )
+
 const JAI_MAP_FRAMEWORK_STRING = OrderedDict(
         JAI_CUDA                => "cuda",
         JAI_HIP                 => "hip",
@@ -311,7 +356,7 @@ end
 function code_cpp_macros(
         frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
@@ -343,7 +388,7 @@ end
 function generate_code(
         frametype   ::JAI_TYPE_FORTRAN_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
@@ -351,8 +396,8 @@ function generate_code(
     ) :: String
 
     suffix   = JAI_MAP_API_FUNCNAME[apitype]
-    specpart = code_module_specpart(frametype, apitype, interop_frametypes, prefix, args, data)
-    subppart = code_module_subppart(frametype, apitype, interop_frametypes, prefix, args, data)
+    specpart = code_module_specpart(frametype, apitype, data_frametype, prefix, args, data)
+    subppart = code_module_subppart(frametype, apitype, data_frametype, prefix, args, data)
 
     return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
                   suffix=suffix, specpart=specpart, subppart=subppart)
@@ -361,7 +406,7 @@ end
 function generate_code(
         frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        interop_frametypes  ::Vector{JAI_TYPE_FRAMEWORK},
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
@@ -369,15 +414,15 @@ function generate_code(
     ) :: String
 
 
-    jmacros = code_cpp_macros(frametype, apitype, interop_frametypes, prefix, args, data)
-    cpp_hdr = code_cpp_header(frametype, apitype, interop_frametypes, prefix, args, data)
-    c_hdr   = code_c_header(frametype, apitype, interop_frametypes, prefix, args, data)
+    jmacros = code_cpp_macros(frametype, apitype, data_frametype, prefix, args, data)
+    cpp_hdr = code_cpp_header(frametype, apitype, data_frametype, prefix, args, data)
+    c_hdr   = code_c_header(frametype, apitype, data_frametype, prefix, args, data)
 
     if frametype in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
-        funcs   = code_c_functions(frametype, apitype, interop_frametypes, prefix,
+        funcs   = code_c_functions(frametype, apitype, data_frametype, prefix,
                                         args, data, launch_config)
     else
-        funcs   = code_c_functions(frametype, apitype, interop_frametypes, prefix,
+        funcs   = code_c_functions(frametype, apitype, data_frametype, prefix,
                                         args, data)
     end
 
@@ -397,43 +442,42 @@ include("machine.jl")
 function generate_sharedlib(
         frametype   ::JAI_TYPE_FRAMEWORK,
         apitype     ::JAI_TYPE_API,
+        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         compile     ::String,
         workdir     ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::Vararg{String, N} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
-        interop_frametypes  ::Union{Vector{JAI_TYPE_FRAMEWORK},
-                                Nothing} = nothing
     ) :: Ptr{Nothing}
-
-    # NOTE: interop_frames: 1) jai_launch case -> accel framework
-    #                       2) jai_data case -> kernel frameworks
 
     if DEBUG
         println("Enter generate_sharedlib: \n    " * string(frametype) *
                 "\n    " * string(apitype))
     end
 
-    if interop_frametypes == nothing
-        interop_frametypes = Vector{JAI_TYPE_FRAMEWORK}()
+    if apitype isa JAI_TYPE_API_DATA
+        code = generate_code(data_frametype, apitype, data_frametype, prefix, args,
+                                data, launch_config=launch_config)
+        src_frametype = data_frametype
+    else
+        code = generate_code(frametype, apitype, data_frametype, prefix, args,
+                                data, launch_config=launch_config)
+        src_frametype = frametype
     end
 
-    code = generate_code(frametype, apitype, interop_frametypes, prefix, args,
-                    data, launch_config=launch_config)
-
-    if frametype isa JAI_TYPE_FORTRAN_FRAMEWORKS
+    if src_frametype isa JAI_TYPE_FORTRAN_FRAMEWORKS
         srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
 
-    elseif frametype isa JAI_TYPE_CPP_FRAMEWORKS
+    elseif src_frametype isa JAI_TYPE_CPP_FRAMEWORKS
         srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".cpp"
     else
-        error("Unknown language: " * string(frametype))
+        error("Unknown language: " * string(src_frametype))
     end
 
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
-    slibpath = compile_code(frametype, code, compile, srcname, outname, workdir)
+    slibpath = compile_code(src_frametype, code, compile, srcname, outname, workdir)
 
     slib = load_sharedlib(slibpath)
 
@@ -502,7 +546,7 @@ function get_framework(
 
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
-        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile, workdir, args)
+        slib    = generate_sharedlib(frametype, JAI_ACCEL, nothing, prefix, compile, workdir, args)
 
         if slib isa Ptr{Nothing}
             if frametype in keys(frameworks)
@@ -572,4 +616,64 @@ function select_framework(
     end
 
     return select_framework(userframe, compiler, workdir)
+end
+
+# data framework
+function select_data_framework(
+        ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL
+    ) :: Union{Tuple{JAI_TYPE_FRAMEWORK, String}, Nothing}
+
+
+    if length(ctx_accel.data_framework) > 0
+        return ctx_accel.data_framework[1]
+    end
+
+    code_frames = Vector{JAI_TYPE_FRAMEWORK}()
+    frame_compiles = Dict{JAI_TYPE_FRAMEWORK, String}()
+    data_frames = copy(JAI_MAP_INTEROP_FRAMEWORK[ctx_accel.framework.type])
+
+    for ctx_kernel in ctx_accel.ctx_kernels
+        kframe = ctx_kernel.framework.type
+        frame_compiles[ctx_kernel.framework.type] = ctx_kernel.framework.compile
+
+        if !(kframe in code_frames)
+            push!(code_frames, kframe)
+        end
+
+        dframes = JAI_MAP_INTEROP_FRAMEWORK[kframe]
+        idx = 1
+        while idx <= length(data_frames)
+            if !(data_frames[idx] in dframes)
+                popat!(data_frames, idx)
+            else
+                idx += 1
+            end
+        end
+    end
+
+    data_frame, frame_compile = nothing, nothing
+
+    for dframe in data_frames
+        found = true
+
+        for cframe in code_frames
+            dframes = JAI_MAP_INTEROP_FRAMEWORK[cframe]
+            if !(dframe in dframes)
+                found = false
+                break
+            end
+        end
+
+        if found
+            data_frame = dframe
+            break
+        end
+    end
+
+    if data_frame != nothing
+        frame_compile = frame_compiles[data_frame]
+        push!(ctx_accel.data_framework, (data_frame, frame_compile))
+    end
+
+    return data_frame, frame_compile
 end
