@@ -96,13 +96,15 @@ const JAI_MAP_INTEROP_FRAMEWORK = OrderedDict(
                             JAI_HIP
                         ],
         JAI_FORTRAN_OMPTARGET   => [  
-                            JAI_FORTRAN_OMPTARGET
+                            JAI_FORTRAN_OMPTARGET,
+                            JAI_HIP
                         ],
         JAI_FORTRAN_OPENACC     => [  
                             JAI_FORTRAN_OPENACC
                         ],
         JAI_CPP_OMPTARGET   => [  
-                            JAI_CPP_OMPTARGET
+                            JAI_CPP_OMPTARGET,
+                            JAI_HIP
                         ],
         JAI_CPP_OPENACC     => [  
                             JAI_CPP_OPENACC

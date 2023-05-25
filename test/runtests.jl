@@ -549,6 +549,81 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
 
 end
 
+function fortran_omptarget_hip_test_string()
+
+    kernel_fortran = """
+[fortran]
+INTEGER i, j, k
+
+DO k=LBOUND(X, 3), UBOUND(X, 3)
+    DO j=LBOUND(X, 2), UBOUND(X, 2)
+        DO i=LBOUND(X, 1), UBOUND(X, 1)
+            X(i, j, k) = 1
+            Y(i, j, k) = 2
+            Z(i, j, k) = 3
+        END DO
+    END DO
+END DO
+
+"""
+
+    kernel_omptarget = """
+
+[fortran_omptarget]
+INTEGER i, j, k
+
+!\$OMP target data map(to:X, Y) map(from: Z)
+!\$OMP target parallel do
+DO k=LBOUND(X, 3), UBOUND(X, 3)
+    DO j=LBOUND(X, 2), UBOUND(X, 2)
+        DO i=LBOUND(X, 1), UBOUND(X, 1)
+            Z(i, j, k) = X(i, j, k)  + Y(i, j, k)
+        END DO
+    END DO
+END DO
+!\$OMP END target parallel do
+!\$OMP END target data
+"""
+
+    kernel_hip = """
+
+[hip]
+    int i = blockIdx.x;
+    int j = blockIdx.y;
+    int k = blockIdx.z;
+
+    Z[i][j][k] = X[i][j][k] + Y[i][j][k];
+
+"""
+    X = ones(SHAPE...)
+    Y = 2 * ones(SHAPE...)
+    Z = 3 * ones(SHAPE...)
+    ANS = 2*X .+ 2*Y
+
+    @jaccel framework(fortran=fort_compile)
+
+    @jkernel kernel_fortran kfort
+    @jkernel kernel_omptarget komp framework(fortran_omptarget=omp_compile)
+    @jkernel kernel_hip khip framework(hip=hip_compile)
+
+    @jenterdata alloc(X, Y, Z)
+
+    @jlaunch kfort output(X, Y, Z)
+
+    @jenterdata updateto(X, Y)
+
+    @jlaunch komp input(X, Y) output(Z)
+    @jlaunch khip input(X, Y) output(Z) hip(threads=(SHAPE, 1))
+
+    @jexitdata updatefrom(Z)
+
+    @test Z == ANS
+
+    @jexitdata delete(X, Y, Z)
+
+    @jdecel
+end
+
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
@@ -570,8 +645,8 @@ end
         #cpp_test_string()
         #cpp_omptarget_test()
         #hip_test_string()
-        hip_fortran_test_string()
-        #fortran_openacc_hip_test_string()
+        #hip_fortran_test_string()
+        fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"
         #fortran_test_string()
