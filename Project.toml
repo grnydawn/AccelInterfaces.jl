@@ -6,7 +6,6 @@ version = "0.1.11"
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
-Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 IOCapture = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
@@ -20,7 +19,6 @@ Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [compat]
 DataStructures = "1"
-Documenter = "1"
 IOCapture = "1"
 OffsetArrays = "1"
 Pidfile = "1"
