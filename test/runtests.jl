@@ -113,7 +113,7 @@ INTEGER i, j, k
 DO k=LBOUND(X, 3), UBOUND(X, 3)
     DO j=LBOUND(X, 2), UBOUND(X, 2)
         DO i=LBOUND(X, 1), UBOUND(X, 1)
-            Z(i, j, k) = X(i, j, k) + Y(i, j, k)
+            Z(i, j, k) = X(i, j, k) + Y(i, j, k) + TEST1
         END DO
     END DO
 END DO
@@ -126,7 +126,7 @@ END DO
 
     fcompile = Dict("compile" => fort_compile)
 
-    @jaccel fortacc framework(fortran=fcompile) set(debug=true)
+    @jaccel fortacc framework(fortran=fcompile) constant(TEST1, TEST2) set(debug=true)
     @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
 
     @jenterdata fortacc alloc(X, Y, Z)
@@ -272,7 +272,7 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel framework(cpp=cpp_compile)
+    @jaccel framework(cpp=cpp_compile) constant(TEST2)
 
     @jkernel kernel_text
 
@@ -642,11 +642,11 @@ end
         #fortran_test_file()
         ##fortran_openacc_tests()
         #fortran_omptarget_tests()
-        #cpp_test_string()
+        cpp_test_string()
         #cpp_omptarget_test()
         #hip_test_string()
         #hip_fortran_test_string()
-        fortran_omptarget_hip_test_string()
+        #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"
         #fortran_test_string()

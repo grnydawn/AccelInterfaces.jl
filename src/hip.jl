@@ -84,44 +84,6 @@ function code_c_header(
 
 end
 
-function code_c_typedecl(arg::JAI_TYPE_ARG) :: Tuple{String, String, String}
-
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
-
-    if var isa AbstractArray
-
-        typestr = JAI_MAP_JULIA_C[dtype]
-        dimlist = Vector{String}(undef, length(vshape))
-        accum = 1
-
-        for (idx, len) in enumerate(reverse(vshape))
-            dimlist[idx] = "[" * string(len) * "]"
-        end
-
-        dimstr = join(dimlist, "")
-
-    else
-        typestr = JAI_MAP_JULIA_C[dtype]
-        dimstr = ""
-    end
-
-    return typestr, vname, dimstr
-end
-
-function code_c_dummyargs(
-        args        ::JAI_TYPE_ARGS
-    ) ::String
-
-    dargs = Vector{String}()
-
-    for arg in args
-        typestr, vname, dimstr = code_c_typedecl(arg)
-        push!(dargs, typestr * " " * vname * dimstr)
-    end
-
-    return join(dargs, ", ")
-end
-
 function code_c_function(
         prefix      ::String,
         suffix      ::String,

@@ -79,10 +79,12 @@ function jai_accel(
         aname = string(aid, base = 16)
     end
 
-    cvars = OrderedDict{String, JAI_TYPE_DATA}()
+    # pack const and variable names
+    cvars = JAI_TYPE_ARGS()
     if const_names != nothing && const_vars != nothing
-        for (name, var) in zip(const_names, const_vars)
-            cvars[name] = var
+        for (n, v) in zip(const_names, const_vars)
+            cvar = pack_arg(v, name=n, inout=JAI_ARG_IN)
+            push!(cvars, cvar)
         end
     end
 
@@ -202,7 +204,7 @@ function jai_data(
             data_frametype, data_compile = select_data_framework(ctx_accel)
 
             slib    = generate_sharedlib(frametype, apitype, data_frametype,
-                        prefix, data_compile, workdir, args)
+                        prefix, data_compile, workdir, ctx_accel.const_vars, args)
 
             ctx_accel.data_slibs[uid] = slib
         end
@@ -258,7 +260,7 @@ function jai_launch(
             data_frametype, data_compile = select_data_framework(ctx_accel)
 
             slib    = generate_sharedlib(frametype, apitype, data_frametype,
-                        prefix, compile, workdir, args, knlbody,
+                        prefix, compile, workdir, ctx_accel.const_vars, args, knlbody,
                         launch_config=config)
 
             ctx_kernel.launch_slibs[uid] = slib

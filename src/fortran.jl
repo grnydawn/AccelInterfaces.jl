@@ -39,19 +39,12 @@ function code_fortran_function(
 
 end
 
-function code_fortran_typedecl(
-        arg ::JAI_TYPE_ARG;
-        inout :: Union{JAI_TYPE_INOUT, Nothing} = nothing
-    ) :: String
-
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
-
-    if inout isa JAI_TYPE_INOUT
-        vinout = inout
-    end
-
-    type = JAI_MAP_JULIA_FORTRAN[dtype]
-    attrs = Vector{String}()
+function code_attr_dimension(
+        attrs   ::Vector{String},
+        var     ::JAI_TYPE_DATA,
+        vshape  ::NTuple{N, T} where {N, T<:Integer},
+        voffset ::NTuple{N, T} where {N, T<:Integer}
+    ) :: Vector{String}
 
     if var isa OffsetArray
         dimlist = Vector{String}()
@@ -69,6 +62,41 @@ function code_fortran_typedecl(
 
     end
 
+    attrs
+end
+
+function code_parameter_typedecl(
+        cvar ::JAI_TYPE_ARG;
+    ) :: String
+
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = cvar
+
+    type = JAI_MAP_JULIA_FORTRAN[dtype]
+
+    attrs = Vector{String}()
+    code_attr_dimension(attrs, var, vshape, voffset)
+    push!(attrs, "PARAMETER") 
+
+    return type * ", " * join(attrs, ", ") * " :: " * vname * " = " * code_fortran_valstring(var)
+end
+
+
+
+function code_fortran_typedecl(
+        arg ::JAI_TYPE_ARG;
+        inout :: Union{JAI_TYPE_INOUT, Nothing} = nothing
+    ) :: String
+
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
+
+    type = JAI_MAP_JULIA_FORTRAN[dtype]
+
+    attrs = Vector{String}()
+    code_attr_dimension(attrs, var, vshape, voffset)
+
+    if inout isa JAI_TYPE_INOUT
+        vinout = inout
+    end
     push!(attrs, JAI_MAP_FORTRAN_INOUT[vinout])
 
     return type * ", " * join(attrs, ", ") * " :: " * vname
@@ -82,15 +110,20 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_ACCEL,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    specs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
+    specs = Vector{String}()
 
-    for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
+    for cvar in cvars
+        push!(specs, code_parameter_typedecl(cvar))
+    end
+
+    for (name, inout) in JAI_ACCEL_FUNCTIONS
         funcname = prefix * name
-        specs[i] = "PUBLIC " * funcname
+        push!(specs, "PUBLIC " * funcname)
     end
 
     return join(specs, "\n")
@@ -124,11 +157,21 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_API_DATA,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
+    specs = Vector{String}()
+
+    for cvar in cvars
+        push!(specs, code_parameter_typedecl(cvar))
+    end
+
+    push!(specs, "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype])
+
+    return join(specs, "\n")
+
 end
 
 function code_module_subppart(
@@ -164,11 +207,21 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_LAUNCH,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    return "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype]
+    specs = Vector{String}()
+
+    for cvar in cvars
+        push!(specs, code_parameter_typedecl(cvar))
+    end
+
+    push!(specs, "PUBLIC " * prefix * JAI_MAP_API_FUNCNAME[apitype])
+
+    return join(specs, "\n")
+
 end
 
 function code_module_subppart(

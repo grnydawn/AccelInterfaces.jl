@@ -3,6 +3,7 @@
 import InteractiveUtils.subtypes
 import Libdl: dlopen, RTLD_LAZY, RTLD_DEEPBIND, RTLD_GLOBAL, dlext, dlsym, dlclose
 import IOCapture
+import OffsetArrays: OffsetVector, OffsetArray
 
 const JAI_FORTRAN                   = JAI_TYPE_FORTRAN()
 const JAI_FORTRAN_OPENACC           = JAI_TYPE_FORTRAN_OPENACC()
@@ -392,14 +393,17 @@ function generate_code(
         apitype     ::JAI_TYPE_API,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
 
     suffix   = JAI_MAP_API_FUNCNAME[apitype]
-    specpart = code_module_specpart(frametype, apitype, data_frametype, prefix, args, data)
-    subppart = code_module_subppart(frametype, apitype, data_frametype, prefix, args, data)
+    specpart = code_module_specpart(frametype, apitype, data_frametype, prefix,
+                                    cvars, args, data)
+    subppart = code_module_subppart(frametype, apitype, data_frametype, prefix,
+                                    args, data)
 
     return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
                   suffix=suffix, specpart=specpart, subppart=subppart)
@@ -410,15 +414,19 @@ function generate_code(
         apitype     ::JAI_TYPE_API,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
 
 
-    jmacros = code_cpp_macros(frametype, apitype, data_frametype, prefix, args, data)
-    cpp_hdr = code_cpp_header(frametype, apitype, data_frametype, prefix, args, data)
-    c_hdr   = code_c_header(frametype, apitype, data_frametype, prefix, args, data)
+    jmacros = code_cpp_macros(frametype, apitype, data_frametype, prefix,
+                                args, data)
+    cpp_hdr = code_cpp_header(frametype, apitype, data_frametype, prefix,
+                                cvars, args, data)
+    c_hdr   = code_c_header(frametype, apitype, data_frametype, prefix,
+                                args, data)
 
     if frametype in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
         funcs   = code_c_functions(frametype, apitype, data_frametype, prefix,
@@ -448,6 +456,7 @@ function generate_sharedlib(
         prefix      ::String,
         compile     ::String,
         workdir     ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::Vararg{String, N} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
@@ -459,12 +468,12 @@ function generate_sharedlib(
     end
 
     if apitype isa JAI_TYPE_API_DATA
-        code = generate_code(data_frametype, apitype, data_frametype, prefix, args,
-                                data, launch_config=launch_config)
+        code = generate_code(data_frametype, apitype, data_frametype, prefix,
+                            cvars, args, data, launch_config=launch_config)
         src_frametype = data_frametype
     else
-        code = generate_code(frametype, apitype, data_frametype, prefix, args,
-                                data, launch_config=launch_config)
+        code = generate_code(frametype, apitype, data_frametype, prefix,
+                            cvars, args, data, launch_config=launch_config)
         src_frametype = frametype
     end
 
@@ -544,11 +553,14 @@ function get_framework(
     args = JAI_TYPE_ARGS()
     push!(args, pack_arg(fill(Int64(-1), 1)))
 
+    cvars = JAI_TYPE_ARGS()
+
     for compile in compiles
 
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
-        slib    = generate_sharedlib(frametype, JAI_ACCEL, nothing, prefix, compile, workdir, args)
+        slib    = generate_sharedlib(frametype, JAI_ACCEL, nothing, prefix,
+                                        compile, workdir, cvars, args)
 
         if slib isa Ptr{Nothing}
             if frametype in keys(frameworks)

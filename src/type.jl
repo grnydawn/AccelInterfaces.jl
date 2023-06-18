@@ -148,7 +148,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     aname           ::String
     aid             ::UInt32
     config          ::JAI_TYPE_CONFIG_USER
-    const_vars      ::OrderedDict{String, JAI_TYPE_DATA}
+    const_vars      ::JAI_TYPE_ARGS
     devices         ::NTuple{N, Integer} where N
     framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
     data_framework  ::Vector{Tuple{JAI_TYPE_FRAMEWORK, String}}

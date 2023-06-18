@@ -70,22 +70,29 @@ function pack_arg(
         name = "var_" * randstring(4) 
     end
 
+    bytes   = sizeof(arg)
+
     if arg isa AbstractArray
 
         shape   = size(arg)
         dtype   = eltype(arg)
-        bytes   = sizeof(arg)
 
         if arg isa OffsetArray
             offsets = arg.offsets
         else
             offsets = Tuple(1 for _ in 1:length(arg))
         end
+
+    elseif arg isa Tuple
+
+        shape   = Tuple(length(arg))
+        dtype   = eltype(arg)
+        offsets = Tuple(1)
+
     else
         shape   = ()
         offsets = ()
         dtype   = typeof(arg)
-        bytes   = Int64(0)
     end
 
     return (arg, dtype, name, inout, bytes, shape, offsets)

@@ -19,16 +19,43 @@ const JAI_MAP_JULIA_C = Dict{DataType, String}(
 
 ###### START of CODEGEN #######
 
+function code_cpp_valstr(
+        cvar    ::JAI_TYPE_ARG
+    ) ::String
+
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = cvar
+
+    if length(vshape) > 0
+        temp = Vector{String}()
+        for i in eachindex(var)
+            push!(temp, string(var[i]))
+        end    
+        valstr = "{" * join(temp, ", ") * "}"
+    else
+        valstr = string(var)
+    end
+
+    return valstr
+end
+
 function code_cpp_header(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    return ""
+    consts = Vector{String}()
+
+    for cvar in cvars
+        typestr, vname, dimstr = code_c_typedecl(cvar)
+        push!(consts, "const $typestr $vname $dimstr = $(code_cpp_valstr(cvar));")
+    end
+
+    return join(consts, "\n")
 
 end
 
@@ -45,13 +72,14 @@ function code_c_header(
 
 end
 
-function code_c_typedecl(arg::JAI_TYPE_ARG) :: String
+function code_c_typedecl(arg::JAI_TYPE_ARG) :: Tuple{String, String, String}
 
     (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
 
+    typestr = JAI_MAP_JULIA_C[dtype]
+
     if var isa AbstractArray
 
-        typestr = JAI_MAP_JULIA_C[dtype]
         dimlist = Vector{String}(undef, length(vshape))
         accum = 1
 
@@ -61,13 +89,40 @@ function code_c_typedecl(arg::JAI_TYPE_ARG) :: String
 
         dimstr = join(dimlist, "")
 
+    elseif var isa Tuple
+
+        dimstr = "[" * string(length(var)) * "]"
+
     else
-        typestr = JAI_MAP_JULIA_C[dtype]
         dimstr = ""
     end
 
-    return typestr * " " * vname * dimstr
+    return typestr, vname, dimstr
 end
+
+#function code_c_typedecl(arg::JAI_TYPE_ARG) :: String
+#
+#    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
+#
+#    if var isa AbstractArray
+#
+#        typestr = JAI_MAP_JULIA_C[dtype]
+#        dimlist = Vector{String}(undef, length(vshape))
+#        accum = 1
+#
+#        for (idx, len) in enumerate(reverse(vshape))
+#            dimlist[idx] = "[" * string(len) * "]"
+#        end
+#
+#        dimstr = join(dimlist, "")
+#
+#    else
+#        typestr = JAI_MAP_JULIA_C[dtype]
+#        dimstr = ""
+#    end
+#
+#    return (typestr * " " * vname * dimstr)
+#end
 
 function code_c_dummyargs(
         args        ::JAI_TYPE_ARGS
@@ -76,7 +131,8 @@ function code_c_dummyargs(
     dargs = Vector{String}()
 
     for arg in args
-        push!(dargs, code_c_typedecl(arg))
+        typestr, vname, dimstr = code_c_typedecl(arg)
+        push!(dargs, typestr * " " * vname * dimstr)
     end
 
     return join(dargs, ", ")
