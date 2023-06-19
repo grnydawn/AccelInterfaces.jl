@@ -94,6 +94,7 @@ end
 
 const TEST1 = 100
 const TEST2 = (1, 2)
+const TEST3 = rand(Float64, (2,3))
 const SHAPE = (2,3,4)
 #const SHAPE = (200,30,40)
 
@@ -113,7 +114,7 @@ INTEGER i, j, k
 DO k=LBOUND(X, 3), UBOUND(X, 3)
     DO j=LBOUND(X, 2), UBOUND(X, 2)
         DO i=LBOUND(X, 1), UBOUND(X, 1)
-            Z(i, j, k) = X(i, j, k) + Y(i, j, k) + TEST1
+            Z(i, j, k) = X(i, j, k) + Y(i, j, k)
         END DO
     END DO
 END DO
@@ -126,7 +127,7 @@ END DO
 
     fcompile = Dict("compile" => fort_compile)
 
-    @jaccel fortacc framework(fortran=fcompile) constant(TEST1, TEST2) set(debug=true)
+    @jaccel fortacc framework(fortran=fcompile) constant(TEST1, TEST2, TEST3) set(debug=true)
     @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
 
     @jenterdata fortacc alloc(X, Y, Z)
@@ -272,7 +273,7 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel framework(cpp=cpp_compile) constant(TEST2)
+    @jaccel framework(cpp=cpp_compile) constant(TEST1, TEST2, TEST3)
 
     @jkernel kernel_text
 
@@ -638,7 +639,7 @@ end
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Frontier"
-        #fortran_test_string()
+        fortran_test_string()
         #fortran_test_file()
         ##fortran_openacc_tests()
         #fortran_omptarget_tests()

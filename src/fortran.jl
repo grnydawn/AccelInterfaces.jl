@@ -65,6 +65,29 @@ function code_attr_dimension(
     attrs
 end
 
+function code_fortran_valstr(
+        cvar ::JAI_TYPE_ARG;
+    ) :: String
+
+    (var, dtype, vname, vinout, bytes, vshape, voffset) = cvar
+
+    if length(vshape) > 0
+        temp = Vector{String}()
+        for i in eachindex(var)
+            push!(temp, string(var[i]))
+        end    
+        if length(vshape) > 1
+            valstr = "&\nRESHAPE((/" * join(temp, ", &\n") * "/), &\n(/" * string(vshape)[2:end-1] * "/))"
+        else
+            valstr = "(/" * join(temp, ", &\n") * "/)"
+        end
+    else
+        valstr = string(var)
+    end
+
+    return valstr
+end
+
 function code_parameter_typedecl(
         cvar ::JAI_TYPE_ARG;
     ) :: String
@@ -77,7 +100,7 @@ function code_parameter_typedecl(
     code_attr_dimension(attrs, var, vshape, voffset)
     push!(attrs, "PARAMETER") 
 
-    return type * ", " * join(attrs, ", ") * " :: " * vname * " = " * code_fortran_valstring(var)
+    return type * ", " * join(attrs, ", ") * " :: " * vname * " = " * code_fortran_valstr(cvar)
 end
 
 
