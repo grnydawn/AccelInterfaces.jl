@@ -79,11 +79,13 @@ function jai_accel(
         aname = string(aid, base = 16)
     end
 
+    externs     = Dict{Ptr{Nothing}, String}()
+    apitype     = JAI_ACCEL
     # pack const and variable names
     cvars = JAI_TYPE_ARGS()
     if const_names != nothing && const_vars != nothing
         for (n, v) in zip(const_names, const_vars)
-            cvar = pack_arg(v, name=n, inout=JAI_ARG_IN)
+            cvar = pack_arg(v, externs, apitype, name=n)
             push!(cvars, cvar)
         end
     end
@@ -99,7 +101,8 @@ function jai_accel(
     data_slibs  = Dict{UInt32, PtrAny}()
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
-                       ctx_framework, data_framework, data_slibs, ctx_kernels)
+                        ctx_framework, data_framework, data_slibs,
+                        ctx_kernels, externs)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -181,7 +184,7 @@ function jai_data(
     # pack data and variable names
     args = JAI_TYPE_ARGS()
     for (i, (n, d)) in enumerate(zip(names, data))
-        arg = pack_arg(d, name=n, inout=JAI_MAP_APITYPE_INOUT[apitype])
+        arg = pack_arg(d, ctx_accel.externs, apitype, name=n)
         push!(args, arg)
     end
 
@@ -195,11 +198,6 @@ function jai_data(
         else
             compile = ctx_accel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
-
-#            interop_frametypes  = Vector{JAI_TYPE_FRAMEWORK}()
-#            for kctx in ctx_accel.ctx_kernels
-#                push!(interop_frametypes, kctx.framework.type)
-#            end
 
             data_frametype, data_compile = select_data_framework(ctx_accel)
 
@@ -242,9 +240,11 @@ function jai_launch(
     )
 
     apitype     = JAI_LAUNCH
-    args        = pack_args(innames, input, outnames, output)
     ctx_accel   = get_accel(aname)
     ctx_kernel  = get_kernel(ctx_accel, kname)
+
+    args        = pack_args(innames, input, outnames, output,
+                            ctx_accel.externs, apitype)
     uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
     frametype   = ctx_kernel.framework.type
     prefix      = generate_prefix(kname, uid)
@@ -280,7 +280,7 @@ end
 function _jwait(framework::JAI_TYPE_CONTEXT_FRAMEWORK)
 
     args = JAI_TYPE_ARGS()
-    push!(args, pack_arg(fill(Int64(-1), 1)))
+    push!(args, pack_arg(fill(Int64(-1), 1), nothing, nothing))
 
     frame   = framework.type
     slib    = framework.slib

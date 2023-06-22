@@ -14,6 +14,7 @@ struct JAI_TYPE_UPDATETO    <: JAI_TYPE_API end
 struct JAI_TYPE_UPDATEFROM  <: JAI_TYPE_API end
 struct JAI_TYPE_LAUNCH      <: JAI_TYPE_API end
 struct JAI_TYPE_WAIT        <: JAI_TYPE_API end
+struct JAI_TYPE_NULLAPI     <: JAI_TYPE_API end
 
 const JAI_TYPE_API_DATA = Union{JAI_TYPE_ALLOCATE, JAI_TYPE_DEALLOCATE,
                                 JAI_TYPE_UPDATETO, JAI_TYPE_UPDATEFROM}
@@ -26,6 +27,7 @@ const JAI_UPDATETO          = JAI_TYPE_UPDATETO()
 const JAI_UPDATEFROM        = JAI_TYPE_UPDATEFROM()
 const JAI_LAUNCH            = JAI_TYPE_LAUNCH()
 const JAI_WAIT              = JAI_TYPE_WAIT()
+const JAI_NULLAPI           = JAI_TYPE_NULLAPI()
 
 # Jai data types
 const PtrAny    = Ptr{Any}
@@ -82,15 +84,20 @@ const JAI_TYPE_ARG = Tuple{ JAI_TYPE_DATA,
                             JAI_TYPE_INOUT,
                             Int64,
                             NTuple{N, T} where {N, T<:Integer},
-                            NTuple{N, T} where {N, T<:Integer}
+                            NTuple{N, T} where {N, T<:Integer},
+                            String
                         }
 const JAI_TYPE_ARGS = Vector{JAI_TYPE_ARG}
 
 const JAI_MAP_APITYPE_INOUT = Dict{JAI_TYPE_API, JAI_TYPE_INOUT}(
+        JAI_ACCEL       => JAI_ARG_IN,
+        JAI_KERNEL      => JAI_ARG_IN,
         JAI_ALLOCATE    => JAI_ARG_IN,
         JAI_DEALLOCATE  => JAI_ARG_IN,
         JAI_UPDATETO    => JAI_ARG_IN,
-        JAI_UPDATEFROM  => JAI_ARG_INOUT
+        JAI_UPDATEFROM  => JAI_ARG_INOUT,
+        JAI_LAUNCH      => JAI_ARG_IN,
+        JAI_WAIT        => JAI_ARG_IN
     )
 
 
@@ -154,6 +161,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     data_framework  ::Vector{Tuple{JAI_TYPE_FRAMEWORK, String}}
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
+    externs         ::Dict{Ptr{Nothing}, String}
 end
 
 struct JAI_TYPE_OS

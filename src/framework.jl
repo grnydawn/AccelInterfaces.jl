@@ -165,6 +165,8 @@ INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 {execpart}
 
+print *, "Exits {prefix}{suffix}"
+
 {prefix}{suffix} = JAI_ERRORCODE
 
 END FUNCTION
@@ -244,7 +246,7 @@ function argsdtypes(
 
     dtypes = Vector{DataType}(undef, N)
 
-    for (i, (arg, name, inout, addr, shape, offsets)) in enumerate(args)
+    for (i, (arg, name, inout, addr, shape, offsets, extname)) in enumerate(args)
 
         if typeof(arg) <: AbstractArray
             dtype = Ptr{typeof(arg)}
@@ -375,7 +377,7 @@ function code_cpp_macros(
 
     device = frametype in (JAI_CUDA, JAI_HIP) ? "__device__ " : ""
 
-    for (var, dtype, vname, vinout, addr, vshape, voffset) in args
+    for (var, dtype, vname, vinout, addr, vshape, voffset, extname) in args
         if var isa AbstractArray
             accum = 1
             for (idx, len) in enumerate(reverse(vshape))
@@ -554,7 +556,7 @@ function get_framework(
     end
 
     args = JAI_TYPE_ARGS()
-    push!(args, pack_arg(fill(Int64(-1), 1)))
+    push!(args, pack_arg(fill(Int64(-1), 1), nothing, nothing))
 
     cvars = JAI_TYPE_ARGS()
 

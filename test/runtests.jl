@@ -641,7 +641,7 @@ end
     elseif SYSNAME == "Frontier"
         fortran_test_string()
         fortran_test_file()
-        ##fortran_openacc_tests()
+        #fortran_openacc_tests()
         fortran_omptarget_tests()
         cpp_test_string()
         cpp_omptarget_test()

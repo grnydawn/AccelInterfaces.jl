@@ -23,7 +23,7 @@ function code_cpp_valstr(
         cvar    ::JAI_TYPE_ARG
     ) ::String
 
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = cvar
+    (var, dtype, vname, vinout, bytes, vshape, voffset, extname) = cvar
 
     if length(vshape) > 0
         temp = Vector{String}()
@@ -74,7 +74,7 @@ end
 
 function code_c_typedecl(arg::JAI_TYPE_ARG) :: Tuple{String, String, String}
 
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
+    (var, dtype, vname, vinout, bytes, vshape, voffset, extname) = arg
 
     typestr = JAI_MAP_JULIA_C[dtype]
 

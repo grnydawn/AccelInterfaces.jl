@@ -69,7 +69,7 @@ function code_fortran_valstr(
         cvar ::JAI_TYPE_ARG;
     ) :: String
 
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = cvar
+    (var, dtype, vname, vinout, bytes, vshape, voffset, extname) = cvar
 
     if length(vshape) > 0
         temp = Vector{String}()
@@ -92,7 +92,7 @@ function code_parameter_typedecl(
         cvar ::JAI_TYPE_ARG;
     ) :: String
 
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = cvar
+    (var, dtype, vname, vinout, bytes, vshape, voffset, extname) = cvar
 
     type = JAI_MAP_JULIA_FORTRAN[dtype]
 
@@ -110,7 +110,7 @@ function code_fortran_typedecl(
         inout :: Union{JAI_TYPE_INOUT, Nothing} = nothing
     ) :: String
 
-    (var, dtype, vname, vinout, bytes, vshape, voffset) = arg
+    (var, dtype, vname, vinout, bytes, vshape, voffset, extname) = arg
 
     type = JAI_MAP_JULIA_FORTRAN[dtype]
 

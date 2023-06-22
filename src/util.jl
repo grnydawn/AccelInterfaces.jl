@@ -61,16 +61,28 @@ macro jwarn(e)  :(@warn  sprint(showerror, $(esc(e)))) end
 macro jerror(e) :(@error sprint(showerror, $(esc(e)))) end
 
 function pack_arg(
-        arg::JAI_TYPE_DATA;
-        name="",
-        inout=JAI_ARG_IN
+        arg     ::JAI_TYPE_DATA,
+        externs ::Union{Nothing, Dict{Ptr{Nothing}, String}},
+        apitype ::Union{Nothing, JAI_TYPE_API};
+        name    ::String="",
+        inout   ::Union{Nothing, JAI_TYPE_INOUT}=nothing
     ) :: JAI_TYPE_ARG
+
+
+    if inout == nothing
+        if apitype isa JAI_TYPE_API
+            inout=JAI_MAP_APITYPE_INOUT[apitype]
+        else
+            inout = JAI_ARG_IN
+        end
+    end
 
     if name == ""
         name = "var_" * randstring(4) 
     end
 
     bytes   = sizeof(arg)
+    extname = ""        
 
     if arg isa AbstractArray
 
@@ -78,10 +90,26 @@ function pack_arg(
         dtype   = eltype(arg)
 
         if arg isa OffsetArray
-            bytes   = sizeof(parent(arg))
+            pobj = parent(arg)
+            addr = pointer_from_objref(pobj)
+            bytes   = sizeof(pobj)
             offsets = arg.offsets
         else
+            addr = pointer_from_objref(arg)
             offsets = Tuple(1 for _ in 1:length(arg))
+        end
+
+        if externs isa Dict{Ptr{Nothing}, String}
+            if apitype isa JAI_TYPE_ALLOCATE
+                lenext = length(externs)
+                extname = "jai_extern_$(lenext)_$(name)"
+                externs[addr] = extname
+
+            elseif apitype isa JAI_TYPE_API_DATA || apitype isa JAI_TYPE_LAUNCH
+                if haskey(externs, addr)
+                    extname = externs[addr]
+                end
+            end
         end
 
     elseif arg isa Tuple
@@ -96,7 +124,7 @@ function pack_arg(
         dtype   = typeof(arg)
     end
 
-    return (arg, dtype, name, inout, bytes, shape, offsets)
+    return (arg, dtype, name, inout, bytes, shape, offsets, extname)
 end
 
 
@@ -104,7 +132,9 @@ function pack_args(
         innames     ::Vector{String},
         indata      ::NTuple{N, JAI_TYPE_DATA} where N,
         outnames    ::Vector{String},
-        outdata     ::NTuple{N, JAI_TYPE_DATA} where N
+        outdata     ::NTuple{N, JAI_TYPE_DATA} where N,
+        externs     ::Union{Nothing, Dict{Ptr{Nothing}, String}},
+        apitype     ::Union{Nothing, JAI_TYPE_API}
     ) :: JAI_TYPE_ARGS
 
     buf = OrderedDict()
@@ -124,7 +154,7 @@ function pack_args(
     args = JAI_TYPE_ARGS()
 
     for (n, (d, inout)) in buf
-        arg = pack_arg(d, name=n, inout=inout)
+        arg = pack_arg(d, externs, apitype, name=n, inout=inout)
         push!(args, arg)
     end
 

@@ -59,13 +59,17 @@ function code_c_header(
 
     for arg in args
         typestr, vname, dimstr = code_c_typedecl(arg)
-        addr = "addr_unknown"
-        try
-            addr = repr(UInt64(pointer_from_objref(arg[1])))
-        catch e
-            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
-        end
-        ename = "jai_extern_$(addr)_$(vname)"
+#        addr = "addr_unknown"
+#        try
+#            addr = repr(UInt64(pointer_from_objref(arg[1])))
+#        catch e
+#            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
+#        end
+#        println("WWWWWWWWWWE", vname, "WWW", arg[end])
+#
+#        ename = "jai_extern_$(addr)_$(vname)"
+
+        ename = arg[end]
 
         if apitype == JAI_ALLOCATE
             #push!(buf, "$typestr * $(ename)$(dimstr);")
@@ -142,13 +146,15 @@ function code_c_functions(
         aname = arg[3]
         asize = arg[5]
 
-        addr = "addr_unknown"
-        try
-            addr = repr(UInt64(pointer_from_objref(arg[1])))
-        catch e
-            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
-        end
-        ename = "jai_extern_$(addr)_$(aname)"
+#        addr = "addr_unknown"
+#        try
+#            addr = repr(UInt64(pointer_from_objref(arg[1])))
+#        catch e
+#            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
+#        end
+#        ename = "jai_extern_$(addr)_$(aname)"
+
+        ename = arg[end]
 
         if apitype == JAI_ALLOCATE
             push!(buf, "HIP_ASSERT(hipMalloc((void**)&$ename, $asize));")
@@ -235,7 +241,6 @@ function code_hip_driver_body(
     anames  = fill("", nargs)
     #dname   = args[end][3]
 
-    # (var, dtype, vname, vinout, addr, vshape, voffset)
     for (i, arg) in enumerate(args)
 
         aname= arg[3] 
@@ -244,13 +249,14 @@ function code_hip_driver_body(
         if arg[1] isa AbstractArray
             t, n, d = code_c_typedecl(arg)
 
-            addr = "addr_unknown"
-            try
-                addr = repr(UInt64(pointer_from_objref(arg[1])))
-            catch e
-                addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
-            end
-            ename = "jai_extern_$(addr)_$(n)"
+#            addr = "addr_unknown"
+#            try
+#                addr = repr(UInt64(pointer_from_objref(arg[1])))
+#            catch e
+#                addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
+#            end
+#            ename = "jai_extern_$(addr)_$(n)"
+            ename = arg[end]
 
             buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($ename);"
             anames[i] = "(*ptr_$n)" 
