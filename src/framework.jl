@@ -193,8 +193,11 @@ int64_t {name}({dargs}) {{
 int64_t jai_res;
 jai_res = 0;
 
+printf("Entering %s\\n", "{name}");
+
 {body}
 
+printf("Exiting %s\\n", "{name}");
 return jai_res;
 }}
 """

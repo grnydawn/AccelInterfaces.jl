@@ -187,12 +187,12 @@ function jai_data(
 
     uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
     frametype   = ctx_accel.framework.type
+    prefix      = generate_prefix(aname, uid)
 
     try
         if uid in keys(ctx_accel.data_slibs)
             slib = ctx_accel.data_slibs[uid]
         else
-            prefix  = generate_prefix(aname, uid)
             compile = ctx_accel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
 
@@ -247,12 +247,12 @@ function jai_launch(
     ctx_kernel  = get_kernel(ctx_accel, kname)
     uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
     frametype   = ctx_kernel.framework.type
+    prefix      = generate_prefix(kname, uid)
 
     try
         if uid in keys(ctx_kernel.launch_slibs)
             slib    = ctx_kernel.launch_slibs[uid]
         else
-            prefix  = generate_prefix(kname, uid)
             compile = ctx_kernel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
             knlbody = get_knlbody(ctx_kernel)

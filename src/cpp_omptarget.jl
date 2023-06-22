@@ -9,11 +9,13 @@ function code_cpp_header(
         apitype     ::JAI_TYPE_API,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, data_frametype, prefix, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, data_frametype, prefix,
+                                cvars, args, data)
 
     return "#include <omp.h>\n" * cpp_hdr
 

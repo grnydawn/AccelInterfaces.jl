@@ -9,12 +9,13 @@ function code_module_specpart(
         apitype     ::JAI_TYPE_ACCEL,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     fortran_spec = code_module_specpart(JAI_FORTRAN, apitype,
-                        data_frametype, prefix, args, data)
+                        data_frametype, prefix, cvars, args, data)
 
     return "USE OMP_LIB\n" * fortran_spec
 end

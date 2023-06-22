@@ -78,6 +78,7 @@ function pack_arg(
         dtype   = eltype(arg)
 
         if arg isa OffsetArray
+            bytes   = sizeof(parent(arg))
             offsets = arg.offsets
         else
             offsets = Tuple(1 for _ in 1:length(arg))

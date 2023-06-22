@@ -439,7 +439,7 @@ for(int i=0; i<JLENGTH(X, 0); i++) {
     int j = blockIdx.y;
     int k = blockIdx.z;
 
-    Z[i][j][k] = X[i][j][k] + Y[i][j][k];
+    Z[k][j][i] = X[k][j][i] + Y[k][j][i];
 """
 
     X = rand(Float64, SHAPE)
@@ -640,13 +640,13 @@ end
 
     elseif SYSNAME == "Frontier"
         fortran_test_string()
-        #fortran_test_file()
+        fortran_test_file()
         ##fortran_openacc_tests()
-        #fortran_omptarget_tests()
+        fortran_omptarget_tests()
         cpp_test_string()
-        #cpp_omptarget_test()
-        #hip_test_string()
-        #hip_fortran_test_string()
+        cpp_omptarget_test()
+        hip_test_string()
+        hip_fortran_test_string()
         #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"

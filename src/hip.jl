@@ -30,18 +30,19 @@ function code_cpp_header(
         apitype     ::JAI_TYPE_API,
         data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, data_frametype, prefix, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, data_frametype, prefix, cvars, args, data)
 
     lines = Vector{String}()
 
-    push!(lines, "#include \"hip/hip_runtime.h\"")
-    push!(lines, "#define HIP_ASSERT(x) (assert((x)==hipSuccess))")
+    push!(lines, "#include \"hip/hip_runtime.h\"\n")
+    push!(lines, "#define HIP_ASSERT(x) (assert((x)==hipSuccess))\n")
 
-    return  join(lines, "\n") * cpp_hdr
+    return  join(lines, "") * cpp_hdr
 
 end
 
@@ -58,7 +59,12 @@ function code_c_header(
 
     for arg in args
         typestr, vname, dimstr = code_c_typedecl(arg)
-        addr = repr(UInt64(pointer_from_objref(arg[1])))
+        addr = "addr_unknown"
+        try
+            addr = repr(UInt64(pointer_from_objref(arg[1])))
+        catch e
+            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
+        end
         ename = "jai_extern_$(addr)_$(vname)"
 
         if apitype == JAI_ALLOCATE
@@ -136,7 +142,12 @@ function code_c_functions(
         aname = arg[3]
         asize = arg[5]
 
-        addr = repr(UInt64(pointer_from_objref(arg[1])))
+        addr = "addr_unknown"
+        try
+            addr = repr(UInt64(pointer_from_objref(arg[1])))
+        catch e
+            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
+        end
         ename = "jai_extern_$(addr)_$(aname)"
 
         if apitype == JAI_ALLOCATE
@@ -203,7 +214,7 @@ function code_hip_driver_body(
 
                     for (i, cfg) in enumerate(threads)
                         if cfg isa Tuple
-                            lcfg[i] = join((string(c) for c in reverse(cfg)), ", ")
+                            lcfg[i] = join((string(c) for c in cfg), ", ")
                         else
                             lcfg[i] = string(cfg)
                         end
@@ -232,10 +243,15 @@ function code_hip_driver_body(
 
         if arg[1] isa AbstractArray
             t, n, d = code_c_typedecl(arg)
-            addr = repr(UInt64(pointer_from_objref(arg[1])))
+
+            addr = "addr_unknown"
+            try
+                addr = repr(UInt64(pointer_from_objref(arg[1])))
+            catch e
+                addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
+            end
             ename = "jai_extern_$(addr)_$(n)"
 
-            #buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($dname[$(i-1)]);"
             buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($ename);"
             anames[i] = "(*ptr_$n)" 
         else
