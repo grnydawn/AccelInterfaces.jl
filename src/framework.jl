@@ -364,7 +364,7 @@ end
 function code_cpp_macros(
         frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
+        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
@@ -396,19 +396,18 @@ end
 function generate_code(
         frametype   ::JAI_TYPE_FORTRAN_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
+        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
-        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        difftest    ::Union{Dict{String, Any}, Nothing} = nothing,
     ) :: String
 
     suffix   = JAI_MAP_API_FUNCNAME[apitype]
-    specpart = code_module_specpart(frametype, apitype, data_frametype, prefix,
-                                    cvars, args, data)
-    subppart = code_module_subppart(frametype, apitype, data_frametype, prefix,
-                                    args, data)
+    specpart = code_module_specpart(frametype, apitype, prefix, cvars, args, data)
+    subppart = code_module_subppart(frametype, apitype, prefix, args, data)
 
     return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
                   suffix=suffix, specpart=specpart, subppart=subppart)
@@ -417,28 +416,24 @@ end
 function generate_code(
         frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
+        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N;
-        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        difftest    ::Union{Dict{String, Any}, Nothing} = nothing,
     ) :: String
 
 
-    jmacros = code_cpp_macros(frametype, apitype, data_frametype, prefix,
-                                args, data)
-    cpp_hdr = code_cpp_header(frametype, apitype, data_frametype, prefix,
-                                cvars, args, data)
-    c_hdr   = code_c_header(frametype, apitype, data_frametype, prefix,
-                                args, data)
+    jmacros = code_cpp_macros(frametype, apitype, prefix, args, data)
+    cpp_hdr = code_cpp_header(frametype, apitype, prefix, cvars, args, data)
+    c_hdr   = code_c_header(frametype, apitype, prefix, args, data)
 
     if frametype in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
-        funcs   = code_c_functions(frametype, apitype, data_frametype, prefix,
-                                        args, data, launch_config)
+        funcs   = code_c_functions(frametype, apitype, prefix, args, data, launch_config)
     else
-        funcs   = code_c_functions(frametype, apitype, data_frametype, prefix,
-                                        args, data)
+        funcs   = code_c_functions(frametype, apitype, prefix, args, data)
     end
 
     return jaifmt(CPP_TEMPLATE_HEADER, jmacros=jmacros, cpp_header=cpp_hdr,
@@ -457,7 +452,7 @@ include("machine.jl")
 function generate_sharedlib(
         frametype   ::JAI_TYPE_FRAMEWORK,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
+        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         compile     ::String,
         workdir     ::String,
@@ -465,6 +460,7 @@ function generate_sharedlib(
         args        ::JAI_TYPE_ARGS,
         data        ::Vararg{String, N} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
+        difftest    ::Union{Dict{String, Any}, Nothing} = nothing,
     ) :: Ptr{Nothing}
 
     if DEBUG
@@ -472,28 +468,23 @@ function generate_sharedlib(
                 "\n    " * string(apitype))
     end
 
-    if apitype isa JAI_TYPE_API_DATA
-        code = generate_code(data_frametype, apitype, data_frametype, prefix,
+    code = generate_code(frametype, apitype, prefix,
                             cvars, args, data, launch_config=launch_config)
-        src_frametype = data_frametype
+
+    if frametype isa JAI_TYPE_FORTRAN_FRAMEWORKS
+        suffix = ".F90"
+
+    elseif frametype isa JAI_TYPE_CPP_FRAMEWORKS
+        suffix = ".cpp"
     else
-        code = generate_code(frametype, apitype, data_frametype, prefix,
-                            cvars, args, data, launch_config=launch_config)
-        src_frametype = frametype
+        error("Unknown language: " * string(frametype))
     end
 
-    if src_frametype isa JAI_TYPE_FORTRAN_FRAMEWORKS
-        srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".F90"
-
-    elseif src_frametype isa JAI_TYPE_CPP_FRAMEWORKS
-        srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * ".cpp"
-    else
-        error("Unknown language: " * string(src_frametype))
-    end
+    srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * suffix
 
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
-    slibpath = compile_code(src_frametype, code, compile, srcname, outname, workdir)
+    slibpath = compile_code(frametype, code, compile, srcname, outname, workdir)
 
     slib = load_sharedlib(slibpath)
 
@@ -513,7 +504,7 @@ end
 function get_framework(
         frametype   ::JAI_TYPE_FRAMEWORK,
         fconfig     ::JAI_TYPE_CONFIG_VALUE,
-        compiler    ::JAI_TYPE_CONFIG,
+        compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
         workdir     ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
  
@@ -525,6 +516,10 @@ function get_framework(
         catch
             compile = nothing
         end
+    end
+
+    if compiler == nothing
+        compiler = JAI_TYPE_CONFIG()
     end
 
     frameworks = JAI["frameworks"]
@@ -564,7 +559,7 @@ function get_framework(
 
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
-        slib    = generate_sharedlib(frametype, JAI_ACCEL, nothing, prefix,
+        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix,
                                         compile, workdir, cvars, args)
 
         if slib isa Ptr{Nothing}
@@ -640,37 +635,41 @@ end
 # data framework
 function select_data_framework(
         ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL
-    ) :: Union{Tuple{JAI_TYPE_FRAMEWORK, String}, Nothing}
-
-
-    if length(ctx_accel.data_framework) > 0
-        return ctx_accel.data_framework[1]
-    end
+    ) :: JAI_TYPE_CONTEXT_FRAMEWORK
 
     code_frames = Vector{JAI_TYPE_FRAMEWORK}()
-    frame_compiles = Dict{JAI_TYPE_FRAMEWORK, String}()
-    data_frames = copy(JAI_MAP_INTEROP_FRAMEWORK[ctx_accel.framework.type])
+    data_frames = Vector{JAI_TYPE_FRAMEWORK}()
+    ctx_frames = Dict{JAI_TYPE_FRAMEWORK, JAI_TYPE_CONTEXT_FRAMEWORK}()
 
     for ctx_kernel in ctx_accel.ctx_kernels
-        kframe = ctx_kernel.framework.type
-        frame_compiles[ctx_kernel.framework.type] = ctx_kernel.framework.compile
+        for ctx_frame in ctx_kernel.frameworks
 
-        if !(kframe in code_frames)
-            push!(code_frames, kframe)
-        end
+            kframe = ctx_frame.type
+            ctx_frames[ctx_frame.type] = ctx_frame
 
-        dframes = JAI_MAP_INTEROP_FRAMEWORK[kframe]
-        idx = 1
-        while idx <= length(data_frames)
-            if !(data_frames[idx] in dframes)
-                popat!(data_frames, idx)
+            if !(kframe in code_frames)
+                push!(code_frames, kframe)
+            end
+
+            len = length(data_frames)
+
+            if len == 0
+                data_frames = copy(JAI_MAP_INTEROP_FRAMEWORK[kframe])
             else
-                idx += 1
+                dframes = JAI_MAP_INTEROP_FRAMEWORK[kframe]
+                idx = 1
+                while idx <= length(data_frames)
+                    if !(data_frames[idx] in dframes)
+                        popat!(data_frames, idx)
+                    else
+                        idx += 1
+                    end
+                end
             end
         end
     end
 
-    data_frame, frame_compile = nothing, nothing
+    data_frame = nothing
 
     for dframe in data_frames
         found = true
@@ -689,10 +688,12 @@ function select_data_framework(
         end
     end
 
+    ret_ctx = nothing
+
     if data_frame != nothing
-        frame_compile = frame_compiles[data_frame]
-        push!(ctx_accel.data_framework, (data_frame, frame_compile))
+        ret_ctx = ctx_frames[data_frame]
+        push!(ctx_accel.data_framework, ret_ctx)
     end
 
-    return data_frame, frame_compile
+    return ret_ctx
 end

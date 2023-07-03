@@ -7,6 +7,8 @@ const JAI_VERSION   = TOML.parsefile(joinpath(@__DIR__, "..", "Project.toml"))["
 const _USER_CONFIGS = Tuple(string(n) for n in fieldnames(JAI_TYPE_CONFIG_USER))
 
 # Jai global configurations
+# frameworks: set from get_framework in @jkernel
+
 const JAI = Dict(
         "config"        => JAI_TYPE_CONFIG_USER(
                                 DEBUG,

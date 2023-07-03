@@ -55,7 +55,6 @@ function jai_accel(
         const_vars  ::Union{NTuple{N, JAI_TYPE_DATA} where N, Nothing}= nothing,
         const_names ::Union{NTuple{N, String} where N, Nothing}       = nothing,
         device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
-        framework   ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
         machine     ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
         set         ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing
@@ -95,14 +94,15 @@ function jai_accel(
         workdir = get_config("workdir")
     end
 
-    ctx_framework   = select_framework(framework, compiler, workdir)
-    data_framework  = Vector{Tuple{JAI_TYPE_FRAMEWORK, String}}()
+    #ctx_framework   = select_framework(framework, compiler, workdir)
+    data_framework  = Vector{JAI_TYPE_CONTEXT_FRAMEWORK}()
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
     data_slibs  = Dict{UInt32, PtrAny}()
+    difftest    = Vector{Dict{String, Any}}()
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
-                        ctx_framework, data_framework, data_slibs,
-                        ctx_kernels, externs)
+                        data_framework, data_slibs, ctx_kernels, externs,
+                        difftest)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -145,10 +145,25 @@ function jai_kernel(
     end
        
     workdir     = get_config(ctx_accel, "workdir")
-    ctx_frame   = select_framework(ctx_accel, framework, compiler, workdir)
+    ctx_frames = Vector{JAI_TYPE_CONTEXT_FRAMEWORK}()
+
+    if framework isa JAI_TYPE_CONFIG
+        for (fkey, fval) in framework
+            frame = get_framework(fkey, fval, compiler, workdir)
+            if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
+                push!(ctx_frames, frame)
+            end
+        end
+    else
+        knlframes = get_kernel_frameworks(kdef)
+        error("Default compilers are not defined yet.")
+        # TODO : get compiler for knl frame from default compilers
+    end
+
+    #ctx_frame   = select_framework(ctx_accel, framework, compiler, workdir)
     launch_slibs= Dict{UInt32, PtrAny}()
 
-    ctx_kernel  = JAI_TYPE_CONTEXT_KERNEL(kid, kname, ctx_frame, launch_slibs, kdef)
+    ctx_kernel  = JAI_TYPE_CONTEXT_KERNEL(kid, kname, ctx_frames, launch_slibs, kdef)
 
     push!(ctx_accel.ctx_kernels, ctx_kernel)
 
@@ -173,42 +188,63 @@ function jai_data(
         apitype     ::JAI_TYPE_API,
         apicount    ::Integer,
         names       ::Vector{String},
+        config      ::Union{JAI_TYPE_CONFIG, Nothing},
         control     ::Vector{String},
         lineno      ::Integer,
         filepath    ::String,
         data        ::Vararg{JAI_TYPE_DATA, N} where N
     )
 
+    if config != nothing
+        if "enable_if" in keys(config) && !config["enable_if"]
+            return
+        end
+    end 
+
     ctx_accel   = get_accel(aname)
 
     # pack data and variable names
+    extnames = Vector{String}()
     args = JAI_TYPE_ARGS()
     for (i, (n, d)) in enumerate(zip(names, data))
         arg = pack_arg(d, ctx_accel.externs, apitype, name=n)
         push!(args, arg)
+        push!(extnames, arg[end])
     end
 
-    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, filepath)
-    frametype   = ctx_accel.framework.type
-    prefix      = generate_prefix(aname, uid)
+    if length(ctx_accel.data_framework) > 0
+        ctx_frame = ctx_accel.data_framework[1]
+    else
+        ctx_frame = select_data_framework(ctx_accel)
+    end
+
+    data_frametype = ctx_frame.type
+    data_compile = ctx_frame.compile
+
+    extnameid   = join(extnames, "")
+    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno,
+                                data_frametype, data_compile, filepath, extnameid)
 
     try
         if uid in keys(ctx_accel.data_slibs)
             slib = ctx_accel.data_slibs[uid]
+
         else
-            compile = ctx_accel.framework.compile
+            prefix      = generate_prefix(aname, uid)
+            #compile = ctx_accel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
 
-            data_frametype, data_compile = select_data_framework(ctx_accel)
+            #data_frametype, data_compile = select_data_framework(ctx_accel)
 
-            slib    = generate_sharedlib(frametype, apitype, data_frametype,
+            slib    = generate_sharedlib(data_frametype, apitype, 
                         prefix, data_compile, workdir, ctx_accel.const_vars, args)
 
             ctx_accel.data_slibs[uid] = slib
         end
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
-        invoke_sharedfunc(frametype, slib, funcname, args)
+        #invoke_sharedfunc(frametype, slib, funcname, args)
+        invoke_sharedfunc(data_frametype, slib, funcname, args)
 
     catch err
         rethrow()
@@ -245,53 +281,83 @@ function jai_launch(
 
     args        = pack_args(innames, input, outnames, output,
                             ctx_accel.externs, apitype)
-    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath)
-    frametype   = ctx_kernel.framework.type
+
+    # select a framework based on config and frameworks
+    frametype = nothing
+    compile = nothing
+
+    disables = Vector{JAI_TYPE_FRAMEWORK}()
+
+    for (key, value) in config
+
+        if "enable_if" in keys(value) && !value["enable_if"]
+            push!(disables, key)
+            continue
+        end
+
+        for ctx_frame in ctx_kernel.frameworks
+            if key == ctx_frame.type
+                frametype = ctx_frame.type
+                compile = ctx_frame.compile
+                break
+            end
+        end
+
+        if frametype != nothing
+            break
+        end
+    end
+ 
+    if frametype == nothing
+        for ctx_frame in ctx_kernel.frameworks
+            if ctx_frame.type in disables
+                continue
+            end 
+
+            frametype = ctx_frame.type
+            compile = ctx_frame.compile
+            break
+        end
+    end
+
+    extnames    = Vector{String}()
+    for arg in args
+        push!(extnames, arg[end])
+    end
+
+    extnameid   = join(extnames, "")
+    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath, extnameid, frametype, compile)
     prefix      = generate_prefix(kname, uid)
 
     try
         if uid in keys(ctx_kernel.launch_slibs)
             slib    = ctx_kernel.launch_slibs[uid]
         else
-            compile = ctx_kernel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
-            knlbody = get_knlbody(ctx_kernel)
+            knlcode = get_kernel_code(ctx_kernel, frametype)
+            difftest = (length(ctx_accel.difftest) > 0
+                       ) ? ctx_accel.difftest[end] : nothing
 
-            data_frametype, data_compile = select_data_framework(ctx_accel)
+            #data_frametype, data_compile = select_data_framework(ctx_accel)
 
-            slib    = generate_sharedlib(frametype, apitype, data_frametype,
-                        prefix, compile, workdir, ctx_accel.const_vars, args, knlbody,
-                        launch_config=config)
+            slib    = generate_sharedlib(frametype, apitype,
+                        prefix, compile, workdir, ctx_accel.const_vars, args, knlcode,
+                        launch_config=config, difftest=difftest)
 
             ctx_kernel.launch_slibs[uid] = slib
         end
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
-        #invoke_sharedfunc(frame, apitype, slib, funcname, args)
         invoke_sharedfunc(frametype, slib, funcname, args)
+
+        # support @jdiff
+        # call jexitdata
 
     catch err
         rethrow()
     end
 
 end
-
-
-function _jwait(framework::JAI_TYPE_CONTEXT_FRAMEWORK)
-
-    args = JAI_TYPE_ARGS()
-    push!(args, pack_arg(fill(Int64(-1), 1), nothing, nothing))
-
-    frame   = framework.type
-    slib    = framework.slib
-
-    funcname = framework.prefix * JAI_MAP_API_FUNCNAME[JAI_WAIT]
-    invoke_sharedfunc(frame, slib, funcname, args)
-
-end
-
-_jwait(ctx::JAI_TYPE_CONTEXT_ACCEL)  = _jwait(ctx.framework)
-_jwait(ctx::JAI_TYPE_CONTEXT_KERNEL) = _jwait(ctx.framework)
 
 """
     function jai_wait
@@ -302,6 +368,41 @@ Process @jwait
   * invoke wait-equivalent framework api
 
 """
+#function jai_wait(
+#        name       ::String,
+#        lineno      ::Integer,
+#        filepath    ::String
+#    )
+#
+#    ctx = nothing
+#    slib = nothing
+#
+#    if name == ""
+#        ctx_accel   = get_accel(name)
+#        ctx_kernel  = get_kernel(ctx_accel, name)
+#        ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
+#    else
+#        ctx_accel   = get_accel(name)
+#        if ctx_accel == nothing
+#            ctx_kernel = nothing
+#            for ctx_accel in JAI["ctx_accels"]
+#                ctx_kernel = get_kernel(ctx_accel, name)
+#                if ctx_kernel != nothing
+#                    _jwait(ctx_kernel)
+#                    break
+#                end
+#            end
+#
+#            if ctx_kernel == nothing
+#                error("Can not find shared library for jwait with " * name)
+#            end
+#        else
+#            ctx_kernel   = get_kernel(ctx_accel, name)
+#            ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
+#        end
+#    end
+#
+#end
 
 function jai_wait(
         name       ::String,
@@ -309,34 +410,21 @@ function jai_wait(
         filepath    ::String
     )
 
-    ctx = nothing
-    slib = nothing
+    ctx_accel   = get_accel(name)
 
-    if name == ""
-        ctx_accel   = get_accel(name)
-        ctx_kernel  = get_kernel(ctx_accel, name)
-        ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
-    else
-        ctx_accel   = get_accel(name)
-        if ctx_accel == nothing
-            ctx_kernel = nothing
-            for ctx_accel in JAI["ctx_accels"]
-                ctx_kernel = get_kernel(ctx_accel, name)
-                if ctx_kernel != nothing
-                    _jwait(ctx_kernel)
-                    break
-                end
-            end
+    if length(ctx_accel.data_framework) > 0
 
-            if ctx_kernel == nothing
-                error("Can not find shared library for jwait with " * name)
-            end
-        else
-            ctx_kernel   = get_kernel(ctx_accel, name)
-            ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
-        end
+        args = JAI_TYPE_ARGS()
+        push!(args, pack_arg(fill(Int64(-1), 1), nothing, nothing))
+
+        framework =  ctx_accel.data_framework[1]
+        frame   = framework.type
+        slib    = framework.slib
+
+        funcname = framework.prefix * JAI_MAP_API_FUNCNAME[JAI_WAIT]
+        invoke_sharedfunc(frame, slib, funcname, args)
+
     end
-
 end
 
 
@@ -360,3 +448,87 @@ function jai_decel(
 
     delete_accel!(aname)
 end
+
+
+"""
+    function jai_diff
+
+Process @jdiff macro
+
+# Implementation
+  * compare kernel implementations
+
+"""
+
+function jai_diff(
+        aname       ::String,
+        cases       ::Tuple{String, String},
+        lineno      ::Integer,
+        filepath    ::String
+    )
+
+    println("Starting DIFF test for $aname $cases")
+
+    ctx_accel   = get_accel(aname)
+
+end
+
+
+function _jai_diffA(
+        aname       ::String,
+        cases       ::Tuple{String, String},
+        lineno      ::Integer,
+        filepath    ::String
+    )
+
+    case = cases[1]
+
+    println("Begin test for $case")
+
+    c1 = Dict{String, Any}()
+    c1["name"] = case
+    c1["test"] = "sum"
+
+    ctx_accel   = get_accel(aname)
+    push!(ctx_accel.difftest, c1)
+
+end
+
+
+function _jai_diffB(
+        aname       ::String,
+        cases       ::Tuple{String, String},
+        lineno      ::Integer,
+        filepath    ::String
+    )
+
+    case = cases[2]
+
+    println("Begin test for $case")
+
+    c2 = Dict{String, Any}()
+    c2["name"] = case
+    c2["test"] = "sum"
+
+    ctx_accel   = get_accel(aname)
+    push!(ctx_accel.difftest, c2)
+
+end
+
+
+function _jai_diffend(
+        aname       ::String,
+        cases       ::Tuple{String, String},
+        lineno      ::Integer,
+        filepath    ::String
+    )
+
+    println("Generate diff report for $(cases)")
+
+    ctx_accel   = get_accel(aname)
+
+    deleteat!(ctx_accel.difftest, 1:length(ctx_accel.difftest))
+
+end
+
+

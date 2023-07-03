@@ -6,7 +6,6 @@ function _jaccel_clause_handler(output, clauses)
 
     # parse clauses
     for clause in clauses
-
         if clause.args[1] == :constant
             const_vars = :(())
             const_names = :(())
@@ -29,7 +28,8 @@ function _jaccel_clause_handler(output, clauses)
             end
             push!(output.args, Expr(:kw, clause.args[1], t))
 
-        elseif clause.args[1] in (:framework, :set, :compiler)
+        #elseif clause.args[1] in (:framework, :set, :compiler)
+        elseif clause.args[1] in (:set, :compiler)
 
             d = :(JAI_TYPE_CONFIG())
 
@@ -47,11 +47,11 @@ function _jaccel_clause_handler(output, clauses)
                     error("Wrong syntax: " * string(clause))
                 end
 
-                if clause.args[1]== :framework
-                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
-                else
+                #if clause.args[1]== :framework
+                #    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
+                #else
                     push!(d.args, Expr(:call, :(=>), string(key), value))
-                end
+                #end
             end
 
             push!(output.args, Expr(:kw, clause.args[1], d))
@@ -175,6 +175,7 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
 
     allocs = Expr[]
     nonallocs = Expr[]
+    config = :(JAI_TYPE_CONFIG())
     alloccount = 1
     updatetocount = 1
     allocnames = String[]
@@ -213,6 +214,39 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
             updatetocount += 1
             push!(nonallocs, direct)
 
+        elseif direct.args[1] in (:enable_if,)
+
+            key = direct.args[1]
+            value = direct.args[2]
+            push!(config.args, Expr(:call, :(=>), string(key), esc(value)))
+            #push!(config.args, esc(direct.args[2]))
+
+        # for later use
+        elseif direct.args[1] in ()
+
+            config = :(JAI_TYPE_CONFIG())
+
+            for item in direct.args[2:end]
+
+                if item isa Symbol
+                    key = item
+                    value = :nothing
+
+                elseif item.head == :kw
+                    key = item.args[1]
+                    value = length(item.args)>1 ? esc(item.args[2]) : nothing
+
+                else
+                    error("Wrong syntax: " * string(direct))
+                end
+
+                #if direct.args[1]== :framework
+                #    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
+                #else
+                    push!(config.args, Expr(:call, :(=>), string(key), value))
+                #end
+            end
+
         elseif direct.args[1] in (:async,)
             push!(control, string(direct.args[1]))
 
@@ -245,9 +279,10 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
 
         end
 
-        insert!(direct.args, 6, control)
-        insert!(direct.args, 7, sline)
-        insert!(direct.args, 8, string(sfile))
+        insert!(direct.args, 6, config)
+        insert!(direct.args, 7, control)
+        insert!(direct.args, 8, sline)
+        insert!(direct.args, 9, string(sfile))
 
         direct.args[1] = :jai_data
 
@@ -613,3 +648,111 @@ macro jdecel(clauses...)
     return(fini)
 end
 
+
+"""
+    @jdiff [name] A B [clauses...] begin ... end
+
+Analize difference between A and B
+
+If `name` is not specified, this context can be accessed only as the currently active context.
+
+# Arguments
+- `name`::String: a unique name for this accelerator context
+- `A`, `B`::Test cases
+
+# Examples
+```julia-repl
+julia> @jdiff myacc fort_impl(USE_HIP=false) hip_impl(USE_HIP=true) begin
+...
+end
+```
+
+# Implementation
+T.B.D.
+
+"""
+macro jdiff(items...)
+
+    block   = Expr(:block)
+    diff    = Expr(:call)
+    diffA   = Expr(:call)
+    diffB   = Expr(:call)
+    diffend = Expr(:call)
+
+    nitems = length(items)
+
+    # parse accelname
+    if nitems > 0 && items[1] isa Symbol
+        accname = string(items[1])
+        idx = 2
+    else
+        accname = ""
+        idx = 1
+    end
+
+    if nitems < idx + 2 # includes body block
+        error("Not enough diff cases.")
+    elseif items[idx].head != :call || items[idx+1].head != :call 
+        error("Wrong case syntax in @jdiff.")
+    end
+
+    #dump(items[idx])
+    Acase = items[idx]
+    Bcase = items[idx+1]
+
+    Aname = string(Acase.args[1])
+    Bname = string(Bcase.args[1])
+
+    push!(diff.args, :jai_diff)
+    push!(diff.args, accname)
+    push!(diff.args, (Aname, Bname))
+    push!(diff.args, __source__.line)
+    push!(diff.args, string(__source__.file))
+    push!(block.args, diff)
+
+    push!(diffA.args, :_jai_diffA)
+    push!(diffA.args, accname)
+    push!(diffA.args, (Aname, Bname))
+    push!(diffA.args, __source__.line)
+    push!(diffA.args, string(__source__.file))
+    push!(block.args, diffA)
+
+    for kwargs in Acase.args[2:end]
+        if kwargs.head != :kw
+            error("Wrong case syntax in @jdiff.")
+        end
+
+        push!(block.args, Expr(:(=), kwargs.args[1], esc(kwargs.args[2])))
+    end
+
+    body = esc(items[end])
+
+    push!(block.args, body)
+
+    push!(diffB.args, :_jai_diffB)
+    push!(diffB.args, accname)
+    push!(diffB.args, (Aname, Bname))
+    push!(diffB.args, __source__.line)
+    push!(diffB.args, string(__source__.file))
+    push!(block.args, diffB)
+
+    for kwargs in Bcase.args[2:end]
+        if kwargs.head != :kw
+            error("Wrong case syntax in @jdiff.")
+        end
+
+        push!(block.args, Expr(:(=), kwargs.args[1], esc(kwargs.args[2])))
+    end
+
+    push!(block.args, body)
+
+    push!(diffend.args, :_jai_diffend)
+    push!(diffend.args, accname)
+    push!(diffend.args, (Aname, Bname))
+    push!(diffend.args, __source__.line)
+    push!(diffend.args, string(__source__.file))
+
+    push!(block.args, diffend)
+
+    return(block)
+end

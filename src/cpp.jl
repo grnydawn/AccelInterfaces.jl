@@ -41,7 +41,6 @@ end
 function code_cpp_header(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
@@ -62,7 +61,6 @@ end
 function code_c_header(
         frame       ::Union{JAI_TYPE_CPP, JAI_TYPE_CPP_OMPTARGET},
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -157,7 +155,6 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_ACCEL,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -178,7 +175,6 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_API_DATA,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -192,7 +188,6 @@ end
 function code_c_functions(
         frame       ::JAI_TYPE_CPP,
         apitype     ::JAI_TYPE_LAUNCH,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N

@@ -181,8 +181,23 @@ function select_section(
     throw(JAI_ERROR_NOVALID_SECTION())
 end
 
-function get_knlbody(ctx::JAI_TYPE_CONTEXT_KERNEL) :: String
-    ksec = select_section(ctx.framework.type, ctx.kdef)
+function get_kernel_code(ctx::JAI_TYPE_CONTEXT_KERNEL,
+                         frametype::JAI_TYPE_FRAMEWORK) :: String
+    ksec = select_section(frametype, ctx.kdef)
     return ksec.body.body
+end
+
+
+function get_kernel_frameworks(
+        kdef::JAI_TYPE_KERNELDEF
+    ) :: Vector{JAI_TYPE_FRAMEWORK}
+
+    frames = Vector{JAI_TYPE_FRAMEWORK}()
+
+    for sec in kdef.sections
+        push!(frames, sec.header.frame)
+    end
+
+    return frames
 end
 

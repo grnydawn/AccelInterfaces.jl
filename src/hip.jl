@@ -14,28 +14,25 @@ __global__ void {kname}({kargs}) {{
 function code_cpp_macros(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, String} where N
     ) :: String
 
-    return code_cpp_macros(JAI_CPP, apitype, data_frametype, prefix,
-                            args, data)
+    return code_cpp_macros(JAI_CPP, apitype, prefix, args, data)
 end
 
 
 function code_cpp_header(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, data_frametype, prefix, cvars, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, prefix, cvars, args, data)
 
     lines = Vector{String}()
 
@@ -49,7 +46,6 @@ end
 function code_c_header(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -59,34 +55,28 @@ function code_c_header(
 
     for arg in args
         typestr, vname, dimstr = code_c_typedecl(arg)
-#        addr = "addr_unknown"
-#        try
-#            addr = repr(UInt64(pointer_from_objref(arg[1])))
-#        catch e
-#            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
-#        end
-#        println("WWWWWWWWWWE", vname, "WWW", arg[end])
-#
-#        ename = "jai_extern_$(addr)_$(vname)"
-
         ename = arg[end]
 
-        if apitype == JAI_ALLOCATE
-            #push!(buf, "$typestr * $(ename)$(dimstr);")
-            push!(buf, "$typestr * $(ename);")
+        # if arg is not scalar
+        if typeof(arg[1]) != arg[2]
 
-        elseif apitype == JAI_UPDATETO
-            #push!(buf, "extern $typestr * $(ename)$(dimstr);")
-            push!(buf, "extern $typestr * $(ename);")
+            if apitype == JAI_ALLOCATE
+                #push!(buf, "$typestr * $(ename)$(dimstr);")
+                push!(buf, "$typestr * $(ename);")
 
-        elseif apitype == JAI_LAUNCH
-            push!(buf, "extern $typestr * $(ename);")
+            elseif apitype == JAI_UPDATETO
+                #push!(buf, "extern $typestr * $(ename)$(dimstr);")
+                push!(buf, "extern $typestr * $(ename);")
 
-        elseif apitype == JAI_UPDATEFROM
-            #push!(buf, "extern $typestr * $(ename)$(dimstr);")
-            push!(buf, "extern $typestr * $(ename);")
+            elseif apitype == JAI_LAUNCH
+                push!(buf, "extern $typestr * $(ename);")
 
-        else
+            elseif apitype == JAI_UPDATEFROM
+                #push!(buf, "extern $typestr * $(ename)$(dimstr);")
+                push!(buf, "extern $typestr * $(ename);")
+
+            else
+            end
         end
     end
 
@@ -113,7 +103,6 @@ end
 function code_c_functions(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_ACCEL,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,
@@ -134,7 +123,6 @@ end
 function code_c_functions(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_API_DATA,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
@@ -145,15 +133,6 @@ function code_c_functions(
     for (i, arg) in enumerate(args)
         aname = arg[3]
         asize = arg[5]
-
-#        addr = "addr_unknown"
-#        try
-#            addr = repr(UInt64(pointer_from_objref(arg[1])))
-#        catch e
-#            addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
-#        end
-#        ename = "jai_extern_$(addr)_$(aname)"
-
         ename = arg[end]
 
         if apitype == JAI_ALLOCATE
@@ -248,14 +227,6 @@ function code_hip_driver_body(
 
         if arg[1] isa AbstractArray
             t, n, d = code_c_typedecl(arg)
-
-#            addr = "addr_unknown"
-#            try
-#                addr = repr(UInt64(pointer_from_objref(arg[1])))
-#            catch e
-#                addr = repr(UInt64(pointer_from_objref(parent(arg[1]))))
-#            end
-#            ename = "jai_extern_$(addr)_$(n)"
             ename = arg[end]
 
             buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($ename);"
@@ -295,7 +266,6 @@ end
 function code_c_functions(
         frametype   ::JAI_TYPE_HIP,
         apitype     ::JAI_TYPE_LAUNCH,
-        data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,

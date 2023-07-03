@@ -15,7 +15,7 @@ include("kernel.jl")
 include("main.jl")
 include("api.jl")
 
-export @jconfig, @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel
+export @jconfig, @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel, @jdiff
 
 end
 
