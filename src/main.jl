@@ -328,7 +328,7 @@ function jai_launch(
 
     extnames    = Vector{String}()
     for arg in args
-        push!(extnames, arg[end])
+        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7]))
     end
 
     extnameid   = join(extnames, "")
