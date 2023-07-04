@@ -215,7 +215,9 @@ function jai_data(
     for (i, (n, d)) in enumerate(zip(names, data))
         arg = pack_arg(d, ctx_accel.externs, apitype, name=n)
         push!(args, arg)
-        push!(extnames, arg[end])
+        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7]))
+
+    return (arg, dtype, name, inout, bytes, shape, offsets, extname)
     end
 
     if length(ctx_accel.data_framework) > 0
