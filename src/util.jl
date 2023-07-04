@@ -5,8 +5,9 @@ import Serialization.serialize
 import SHA.sha1
 import Random.randstring
 import DataStructures.Stack
+import Dates: Second, now
 
-function locked_filetask(pidfile::String, target::String, fn::Function, args...) ::Nothing
+function locked_filetask(pidfile::String, target::String, fn::Function, args...)
 
     if !ispath(target)
         lock = nothing
@@ -29,7 +30,14 @@ function locked_filetask(pidfile::String, target::String, fn::Function, args...)
         end
     end
 
-    return nothing
+    waitsecs = Second(10)
+    start  = now()
+
+    while (start + delta > now())  
+        if filesize(target) > 10
+            break
+        end
+    end
 end
 
 
