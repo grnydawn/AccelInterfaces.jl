@@ -30,7 +30,7 @@ function locked_filetask(pidfile::String, target::String, fn::Function, args...)
         end
     end
 
-    waitsecs = Second(10)
+    delta = Second(10)
     start  = now()
 
     while (start + delta > now())  
