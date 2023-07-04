@@ -91,12 +91,10 @@ function pack_arg(
 
         if arg isa OffsetArray
             pobj = parent(arg)
-            #addr = pointer_from_objref(pobj)
             addr = string(pointer(pobj))
             bytes   = sizeof(pobj)
             offsets = arg.offsets
         else
-            #addr = pointer_from_objref(arg)
             addr = string(pointer(arg))
             offsets = Tuple(1 for _ in 1:length(arg))
         end
@@ -106,10 +104,13 @@ function pack_arg(
                 lenext = length(externs)
                 extname = "jai_extern_$(lenext)_$(name)"
                 externs[addr] = extname
-
+                #println("DDDDDDDD ", name, " ", extname, " ", addr)
             elseif apitype isa JAI_TYPE_API_DATA || apitype isa JAI_TYPE_LAUNCH
                 if haskey(externs, addr)
                     extname = externs[addr]
+                    #println("EEEEEE ", name, " ", extname, " ", addr)
+                else
+                    #println("FFFFFF ", name, " ", addr)
                 end
             end
         end

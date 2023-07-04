@@ -111,7 +111,11 @@ function code_c_functions(
     funcs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
 
     for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
-        funcs[i] = code_c_function(prefix, name, args, "")
+        if name == "wait"
+            funcs[i] = code_c_function(prefix, name, args, "HIP_ASSERT(hipDeviceSynchronize());")
+        else
+            funcs[i] = code_c_function(prefix, name, args, "")
+        end
     end
 
     return  join(funcs, "\n\n")

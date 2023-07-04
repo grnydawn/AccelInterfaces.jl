@@ -266,42 +266,36 @@ function argsdtypes(
     dtypes
 end
 
-
 function compile_code(
+        srcname     ::String,
         frametype   ::JAI_TYPE_FRAMEWORK,
-        code    ::String,
-        compile ::String,
-        srcname ::String,
-        outname ::String,
-        workdir ::String
-    ) ::String
+        apitype     ::JAI_TYPE_API,
+        prefix      ::String,
+        cvars       ::JAI_TYPE_ARGS,
+        args        ::JAI_TYPE_ARGS,
+        data        ::NTuple{N, String} where N,
+        launch_config   ::Union{JAI_TYPE_CONFIG, Nothing},
+        compile     ::String,
+        outname     ::String
+    )
 
-    curdir = pwd()
-
-    try
-        cd(workdir)
+    if !isfile(srcname)
+        code = generate_code(frametype, apitype, prefix,
+                    cvars, args, data, launch_config=launch_config)
 
         open(srcname, "w") do io
             write(io, code)
         end
-
-        #cmds = get_prerun()
-        #cmd = Cmd(`bash -c "module load rocm; module load craype-accel-amd-gfx90a; $(compile) -o $(outname) $(srcname); env"`, dir=workdir)
-        #c = IOCapture.capture() do
-        #    run(cmd3)
-        #end
-        output = read(run(`$(split(compile)) -o $outname $srcname`), String)
-
-        isfile(outname) || throw(JAI_ERROR_COMPILE_NOSHAREDLIB(compile, output))
-
-        return joinpath(workdir, outname)
-
-    catch e
-        rethrow(e)
-
-    finally
-        cd(curdir)
     end
+
+    #cmds = get_prerun()
+    #cmd = Cmd(`bash -c "module load rocm; module load craype-accel-amd-gfx90a; $(compile) -o $(outname) $(srcname); env"`, dir=workdir)
+    #c = IOCapture.capture() do
+    #    run(cmd3)
+    #end
+    output = read(run(`$(split(compile)) -o $outname $srcname`), String)
+
+    isfile(outname) || throw(JAI_ERROR_COMPILE_NOSHAREDLIB(compile, output))
 end
 
 
@@ -468,9 +462,6 @@ function generate_sharedlib(
                 "\n    " * string(apitype))
     end
 
-    code = generate_code(frametype, apitype, prefix,
-                            cvars, args, data, launch_config=launch_config)
-
     if frametype isa JAI_TYPE_FORTRAN_FRAMEWORKS
         suffix = ".F90"
 
@@ -481,10 +472,27 @@ function generate_sharedlib(
     end
 
     srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * suffix
-
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
+    slibpath= joinpath(workdir, outname)
 
-    slibpath = compile_code(frametype, code, compile, srcname, outname, workdir)
+    if !isfile(slibpath)
+
+        curdir = pwd()
+
+        try
+            cd(workdir)
+
+            pidfile = slibpath * ".pid"
+
+            locked_filetask(pidfile, slibpath, compile_code, srcname, frametype, apitype,
+                            prefix, cvars, args, data, launch_config, compile, outname)
+        catch e
+            rethrow(e)
+
+        finally
+            cd(curdir)
+        end
+    end
 
     slib = load_sharedlib(slibpath)
 
@@ -496,6 +504,7 @@ function generate_sharedlib(
     if DEBUG
         println("Exit generate_sharedlib")
     end
+
     return slib
 
 end

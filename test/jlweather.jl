@@ -23,23 +23,6 @@ END DO
 _DEV_ALLOC = true
 
 function _perform(X, Y, Z, val)
- 
-
-    if X isa OffsetArray
-        #println("X1111 ",  pointer_from_objref(parent(X)))
-        println("X1111 ",  pointer(parent(X)))
-    else
-        #println("X1111 ",  pointer_from_objref(X))
-        println("X1111 ",  pointer(X))
-    end
-
-    if Y isa OffsetArray
-        #println("Y2222 ",  pointer_from_objref(parent(Y)))
-        println("Y2222 ",  pointer(parent(Y)))
-    else
-        #println("Y2222 ",  pointer_from_objref(Y))
-        println("Y2222 ",  pointer(Y))
-    end
 
     @jenterdata hipacc updateto(X, Y) enable_if(_DEV_ALLOC)
 
@@ -88,13 +71,7 @@ function jlweather_test()
 
         sum1 = sum1 + sum(c)
 
-        println("")
-        println("SSSSSSSSSS ", sum1, " ", sum2)
-        println("")
-
-        println("TTTTTTT ", pointer_from_objref(parent(X)))
-        X = X .* 2
-        println("TTTTTTT ", pointer_from_objref(parent(X)))
+        X .= X .* 2
     end
 
     @jexitdata hipacc delete(X, Y, Z) enable_if(_DEV_ALLOC) async
