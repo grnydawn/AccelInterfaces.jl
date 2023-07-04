@@ -62,7 +62,7 @@ macro jerror(e) :(@error sprint(showerror, $(esc(e)))) end
 
 function pack_arg(
         arg     ::JAI_TYPE_DATA,
-        externs ::Union{Nothing, Dict{Ptr{Nothing}, String}},
+        externs ::Union{Nothing, Dict{String, String}},
         apitype ::Union{Nothing, JAI_TYPE_API};
         name    ::String="",
         inout   ::Union{Nothing, JAI_TYPE_INOUT}=nothing
@@ -91,15 +91,17 @@ function pack_arg(
 
         if arg isa OffsetArray
             pobj = parent(arg)
-            addr = pointer_from_objref(pobj)
+            #addr = pointer_from_objref(pobj)
+            addr = string(pointer(pobj))
             bytes   = sizeof(pobj)
             offsets = arg.offsets
         else
-            addr = pointer_from_objref(arg)
+            #addr = pointer_from_objref(arg)
+            addr = string(pointer(arg))
             offsets = Tuple(1 for _ in 1:length(arg))
         end
 
-        if externs isa Dict{Ptr{Nothing}, String}
+        if externs isa Dict{String, String}
             if apitype isa JAI_TYPE_ALLOCATE
                 lenext = length(externs)
                 extname = "jai_extern_$(lenext)_$(name)"
@@ -133,7 +135,7 @@ function pack_args(
         indata      ::NTuple{N, JAI_TYPE_DATA} where N,
         outnames    ::Vector{String},
         outdata     ::NTuple{N, JAI_TYPE_DATA} where N,
-        externs     ::Union{Nothing, Dict{Ptr{Nothing}, String}},
+        externs     ::Union{Nothing, Dict{String, String}},
         apitype     ::Union{Nothing, JAI_TYPE_API}
     ) :: JAI_TYPE_ARGS
 

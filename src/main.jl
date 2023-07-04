@@ -78,7 +78,7 @@ function jai_accel(
         aname = string(aid, base = 16)
     end
 
-    externs     = Dict{Ptr{Nothing}, String}()
+    externs     = Dict{String, String}()
     apitype     = JAI_ACCEL
     # pack const and variable names
     cvars = JAI_TYPE_ARGS()
@@ -137,6 +137,10 @@ function jai_kernel(
         kdef = parse_kerneldef(kdef)
     end
 
+    kdef_frames = Vector{JAI_TYPE_FRAMEWORK}()
+    for sec in kdef.sections
+        push!(kdef_frames, sec.header.frame)
+    end
     # generate kernel context id
     kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath)
  
@@ -149,9 +153,11 @@ function jai_kernel(
 
     if framework isa JAI_TYPE_CONFIG
         for (fkey, fval) in framework
-            frame = get_framework(fkey, fval, compiler, workdir)
-            if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
-                push!(ctx_frames, frame)
+            if fkey in kdef_frames
+                frame = get_framework(fkey, fval, compiler, workdir)
+                if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
+                    push!(ctx_frames, frame)
+                end
             end
         end
     else
@@ -224,13 +230,13 @@ function jai_data(
     extnameid   = join(extnames, "")
     uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno,
                                 data_frametype, data_compile, filepath, extnameid)
+    prefix      = generate_prefix(aname, uid)
 
     try
         if uid in keys(ctx_accel.data_slibs)
             slib = ctx_accel.data_slibs[uid]
 
         else
-            prefix      = generate_prefix(aname, uid)
             #compile = ctx_accel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
 
@@ -290,7 +296,7 @@ function jai_launch(
 
     for (key, value) in config
 
-        if "enable_if" in keys(value) && !value["enable_if"]
+        if value != nothing && "enable_if" in keys(value) && !value["enable_if"]
             push!(disables, key)
             continue
         end

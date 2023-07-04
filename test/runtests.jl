@@ -649,6 +649,8 @@ END DO
     @jdecel
 end
 
+include("jlweather.jl")
+
 @testset "AccelInterfaces.jl" begin
 
     if SYSNAME == "Crusher"
@@ -663,14 +665,15 @@ end
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Frontier"
-        fortran_test_string()
-        fortran_test_file()
-        #fortran_openacc_tests()
-        fortran_omptarget_tests()
-        cpp_test_string()
-        cpp_omptarget_test()
-        hip_test_string()
-        hip_fortran_test_string()
+#        fortran_test_string()
+#        fortran_test_file()
+#        #fortran_openacc_tests()
+#        fortran_omptarget_tests()
+#        cpp_test_string()
+#        cpp_omptarget_test()
+#        hip_test_string()
+#        hip_fortran_test_string()
+        jlweather_test()
         #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"

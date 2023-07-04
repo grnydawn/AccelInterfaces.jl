@@ -137,12 +137,18 @@ function code_c_functions(
 
         if apitype == JAI_ALLOCATE
             push!(buf, "HIP_ASSERT(hipMalloc((void**)&$ename, $asize));")
+            #push!(buf, "printf(\"ALLOC PPPPP $aname = %p\\n\", $aname);")
+            #push!(buf, "printf(\"ALLOC QQQQQ $ename = %p\\n\", $ename);")
 
         elseif apitype == JAI_UPDATETO
+            #push!(buf, "printf(\"UPTO PPPPP $aname = %p\\n\", $aname);")
+            #push!(buf, "printf(\"UPTO QQQQQ $ename = %p\\n\", $ename);")
             push!(buf, "HIP_ASSERT(hipMemcpy((void *)$ename, (void *)$aname,
                     $asize, hipMemcpyHostToDevice));")
 
         elseif apitype == JAI_UPDATEFROM
+            #push!(buf, "printf(\"UPFR PPPPP $aname = %p\\n\", $aname);")
+            #push!(buf, "printf(\"UPFR QQQQQ $ename = %p\\n\", $ename);")
             push!(buf, "HIP_ASSERT(hipMemcpy((void *)$aname, (void *)$ename,
                     $asize, hipMemcpyDeviceToHost));")
 
@@ -218,6 +224,7 @@ function code_hip_driver_body(
     buf     = fill("", nargs)
     dbuf    = fill("", nargs)
     anames  = fill("", nargs)
+    pf  = Vector{String}()
     #dname   = args[end][3]
 
     for (i, arg) in enumerate(args)
@@ -231,6 +238,8 @@ function code_hip_driver_body(
 
             buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($ename);"
             anames[i] = "(*ptr_$n)" 
+            #push!(pf, "printf(\"KERNEL PPPPP $n = %p\\n\", $n);")
+            #push!(pf, "printf(\"KERNEL QQQQQ $ename = %p\\n\", $ename);")
         else
             anames[i] = aname
         end
@@ -245,12 +254,15 @@ function code_hip_driver_body(
     #reintepret  = ""
     dvarnames   = join(anames, ", \n")
     debug       = join(dbuf, "\n")
+    printf      = join(pf, "\n")
 
     push!(out, """
 
 $debug
 
 $reintepret
+
+$printf
 
 hipLaunchKernelGGL(
     $kname, 

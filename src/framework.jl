@@ -165,7 +165,7 @@ INTEGER (C_INT64_T) :: JAI_ERRORCODE  = 0
 
 {execpart}
 
-print *, "Exits {prefix}{suffix}"
+!print *, "Exits {prefix}{suffix}"
 
 {prefix}{suffix} = JAI_ERRORCODE
 
@@ -195,11 +195,11 @@ int64_t {name}({dargs}) {{
 int64_t jai_res;
 jai_res = 0;
 
-printf("Entering %s\\n", "{name}");
+//printf("Entering %s\\n", "{name}");
 
 {body}
 
-printf("Exiting %s\\n", "{name}");
+//printf("Exiting %s\\n", "{name}");
 return jai_res;
 }}
 """
