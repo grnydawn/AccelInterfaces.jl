@@ -174,7 +174,8 @@ end
 ###### START of DATA #######
 
 function code_module_specpart(
-        frametype   ::Union{JAI_TYPE_FORTRAN, JAI_TYPE_FORTRAN_OMPTARGET},
+        frametype   ::Union{JAI_TYPE_FORTRAN, JAI_TYPE_FORTRAN_OMPTARGET,
+                        JAI_TYPE_FORTRAN_OPENACC},
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
@@ -222,7 +223,8 @@ end
 ###### START of LAUNCH #######
 
 function code_module_specpart(
-        frametype   ::Union{JAI_TYPE_FORTRAN,JAI_TYPE_FORTRAN_OMPTARGET},
+        frametype   ::Union{JAI_TYPE_FORTRAN,JAI_TYPE_FORTRAN_OMPTARGET,
+                        JAI_TYPE_FORTRAN_OPENACC},
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,

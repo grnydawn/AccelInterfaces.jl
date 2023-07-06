@@ -186,11 +186,11 @@ function fortran_openacc_tests()
 
     #@jaccel accacc framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
     @jaccel accacc constant(TEST1, TEST2
-                    ) compiler(acc_compile) device(1) set(debugdir=workdir, master=ismaster,
+                    ) device(1) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
 
-    @jkernel "ex1.knl" mykernel accacc
+    @jkernel "ex1.knl" mykernel accacc framework(fortran_openacc=acc_compile)
 
     @jenterdata accacc alloc(X, Y, Z) updateto(X, Y)
 
@@ -667,13 +667,13 @@ include("jlweather.jl")
     elseif SYSNAME == "Frontier"
 #        fortran_test_string()
 #        fortran_test_file()
-#        #fortran_openacc_tests()
+        fortran_openacc_tests()
 #        fortran_omptarget_tests()
 #        cpp_test_string()
 #        cpp_omptarget_test()
 #        hip_test_string()
 #        hip_fortran_test_string()
-        jlweather_test()
+#        jlweather_test()
         #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"

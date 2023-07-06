@@ -437,6 +437,7 @@ end
 
 include("fortran.jl")
 include("fortran_omptarget.jl")
+include("fortran_openacc.jl")
 include("cpp.jl")
 include("cpp_omptarget.jl")
 include("hip.jl")
