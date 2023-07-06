@@ -279,6 +279,8 @@ function compile_code(
         outname     ::String
     )
 
+    # TODO: add compile argument to generate_code
+
     if !isfile(srcname)
         code = generate_code(frametype, apitype, prefix,
                     cvars, args, data, launch_config=launch_config)
@@ -440,6 +442,7 @@ include("fortran_omptarget.jl")
 include("fortran_openacc.jl")
 include("cpp.jl")
 include("cpp_omptarget.jl")
+include("cuda.jl")
 include("hip.jl")
 include("compiler.jl")
 include("machine.jl")
@@ -467,7 +470,11 @@ function generate_sharedlib(
         suffix = ".F90"
 
     elseif frametype isa JAI_TYPE_CPP_FRAMEWORKS
-        suffix = ".cpp"
+        if frametype isa JAI_TYPE_CUDA
+            suffix = ".cu"
+        else
+            suffix = ".cpp"
+        end
     else
         error("Unknown language: " * string(frametype))
     end

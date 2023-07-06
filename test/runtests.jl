@@ -340,13 +340,11 @@ function cuda_test_string()
     kernel_text = """
 
 [cuda]
-for(int k=0; k<JLENGTH(X, 0); k++) {
-    for(int j=0; j<JLENGTH(X, 1); j++) {
-        for(int i=0; i<JLENGTH(X, 2); i++) {
-            Z[k][j][i] = X[k][j][i] + Y[k][j][i];
-        }
-    }
-}
+    int i = blockIdx.x;
+    int j = blockIdx.y;
+    int k = blockIdx.z;
+
+    Z[k][j][i] = X[k][j][i] + Y[k][j][i];
 """
 
     X = rand(Float64, SHAPE)
@@ -354,13 +352,12 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    #@jaccel cudaacc framework(cuda=cuda_compile) set(debugdir=workdir, workdir=workdir)
-    @jaccel cudaacc set(debugdir=workdir, workdir=workdir)
-    @jkernel kernel_text mykernel cudaacc
+    @jaccel cudaacc set(debugdir=workdir, workdir=workdir) 
+    @jkernel kernel_text mykernel cudaacc framework(cuda=cuda_compile)
 
     @jenterdata cudaacc alloc(X, Y, Z) updateto(X, Y) async
 
-    @jlaunch mykernel cudaacc input(X, Y) output(Z,) cuda(threads=(1,1))
+    @jlaunch mykernel cudaacc input(X, Y) output(Z,) cuda(threads=(SHAPE,1))
 
     @jexitdata cudaacc updatefrom(Z) delete(X, Y, Z) async
 
@@ -687,11 +684,11 @@ include("jlweather.jl")
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Summit"
-        fortran_test_string()
+        #fortran_test_string()
         #fortran_test_file()
         #fortran_openacc_tests()
         #cpp_test_string()
-        #cuda_test_string()
+        cuda_test_string()
         #fortran_openacc_cuda_test_string()
 
     elseif SYSNAME == "Linux"

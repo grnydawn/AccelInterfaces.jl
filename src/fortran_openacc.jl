@@ -15,6 +15,8 @@ function code_module_specpart(
 
     fortran_spec = code_module_specpart(JAI_FORTRAN, apitype, prefix, cvars, args, data)
 
+    # TODO: required compiler-specific openacc use 
+    # one idea is to actually test by compiling a small test code
     return "USE OPENACC_LIB\n" * fortran_spec
 end
 
@@ -84,11 +86,6 @@ function code_module_subppart(
         typedecls[i] = code_fortran_typedecl(arg)
 
         if apitype == JAI_ALLOCATE
-            # TODO: check if the following is preferred
-            #device = omp_get_default_device();
-            #ptr = omp_target_alloc(bytes,device);
-            #omp_target_associate_ptr(host_ptr,device_ptr,bytes,0device_offset,0device_num);
-
             directs[i] = "!\$acc enter data create($(argname))"
 
         elseif apitype == JAI_DEALLOCATE
