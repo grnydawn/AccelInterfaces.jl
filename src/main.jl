@@ -194,15 +194,14 @@ function jai_data(
         apitype     ::JAI_TYPE_API,
         apicount    ::Integer,
         names       ::Vector{String},
-        config      ::Union{JAI_TYPE_CONFIG, Nothing},
-        control     ::Vector{String},
+        clauses     ::JAI_TYPE_CONFIG,
         lineno      ::Integer,
         filepath    ::String,
         data        ::Vararg{JAI_TYPE_DATA, N} where N
     )
 
-    if config != nothing
-        if "enable_if" in keys(config) && !config["enable_if"]
+    if clauses != nothing
+        if "enable_if" in keys(clauses) && !clauses["enable_if"]
             return
         end
     end 
@@ -243,7 +242,8 @@ function jai_data(
             #data_frametype, data_compile = select_data_framework(ctx_accel)
 
             slib    = generate_sharedlib(data_frametype, apitype, 
-                        prefix, data_compile, workdir, ctx_accel.const_vars, args)
+                        prefix, data_compile, workdir, ctx_accel.const_vars,
+                        args, clauses)
 
             ctx_accel.data_slibs[uid] = slib
         end
@@ -276,9 +276,10 @@ function jai_launch(
         output      ::NTuple{N, JAI_TYPE_DATA} where N,
         innames     ::Vector{String},
         outnames    ::Vector{String},
+        frame_config::JAI_TYPE_CONFIG,
+        clauses     ::JAI_TYPE_CONFIG,
         lineno      ::Integer,
-        filepath    ::String,
-        config      ::JAI_TYPE_CONFIG
+        filepath    ::String
     )
 
     apitype     = JAI_LAUNCH
@@ -294,7 +295,7 @@ function jai_launch(
 
     disables = Vector{JAI_TYPE_FRAMEWORK}()
 
-    for (key, value) in config
+    for (key, value) in frame_config
 
         if value != nothing && "enable_if" in keys(value) && !value["enable_if"]
             push!(disables, key)
@@ -332,7 +333,8 @@ function jai_launch(
     end
 
     extnameid   = join(extnames, "")
-    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath, extnameid, frametype, compile)
+    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath,
+                                extnameid, frametype, compile)
     prefix      = generate_prefix(kname, uid)
 
     try
@@ -347,8 +349,9 @@ function jai_launch(
             #data_frametype, data_compile = select_data_framework(ctx_accel)
 
             slib    = generate_sharedlib(frametype, apitype,
-                        prefix, compile, workdir, ctx_accel.const_vars, args, knlcode,
-                        launch_config=config, difftest=difftest)
+                        prefix, compile, workdir, ctx_accel.const_vars, args,
+                        clauses, knlcode, launch_config=frame_config,
+                        difftest=difftest)
 
             ctx_kernel.launch_slibs[uid] = slib
         end

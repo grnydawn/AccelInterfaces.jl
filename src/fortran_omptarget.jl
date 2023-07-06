@@ -10,10 +10,12 @@ function code_module_specpart(
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    fortran_spec = code_module_specpart(JAI_FORTRAN, apitype, prefix, cvars, args, data)
+    fortran_spec = code_module_specpart(JAI_FORTRAN, apitype, prefix, cvars,
+                        args, clauses, data)
 
     return "USE OMP_LIB\n" * fortran_spec
 end
@@ -23,6 +25,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
@@ -69,8 +72,24 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
+
+    async_str = ""
+
+    if "async" in keys(clauses)
+        aval = clauses["async"]
+
+        if aval isa Bool
+            if aval == true
+                async_str = "nowait"
+            end
+        elseif aval isa Integer
+            # TODO: handle stream id
+            async_str = "nowait"
+        end
+    end
 
     apiname  = JAI_MAP_API_FUNCNAME[apitype]
 
@@ -89,16 +108,16 @@ function code_module_subppart(
             #ptr = omp_target_alloc(bytes,device);
             #omp_target_associate_ptr(host_ptr,device_ptr,bytes,0device_offset,0device_num);
 
-            directs[i] = "!\$omp target enter data map(alloc: $(argname))"
+            directs[i] = "!\$omp target enter data map(alloc: $(argname)) $(async_str)"
 
         elseif apitype == JAI_DEALLOCATE
-            directs[i] = "!\$omp target exit data map(delete: $(argname))"
+            directs[i] = "!\$omp target exit data map(delete: $(argname)) $(async_str)"
 
         elseif apitype == JAI_UPDATETO
-            directs[i] = "!\$omp target update to($(argname))"
+            directs[i] = "!\$omp target update to($(argname)) $(async_str)"
 
         elseif apitype == JAI_UPDATEFROM
-            directs[i] = "!\$omp target update from($(argname))"
+            directs[i] = "!\$omp target update from($(argname)) $(async_str)"
 
         else
             error("Unknown api type: " * string(apitype))
@@ -121,6 +140,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 

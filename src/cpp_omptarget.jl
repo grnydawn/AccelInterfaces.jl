@@ -10,10 +10,11 @@ function code_cpp_header(
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, prefix, cvars, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, prefix, cvars, args, clauses, data)
 
     return "#include <omp.h>\n" * cpp_hdr
 
@@ -27,6 +28,7 @@ function code_c_functions(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
@@ -55,7 +57,7 @@ function code_c_functions(
 
         end
 
-        funcs[i] = code_c_function(prefix, name, args, body)
+        funcs[i] = code_c_function(prefix, name, args, clauses, body)
     end
 
     return  join(funcs, "\n\n")
@@ -69,10 +71,11 @@ function code_c_functions(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, "")
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, clauses, "")
 end
 
 ###### START of LAUNCH #######
@@ -82,10 +85,11 @@ function code_c_functions(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, String} where N
     ) :: String
 
-    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, data[1])
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, clauses, data[1])
 end
 
 

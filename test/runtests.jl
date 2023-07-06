@@ -192,9 +192,9 @@ function fortran_openacc_tests()
 
     @jkernel "ex1.knl" mykernel accacc framework(fortran_openacc=acc_compile)
 
-    @jenterdata accacc alloc(X, Y, Z) updateto(X, Y)
+    @jenterdata accacc alloc(X, Y, Z) updateto(X, Y) async(1)
 
-    @jlaunch mykernel accacc input(X, Y) output(Z,)
+    @jlaunch mykernel accacc input(X, Y) output(Z,) async(2)
 
     @jexitdata accacc updatefrom(Z) delete(X, Y, Z) async
 
@@ -221,7 +221,7 @@ function fortran_omptarget_tests()
 
     @jkernel "ex1.knl" framework(fortran_omptarget=omp_compile)
 
-    @jenterdata alloc(X, Y, Z) updateto(X, Y)
+    @jenterdata alloc(X, Y, Z) updateto(X, Y) async
 
     @jlaunch input(X, Y) output(Z,)
 
@@ -662,16 +662,16 @@ include("jlweather.jl")
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Frontier"
-#        fortran_test_string()
-#        fortran_test_file()
+        fortran_test_string()
+        fortran_test_file()
         fortran_openacc_tests()
-#        fortran_omptarget_tests()
-#        cpp_test_string()
-#        cpp_omptarget_test()
-#        hip_test_string()
-#        hip_fortran_test_string()
+        fortran_omptarget_tests()
+        cpp_test_string()
+        cpp_omptarget_test()
+        hip_test_string()
+        hip_fortran_test_string()
 #        jlweather_test()
-        #fortran_omptarget_hip_test_string()
+#        #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"
         #fortran_test_string()

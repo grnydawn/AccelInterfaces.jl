@@ -16,10 +16,11 @@ function code_cpp_macros(
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, String} where N
     ) :: String
 
-    return code_cpp_macros(JAI_CPP, apitype, prefix, args, data)
+    return code_cpp_macros(JAI_CPP, apitype, prefix, args, clauses, data)
 end
 
 
@@ -29,10 +30,11 @@ function code_cpp_header(
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
-    cpp_hdr = code_cpp_header(JAI_CPP, apitype, prefix, cvars, args, data)
+    cpp_hdr = code_cpp_header(JAI_CPP, apitype, prefix, cvars, args, clauses, data)
 
     lines = Vector{String}()
 
@@ -48,6 +50,7 @@ function code_c_header(
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
@@ -75,6 +78,9 @@ function code_c_header(
                 #push!(buf, "extern $typestr * $(ename)$(dimstr);")
                 push!(buf, "extern $typestr * $(ename);")
 
+            elseif apitype == JAI_DEALLOCATE
+                push!(buf, "extern $typestr * $(ename);")
+
             else
             end
         end
@@ -88,6 +94,7 @@ function code_c_function(
         prefix      ::String,
         suffix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         body        ::String
     ) ::String
 
@@ -105,6 +112,7 @@ function code_c_functions(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,
     ) :: String
 
@@ -112,9 +120,10 @@ function code_c_functions(
 
     for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
         if name == "wait"
-            funcs[i] = code_c_function(prefix, name, args, "HIP_ASSERT(hipDeviceSynchronize());")
+            funcs[i] = code_c_function(prefix, name, args, clauses,
+                            "HIP_ASSERT(hipDeviceSynchronize());")
         else
-            funcs[i] = code_c_function(prefix, name, args, "")
+            funcs[i] = code_c_function(prefix, name, args, clauses, "")
         end
     end
 
@@ -129,6 +138,7 @@ function code_c_functions(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
@@ -141,20 +151,17 @@ function code_c_functions(
 
         if apitype == JAI_ALLOCATE
             push!(buf, "HIP_ASSERT(hipMalloc((void**)&$ename, $asize));")
-            #push!(buf, "printf(\"ALLOC PPPPP $aname = %p\\n\", $aname);")
-            #push!(buf, "printf(\"ALLOC QQQQQ $ename = %p\\n\", $ename);")
 
         elseif apitype == JAI_UPDATETO
-            #push!(buf, "printf(\"UPTO PPPPP $aname = %p\\n\", $aname);")
-            #push!(buf, "printf(\"UPTO QQQQQ $ename = %p\\n\", $ename);")
             push!(buf, "HIP_ASSERT(hipMemcpy((void *)$ename, (void *)$aname,
                     $asize, hipMemcpyHostToDevice));")
 
         elseif apitype == JAI_UPDATEFROM
-            #push!(buf, "printf(\"UPFR PPPPP $aname = %p\\n\", $aname);")
-            #push!(buf, "printf(\"UPFR QQQQQ $ename = %p\\n\", $ename);")
             push!(buf, "HIP_ASSERT(hipMemcpy((void *)$aname, (void *)$ename,
                     $asize, hipMemcpyDeviceToHost));")
+
+        elseif apitype == JAI_DEALLOCATE
+            push!(buf, "HIP_ASSERT(hipFree($ename));")
 
         else
         end
@@ -162,7 +169,7 @@ function code_c_functions(
 
     body = join(buf, "\n")
 
-    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, body)
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, clauses, body)
 end
 
 ###### START of LAUNCH #######
@@ -284,6 +291,7 @@ function code_c_functions(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N,
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing
     ) :: String
@@ -295,7 +303,7 @@ function code_c_functions(
 
     # driver function
     dbody = code_hip_driver_body(kname, args, launch_config)
-    dfunc = code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, dbody)
+    dfunc = code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, clauses, dbody)
 
     return kfunc * "\n\n" * dfunc
 end

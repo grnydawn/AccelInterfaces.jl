@@ -10,10 +10,12 @@ function code_module_specpart(
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    fortran_spec = code_module_specpart(JAI_FORTRAN, apitype, prefix, cvars, args, data)
+    fortran_spec = code_module_specpart(JAI_FORTRAN, apitype, prefix, cvars,
+                        args, clauses, data)
 
     # TODO: required compiler-specific openacc use 
     # one idea is to actually test by compiling a small test code
@@ -25,6 +27,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
@@ -71,10 +74,26 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     apiname  = JAI_MAP_API_FUNCNAME[apitype]
+
+    async_str = ""
+
+    if "async" in keys(clauses)
+        aval = clauses["async"]
+
+        if aval isa Bool
+            if aval == true
+                async_str = "async"
+            end
+        elseif aval isa Integer
+            async_str = "async($(aval))"
+        end
+    end
+
 
     argnames    = Vector{String}(undef, length(args))
     typedecls   = Vector{String}(undef, length(args))
@@ -86,16 +105,16 @@ function code_module_subppart(
         typedecls[i] = code_fortran_typedecl(arg)
 
         if apitype == JAI_ALLOCATE
-            directs[i] = "!\$acc enter data create($(argname))"
+            directs[i] = "!\$acc enter data create($(argname)) $(async_str)"
 
         elseif apitype == JAI_DEALLOCATE
-            directs[i] = "!\$acc exit data delete($(argname))"
+            directs[i] = "!\$acc exit data delete($(argname)) $(async_str)"
 
         elseif apitype == JAI_UPDATETO
-            directs[i] = "!\$acc update device($(argname))"
+            directs[i] = "!\$acc update device($(argname)) $(async_str)"
 
         elseif apitype == JAI_UPDATEFROM
-            directs[i] = "!\$acc update host($(argname))"
+            directs[i] = "!\$acc update host($(argname)) $(async_str)"
 
         else
             error("Unknown api type: " * string(apitype))
@@ -118,6 +137,7 @@ function code_module_subppart(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 

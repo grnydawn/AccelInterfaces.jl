@@ -273,6 +273,7 @@ function compile_code(
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, String} where N,
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing},
         compile     ::String,
@@ -282,8 +283,8 @@ function compile_code(
     # TODO: add compile argument to generate_code
 
     if !isfile(srcname)
-        code = generate_code(frametype, apitype, prefix,
-                    cvars, args, data, launch_config=launch_config)
+        code = generate_code(frametype, apitype, prefix, cvars, args,
+                            clauses, data, launch_config=launch_config)
 
         open(srcname, "w") do io
             write(io, code)
@@ -360,9 +361,9 @@ end
 function code_cpp_macros(
         frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, String} where N
     ) :: String
 
@@ -392,18 +393,18 @@ end
 function generate_code(
         frametype   ::JAI_TYPE_FORTRAN_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, String} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
         difftest    ::Union{Dict{String, Any}, Nothing} = nothing,
     ) :: String
 
     suffix   = JAI_MAP_API_FUNCNAME[apitype]
-    specpart = code_module_specpart(frametype, apitype, prefix, cvars, args, data)
-    subppart = code_module_subppart(frametype, apitype, prefix, args, data)
+    specpart = code_module_specpart(frametype, apitype, prefix, cvars, args, clauses, data)
+    subppart = code_module_subppart(frametype, apitype, prefix, args, clauses, data)
 
     return jaifmt(FORTRAN_TEMPLATE_MODULE, prefix=prefix,
                   suffix=suffix, specpart=specpart, subppart=subppart)
@@ -412,24 +413,24 @@ end
 function generate_code(
         frametype   ::JAI_TYPE_CPP_FRAMEWORKS,
         apitype     ::JAI_TYPE_API,
-        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, String} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
         difftest    ::Union{Dict{String, Any}, Nothing} = nothing,
     ) :: String
 
 
-    jmacros = code_cpp_macros(frametype, apitype, prefix, args, data)
-    cpp_hdr = code_cpp_header(frametype, apitype, prefix, cvars, args, data)
-    c_hdr   = code_c_header(frametype, apitype, prefix, args, data)
+    jmacros = code_cpp_macros(frametype, apitype, prefix, args, clauses, data)
+    cpp_hdr = code_cpp_header(frametype, apitype, prefix, cvars, args, clauses, data)
+    c_hdr   = code_c_header(frametype, apitype, prefix, args, clauses, data)
 
     if frametype in (JAI_CUDA, JAI_HIP) && apitype == JAI_LAUNCH
-        funcs   = code_c_functions(frametype, apitype, prefix, args, data, launch_config)
+        funcs   = code_c_functions(frametype, apitype, prefix, args, clauses, data, launch_config)
     else
-        funcs   = code_c_functions(frametype, apitype, prefix, args, data)
+        funcs   = code_c_functions(frametype, apitype, prefix, args, clauses, data)
     end
 
     return jaifmt(CPP_TEMPLATE_HEADER, jmacros=jmacros, cpp_header=cpp_hdr,
@@ -450,12 +451,12 @@ include("machine.jl")
 function generate_sharedlib(
         frametype   ::JAI_TYPE_FRAMEWORK,
         apitype     ::JAI_TYPE_API,
-        #data_frametype  ::Union{JAI_TYPE_FRAMEWORK, Nothing},
         prefix      ::String,
         compile     ::String,
         workdir     ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::Vararg{String, N} where N;
         launch_config   ::Union{JAI_TYPE_CONFIG, Nothing} = nothing,
         difftest    ::Union{Dict{String, Any}, Nothing} = nothing,
@@ -492,8 +493,9 @@ function generate_sharedlib(
 
             pidfile = slibpath * ".pid"
 
-            locked_filetask(pidfile, slibpath, compile_code, srcname, frametype, apitype,
-                            prefix, cvars, args, data, launch_config, compile, outname)
+            locked_filetask(pidfile, slibpath, compile_code, srcname, frametype,
+                            apitype, prefix, cvars, args, clauses, data,
+                            launch_config, compile, outname)
         catch e
             rethrow(e)
 
@@ -569,15 +571,15 @@ function get_framework(
 
     args = JAI_TYPE_ARGS()
     push!(args, pack_arg(fill(Int64(-1), 1), nothing, nothing))
-
     cvars = JAI_TYPE_ARGS()
+    clauses = JAI_TYPE_CONFIG()
 
     for compile in compiles
 
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
-        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix,
-                                        compile, workdir, cvars, args)
+        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile,
+                        workdir, cvars, args, clauses)
 
         if slib isa Ptr{Nothing}
             if frametype in keys(frameworks)

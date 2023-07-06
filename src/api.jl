@@ -138,6 +138,8 @@ macro jaccel(clauses...)
 
     nclauses = length(clauses)
 
+    # TODO: support stream clause
+
     # parse accelname
     if nclauses > 0 && clauses[1] isa Symbol
         push!(init.args, string(clauses[1]))
@@ -180,13 +182,14 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
     updatetocount = 1
     allocnames = String[]
     updatenames = String[]
-    control = String[]
+    #control = String[]
 
     # parse directs
     for direct in directs[start_index:end]
 
         if direct isa Symbol
-            push!(control, string(direct))
+            push!(config.args, Expr(:call, :(=>), string(direct), true))
+            #push!(control, string(direct))
 
         elseif direct.args[1] == symalloc
 
@@ -214,7 +217,7 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
             updatetocount += 1
             push!(nonallocs, direct)
 
-        elseif direct.args[1] in (:enable_if,)
+        elseif direct.args[1] in (:enable_if, :async)
 
             key = direct.args[1]
             value = direct.args[2]
@@ -247,8 +250,8 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
                 #end
             end
 
-        elseif direct.args[1] in (:async,)
-            push!(control, string(direct.args[1]))
+        #elseif direct.args[1] in (:async,)
+        #    push!(control, string(direct.args[1]))
 
         else
             error(string(direct.args[1]) * " is not supported.")
@@ -280,9 +283,8 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
         end
 
         insert!(direct.args, 6, config)
-        insert!(direct.args, 7, control)
-        insert!(direct.args, 8, sline)
-        insert!(direct.args, 9, string(sfile))
+        insert!(direct.args, 7, sline)
+        insert!(direct.args, 8, string(sfile))
 
         direct.args[1] = :jai_data
 
@@ -487,6 +489,7 @@ macro jlaunch(clauses...)
     output = :(())
     innames = String[]
     outnames = String[]
+    config = :(JAI_TYPE_CONFIG())
 
     nclauses = length(clauses)
 
@@ -515,7 +518,13 @@ macro jlaunch(clauses...)
     frames = :(JAI_TYPE_CONFIG())
 
     for clause in clauses[start_index:end]
-        if clause.head == :call
+
+        if clause in (:async,)
+
+            push!(config.args, Expr(:call, :(=>),
+                string(clause), true))
+
+        elseif clause.head == :call
             if clause.args[1] == :input
                 for invar in clause.args[2:end]
                     push!(innames, String(invar))
@@ -542,6 +551,11 @@ macro jlaunch(clauses...)
                 push!(frames.args, Expr(:call, :(=>),
                         JAI_MAP_SYMBOL_FRAMEWORK[clause.args[1]], value))
 
+            elseif clause.args[1] in (:async,)
+
+                push!(config.args, Expr(:call, :(=>),
+                    string(clause.args[1]), esc(clause.args[2])))
+
             else
                 error("Wrong jlaunch clause: " * string(clause.args[1]))
             end
@@ -552,9 +566,10 @@ macro jlaunch(clauses...)
     push!(tmp.args, output)
     push!(tmp.args, innames)
     push!(tmp.args, outnames)
+    push!(tmp.args, frames)
+    push!(tmp.args, config)
     push!(tmp.args, __source__.line)
     push!(tmp.args, string(__source__.file))
-    push!(tmp.args, frames)
 
     #dump(tmp)
     return(tmp)

@@ -44,6 +44,7 @@ function code_cpp_header(
         prefix      ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
@@ -63,6 +64,7 @@ function code_c_header(
         apitype     ::JAI_TYPE_API,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) ::String
 
@@ -140,6 +142,7 @@ function code_c_function(
         prefix      ::String,
         suffix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         body        ::String
     ) ::String
 
@@ -157,13 +160,14 @@ function code_c_functions(
         apitype     ::JAI_TYPE_ACCEL,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
     funcs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
 
     for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
-        funcs[i] = code_c_function(prefix, name, args, "")
+        funcs[i] = code_c_function(prefix, name, args, clauses, "")
     end
 
     return  join(funcs, "\n\n")
@@ -177,10 +181,11 @@ function code_c_functions(
         apitype     ::JAI_TYPE_API_DATA,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, "")
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, clause, "")
 end
 
 ###### START of LAUNCH #######
@@ -190,10 +195,11 @@ function code_c_functions(
         apitype     ::JAI_TYPE_LAUNCH,
         prefix      ::String,
         args        ::JAI_TYPE_ARGS,
+        clauses     ::JAI_TYPE_CONFIG,
         data        ::NTuple{N, JAI_TYPE_DATA} where N
     ) :: String
 
-    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, data[1])
+    return code_c_function(prefix, JAI_MAP_API_FUNCNAME[apitype], args, clauses, data[1])
 end
 
 
