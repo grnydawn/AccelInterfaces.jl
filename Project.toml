@@ -9,23 +9,10 @@ Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 IOCapture = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
-Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 Pidfile = "fa939f87-e72e-5be4-a000-7fc836dbe307"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
-
-[compat]
-DataStructures = "0.1 - 2.0"
-OffsetArrays = "0.1 - 2.0"
-Pidfile = "0.1 - 2.0"
-julia = "1"
-
-[extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["Test"]

@@ -1,5 +1,5 @@
 using AccelInterfaces
-using Profile
+#using Profile
 
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
@@ -49,8 +49,8 @@ elseif SYSNAME == "Frontier"
     const cpp_compile  = "CC -fPIC -shared -g"
     const cpp_omp_compile  = "CC -shared -fPIC -fopenmp"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
-    const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
-    #const workdir = "/ccs/home/grnydawn/temp/jaiwork"
+    #const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
+    const workdir = "/ccs/home/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Summit" 
 
@@ -666,13 +666,13 @@ include("jlweather.jl")
 
     elseif SYSNAME == "Frontier"
         fortran_test_string()
-        fortran_test_file()
-        fortran_openacc_tests()
-        fortran_omptarget_tests()
-        cpp_test_string()
-        cpp_omptarget_test()
-        hip_test_string()
-        hip_fortran_test_string()
+#        fortran_test_file()
+#        fortran_openacc_tests()
+#        fortran_omptarget_tests()
+#        cpp_test_string()
+#        cpp_omptarget_test()
+#        hip_test_string()
+#        hip_fortran_test_string()
 #        jlweather_test()
 #        #fortran_omptarget_hip_test_string()
 
@@ -685,11 +685,11 @@ include("jlweather.jl")
         #hip_test_string()
         #hip_fortran_test_string()
         #fortran_openacc_hip_test_string()
-        @profile jlweather_test()
-		f = open("profile_opt1_reuse.out", "w")
-		#Profile.print(f, format=:flat, sortedby=:overhead, mincount=1)
-		Profile.print(f, format=:flat, sortedby=:count, mincount=1)
-		close(f)
+#        @profile jlweather_test()
+#		f = open("profile_opt1_reuse.out", "w")
+#		#Profile.print(f, format=:flat, sortedby=:overhead, mincount=1)
+#		Profile.print(f, format=:flat, sortedby=:count, mincount=1)
+#		close(f)
 
     elseif SYSNAME == "Summit"
         #fortran_test_string()
