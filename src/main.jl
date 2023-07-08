@@ -138,6 +138,7 @@ function jai_kernel(
     for sec in kdef.sections
         push!(kdef_frames, sec.header.frame)
     end
+
     # generate kernel context id
     kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, callsite) # 31/0, 28/0
  
@@ -216,12 +217,15 @@ function jai_data(
     ctx_accel   = get_accel(aname)
 
     # pack data and variable names
-    extnames = Vector{String}()
+    #extnames = Vector{String}()
+	varitems = []
     args = JAI_TYPE_ARGS()
     for (i, (n, d)) in enumerate(zip(names, data)) # 18/13, 17/12
         arg = pack_arg(d, ctx_accel.externs, apitype, name=n) # 129/46, 124/45
         push!(args, arg)
-        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7])) # 403/54, 387/55
+        #push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7])) # 403/54, 387/55
+		push!(varitems, arg[2]); push!(varitems, arg[6])
+		push!(varitems, arg[7]); push!(varitems, arg[8])
         #push!(extnameid, (arg[8], arg[2], arg[6], arg[7])) # 403/54, 387/55
     end
 
@@ -234,9 +238,9 @@ function jai_data(
     data_frametype = ctx_frame.type
     data_compile = ctx_frame.compile
 
-    extnameid   = join(extnames, "") # 5/0
+    #extnameid   = join(extnames, "") # 5/0
     uid         = generate_jid(ctx_accel.aid, apitype, apicount, callsite, # 90/0, 81/0
-                                data_frametype, data_compile, extnameid)
+                                data_frametype, data_compile, varitems)
     prefix      = generate_prefix(aname, uid)
 
     try
@@ -334,15 +338,14 @@ function jai_launch(
         end
     end
 
-    extnames = Vector{String}()
+	varitems = []
     for arg in args
-        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7])) # 128/5, 52/1
-        #push!(extnameid, (arg[8], arg[2], arg[6], arg[7]))
+		push!(varitems, arg[2]); push!(varitems, arg[6])
+		push!(varitems, arg[7]); push!(varitems, arg[8])
     end
 
-    extnameid   = join(extnames, "") # X/X, 5/0
     uid         = generate_jid(ctx_kernel.kid, apitype, callsite, # 41/0, 39/0
-                                extnameid, frametype, compile)
+                                varitems, frametype, compile)
     prefix      = generate_prefix(kname, uid)
 
     try

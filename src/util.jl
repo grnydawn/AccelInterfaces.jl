@@ -44,6 +44,15 @@ function generate_jid(args...) ::UInt32
 
     ret = 0x00000000::UInt32
 
+	tempid = UInt64(0)
+	for arg in args
+		tempid = hash(arg, tempid)
+	end
+
+	if tempid in keys(JAI["jids"])
+		return JAI["jids"][tempid]
+	end
+
     io = IOBuffer()
     serialize(io, args)
 
@@ -51,6 +60,8 @@ function generate_jid(args...) ::UInt32
         ret |= n
         ret <<= 8
     end
+
+	JAI["jids"][tempid] = ret
 
     return ret
 end

@@ -21,7 +21,7 @@ END DO
 """
 
 
-_DEV_ALLOC = false
+_DEV_ALLOC = true
 
 function _perform(X, Y, Z, val)
 
@@ -38,14 +38,14 @@ function jlweather_test()
 
     @jaccel hipacc
 
-    @jkernel jlweather_kernel_text mykernel hipacc framework(hip=hip_compile, fortran=fort_compile)
+    #@jkernel jlweather_kernel_text mykernel hipacc framework(hip=hip_compile, fortran=fort_compile)
+    @jkernel jlweather_kernel_text mykernel hipacc framework(fortran=fort_compile)
 #    @jdiff hipacc fort_impl(DEV_ALLOC=false, X=1) hip_impl(DEV_ALLOC=true) begin
 
     X = fill(1::Int64, SHAPE)
     Y = fill(2::Int64, SHAPE)
     Z = fill(1::Int64, SHAPE)
 
-    @jenterdata hipacc alloc(X, Y, Z) enable_if(_DEV_ALLOC)
 
 	val = 2
 

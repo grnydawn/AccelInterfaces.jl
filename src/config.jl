@@ -18,7 +18,8 @@ const JAI = Dict(
         "ctx_accels"    => Vector{JAI_TYPE_CONTEXT_ACCEL}(),
         "frameworks"    => OrderedDict{JAI_TYPE_FRAMEWORK,
                                        OrderedDict{UInt32, JAI_TYPE_CONTEXT_FRAMEWORK}}(),
-        "machine"       => nothing
+        "machine"       => nothing,
+        "jids"          => Dict{UInt64, UInt32}()
     )
 
 function _find_accel(aname::String) ::Union{<:Integer, Nothing}
