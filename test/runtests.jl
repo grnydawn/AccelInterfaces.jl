@@ -1,4 +1,5 @@
 using AccelInterfaces
+using Profile
 
 import OffsetArrays.OffsetArray,
        OffsetArrays.OffsetVector
@@ -85,6 +86,7 @@ elseif SYSNAME == "Perlmutter"
 
     const cpp_compile  = "CC -fPIC -shared -g"
     const cuda_compile  = "nvcc --linker-options=\"-fPIC\" --compiler-options=\"-fPIC\" --shared -g"
+    const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/pscratch/sd/y/youngsun/jaiwork"
 
 else
@@ -97,8 +99,8 @@ end
 const TEST1 = 100
 const TEST2 = (1, 2)
 const TEST3 = rand(Float64, (2,3))
-const SHAPE = (2,3,4)
-#const SHAPE = (200,30,40)
+#const SHAPE = (2,3,4)
+const SHAPE = (200,30,40)
 
 const machinefile = "machine.toml"
 
@@ -130,21 +132,22 @@ END DO
     fcompile = Dict("compile" => fort_compile)
 
     #@jaccel fortacc framework(fortran=fcompile) constant(TEST1, TEST2, TEST3) set(debug=true)
-    @jaccel fortacc constant(TEST1, TEST2, TEST3) set(debug=true)
-    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
+    @jaccel fortacc constant(TEST1, TEST2, TEST3) set(debug=true) # 177/0, 173/0 ### 118 , 
+    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile) # 1362/0, 1300/0 ### 1082, 1039
 
-    @jenterdata fortacc alloc(X, Y, Z)
+    @jenterdata fortacc alloc(X, Y, Z) # 1567/93, 819/84 ### 1059, 454
 
-    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2")
+    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2") # 477/82, 362/64 ### 560, 714
 
-    @jexitdata fortacc delete(X, Y, Z)
+    @jexitdata fortacc delete(X, Y, Z) #289/43  , 235/48 ### 258, 289
 
     @jwait fortacc
 
-    @jdecel fortacc
+    @jdecel fortacc # 27/0 , 31/0 ### 28, 24
 
-    @test Z == ANS
+    @test Z == ANS # 30/0 , 28/0 ### 21, 20
 
+	# sum 4106
 end
 
 function fortran_test_file()
@@ -248,7 +251,7 @@ function fortran_omptarget_cuda_tests()
                     debugdir=workdir, workdir=workdir)
 
 
-    @jkernel  "ex1.knl" mykernel ompcuda
+    @jkernel  "ex1.knl" mykernel ompcuda framework(fortran_omptarget=omp_compile, cuda=cuda_compile)
 
     @jenterdata ompcuda alloc(X, Y, Z) updateto(X, Y)
 
@@ -674,14 +677,19 @@ include("jlweather.jl")
 #        #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"
-        #fortran_test_string()
+        @profile fortran_test_string()
         #fortran_test_file()
         #fortran_omptarget_tests()
-        fortran_omptarget_cuda_tests()
+        #fortran_omptarget_cuda_tests()
         #cpp_test_string()
         #hip_test_string()
         #hip_fortran_test_string()
         #fortran_openacc_hip_test_string()
+        #@profile jlweather_test()
+		f = open("profile_macrodebug.out", "w")
+		#Profile.print(f, format=:flat, sortedby=:overhead, mincount=1)
+		Profile.print(f, format=:flat, sortedby=:count, mincount=1)
+		close(f)
 
     elseif SYSNAME == "Summit"
         #fortran_test_string()

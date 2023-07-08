@@ -131,10 +131,10 @@ function jai_kernel(
     )
 
     # find ctx_accel
-    ctx_accel = get_accel(aname)
+    ctx_accel = get_accel(aname) # 1359/0, 1299/0
 
     if !(kdef isa JAI_TYPE_KERNELDEF)
-        kdef = parse_kerneldef(kdef)
+        kdef = parse_kerneldef(kdef) # 504/0, 456/0
     end
 
     kdef_frames = Vector{JAI_TYPE_FRAMEWORK}()
@@ -142,7 +142,7 @@ function jai_kernel(
         push!(kdef_frames, sec.header.frame)
     end
     # generate kernel context id
-    kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath)
+    kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath) # 31/0, 28/0
  
     if kname == ""
         kname = string(kid, base = 16)
@@ -153,11 +153,22 @@ function jai_kernel(
 
     if framework isa JAI_TYPE_CONFIG
         for (fkey, fval) in framework
-            if fkey in kdef_frames
-                frame = get_framework(fkey, fval, compiler, workdir)
-                if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
-                    push!(ctx_frames, frame)
-                end
+            if fkey in kdef_frames # 7/7
+				try
+					frame = get_framework(fkey, fval, compiler, workdir) # 812/461, 807/466
+					if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
+						push!(ctx_frames, frame)
+					end
+
+				catch err
+					if err isa Base.IOError
+
+					elseif err isa JAI_ERROR_COMPILE_NOSHAREDLIB
+
+					else
+						rethrow(err)
+					end
+				end
             end
         end
     else
@@ -211,23 +222,24 @@ function jai_data(
     # pack data and variable names
     extnames = Vector{String}()
     args = JAI_TYPE_ARGS()
-    for (i, (n, d)) in enumerate(zip(names, data))
-        arg = pack_arg(d, ctx_accel.externs, apitype, name=n)
+    for (i, (n, d)) in enumerate(zip(names, data)) # 18/13, 17/12
+        arg = pack_arg(d, ctx_accel.externs, apitype, name=n) # 129/46, 124/45
         push!(args, arg)
-        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7]))
+        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7])) # 403/54, 387/55
+        #push!(extnameid, (arg[8], arg[2], arg[6], arg[7])) # 403/54, 387/55
     end
 
     if length(ctx_accel.data_framework) > 0
         ctx_frame = ctx_accel.data_framework[1]
     else
-        ctx_frame = select_data_framework(ctx_accel)
+        ctx_frame = select_data_framework(ctx_accel) # 91/0, 90/0
     end
 
     data_frametype = ctx_frame.type
     data_compile = ctx_frame.compile
 
-    extnameid   = join(extnames, "")
-    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno,
+    extnameid   = join(extnames, "") # 5/0
+    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, # 90/0, 81/0
                                 data_frametype, data_compile, filepath, extnameid)
     prefix      = generate_prefix(aname, uid)
 
@@ -241,7 +253,7 @@ function jai_data(
 
             #data_frametype, data_compile = select_data_framework(ctx_accel)
 
-            slib    = generate_sharedlib(data_frametype, apitype, 
+            slib    = generate_sharedlib(data_frametype, apitype,  # 776/25, 94/26
                         prefix, data_compile, workdir, ctx_accel.const_vars,
                         args, clauses)
 
@@ -250,7 +262,7 @@ function jai_data(
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
         #invoke_sharedfunc(frametype, slib, funcname, args)
-        invoke_sharedfunc(data_frametype, slib, funcname, args)
+        invoke_sharedfunc(data_frametype, slib, funcname, args) # 157/0, 79/1
 
     catch err
         rethrow()
@@ -286,7 +298,7 @@ function jai_launch(
     ctx_accel   = get_accel(aname)
     ctx_kernel  = get_kernel(ctx_accel, kname)
 
-    args        = pack_args(innames, input, outnames, output,
+    args        = pack_args(innames, input, outnames, output, # 80/0, 113/0
                             ctx_accel.externs, apitype)
 
     # select a framework based on config and frameworks
@@ -297,7 +309,7 @@ function jai_launch(
 
     for (key, value) in frame_config
 
-        if value != nothing && "enable_if" in keys(value) && !value["enable_if"]
+        if value != nothing && "enable_if" in keys(value) && !value["enable_if"] # 25/18, 18/13
             push!(disables, key)
             continue
         end
@@ -327,13 +339,14 @@ function jai_launch(
         end
     end
 
-    extnames    = Vector{String}()
+    extnames = Vector{String}()
     for arg in args
-        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7]))
+        push!(extnames, arg[8]*string(arg[2])*string(arg[6])*string(arg[7])) # 128/5, 52/1
+        #push!(extnameid, (arg[8], arg[2], arg[6], arg[7]))
     end
 
-    extnameid   = join(extnames, "")
-    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath,
+    extnameid   = join(extnames, "") # X/X, 5/0
+    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath, # 41/0, 39/0
                                 extnameid, frametype, compile)
     prefix      = generate_prefix(kname, uid)
 
@@ -342,13 +355,13 @@ function jai_launch(
             slib    = ctx_kernel.launch_slibs[uid]
         else
             workdir = get_config(ctx_accel, "workdir")
-            knlcode = get_kernel_code(ctx_kernel, frametype)
+            knlcode = get_kernel_code(ctx_kernel, frametype) # 37/26, 33/24
             difftest = (length(ctx_accel.difftest) > 0
                        ) ? ctx_accel.difftest[end] : nothing
 
             #data_frametype, data_compile = select_data_framework(ctx_accel)
 
-            slib    = generate_sharedlib(frametype, apitype,
+            slib    = generate_sharedlib(frametype, apitype, # 67/16, 25/17
                         prefix, compile, workdir, ctx_accel.const_vars, args,
                         clauses, knlcode, launch_config=frame_config,
                         difftest=difftest)
@@ -357,7 +370,7 @@ function jai_launch(
         end
 
         funcname = prefix*JAI_MAP_API_FUNCNAME[apitype]
-        invoke_sharedfunc(frametype, slib, funcname, args)
+        invoke_sharedfunc(frametype, slib, funcname, args) # 11/0, 8/0
 
         # support @jdiff
         # call jexitdata

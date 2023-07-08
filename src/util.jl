@@ -40,7 +40,6 @@ function locked_filetask(pidfile::String, target::String, fn::Function, args...)
     end
 end
 
-
 function generate_jid(args...) ::UInt32
 
     ret = 0x00000000::UInt32
