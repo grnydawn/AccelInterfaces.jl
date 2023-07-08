@@ -95,8 +95,8 @@ macro jconfig(clauses...)
 
     # exclude jaccel specific inputs
 
-    push!(config.args, __source__.line)
-    push!(config.args, string(__source__.file))
+	callsite = sha1(string(__source__.line)*string(__source__.file))
+    push!(config.args, vector_to_uint32(callsite))
 
     return(config)
 end
@@ -151,8 +151,8 @@ macro jaccel(clauses...)
 
     _jaccel_clause_handler(init, clauses[start_index:end])
 
-    push!(init.args, __source__.line)
-    push!(init.args, string(__source__.file))
+	callsite = sha1(string(__source__.line)*string(__source__.file))
+    push!(init.args, vector_to_uint32(callsite))
 
     #dump(clauses)
     
@@ -268,6 +268,8 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
         error("unknown symbol in jai data macro: " * string(symalloc))
     end
 
+	callsite = sha1(string(sline)*string(sfile))
+
     for direct in _buffer
 
         if direct.args[1] == symupdate
@@ -283,8 +285,7 @@ function _jdata(symalloc, jai_alloctype, symupdate, jai_updatetype, directs, sli
         end
 
         insert!(direct.args, 6, config)
-        insert!(direct.args, 7, sline)
-        insert!(direct.args, 8, string(sfile))
+        insert!(direct.args, 7, vector_to_uint32(callsite))
 
         direct.args[1] = :jai_data
 
@@ -413,8 +414,9 @@ macro jkernel(kdef, clauses...)
 
     push!(expr.args, knlname) # kernel context name
     push!(expr.args, accname) # accel context name
-    push!(expr.args, __source__.line)
-    push!(expr.args, string(__source__.file))
+
+	callsite = sha1(string(__source__.line)*string(__source__.file))
+    push!(expr.args, vector_to_uint32(callsite))
 
     for clause in clauses[start_index:end]
 
@@ -568,8 +570,9 @@ macro jlaunch(clauses...)
     push!(tmp.args, outnames)
     push!(tmp.args, frames)
     push!(tmp.args, config)
-    push!(tmp.args, __source__.line)
-    push!(tmp.args, string(__source__.file))
+
+	callsite = sha1(string(__source__.line)*string(__source__.file))
+    push!(tmp.args, vector_to_uint32(callsite))
 
     #dump(tmp)
     return(tmp)
@@ -613,8 +616,8 @@ macro jwait(clauses...)
     push!(expr.args, :jai_wait)
     push!(expr.args, name)
 
-    push!(expr.args, __source__.line)
-    push!(expr.args, string(__source__.file))
+    callsite = sha1(string(__source__.line)*string(__source__.file))
+    push!(expr.args, vector_to_uint32(callsite))
 
     return(expr)
 end
@@ -657,8 +660,8 @@ macro jdecel(clauses...)
 
     push!(fini.args, :jai_decel)
     push!(fini.args, accname)
-    push!(fini.args, __source__.line)
-    push!(fini.args, string(__source__.file))
+    callsite = sha1(string(__source__.line)*string(__source__.file))
+    push!(fini.args, vector_to_uint32(callsite))
 
     return(fini)
 end
@@ -718,18 +721,19 @@ macro jdiff(items...)
     Aname = string(Acase.args[1])
     Bname = string(Bcase.args[1])
 
+    callsite = vector_to_uint32(sha1(
+					string(__source__.line)*string(__source__.file)))
+
     push!(diff.args, :jai_diff)
     push!(diff.args, accname)
     push!(diff.args, (Aname, Bname))
-    push!(diff.args, __source__.line)
-    push!(diff.args, string(__source__.file))
+    push!(diff.args, callsite)
     push!(block.args, diff)
 
     push!(diffA.args, :_jai_diffA)
     push!(diffA.args, accname)
     push!(diffA.args, (Aname, Bname))
-    push!(diffA.args, __source__.line)
-    push!(diffA.args, string(__source__.file))
+    push!(diffA.args, callsite)
     push!(block.args, diffA)
 
     for kwargs in Acase.args[2:end]
@@ -747,8 +751,7 @@ macro jdiff(items...)
     push!(diffB.args, :_jai_diffB)
     push!(diffB.args, accname)
     push!(diffB.args, (Aname, Bname))
-    push!(diffB.args, __source__.line)
-    push!(diffB.args, string(__source__.file))
+    push!(diffB.args, callsite)
     push!(block.args, diffB)
 
     for kwargs in Bcase.args[2:end]
@@ -764,8 +767,7 @@ macro jdiff(items...)
     push!(diffend.args, :_jai_diffend)
     push!(diffend.args, accname)
     push!(diffend.args, (Aname, Bname))
-    push!(diffend.args, __source__.line)
-    push!(diffend.args, string(__source__.file))
+    push!(diffend.args, callsite)
 
     push!(block.args, diffend)
 

@@ -55,6 +55,15 @@ function generate_jid(args...) ::UInt32
     return ret
 end
 
+function vector_to_uint32(uid::Vector{UInt8}) :: UInt32
+    ret = 0x00000000::UInt32
+    for n in uid[1:4]
+        ret |= n
+        ret <<= 8
+    end
+    return ret
+end
+
 function generate_prefix(name :: String, jid :: UInt32)
     return "jai_" * name * "_" * string(jid, base=16) * "_"
 end

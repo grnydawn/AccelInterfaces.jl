@@ -11,8 +11,7 @@ Process @jconfig macro
 """
 
 function jai_config(
-        lineno      ::Integer,
-        filepath    ::String;
+        callsite    ::UInt32;
         const_vars  ::Union{NTuple{N, JAI_TYPE_DATA} where N, Nothing}= nothing,
         const_names ::Union{NTuple{N, String} where N, Nothing}       = nothing,
         device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
@@ -50,8 +49,7 @@ Process @jaccel macro
 
 function jai_accel(
         aname       ::String,
-        lineno      ::Integer,
-        filepath    ::String;
+        callsite    ::UInt32;
         const_vars  ::Union{NTuple{N, JAI_TYPE_DATA} where N, Nothing}= nothing,
         const_names ::Union{NTuple{N, String} where N, Nothing}       = nothing,
         device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
@@ -72,7 +70,7 @@ function jai_accel(
 
     # TODO: apply accel specific config in set
     #
-    aid = generate_jid(aname, Sys.STDLIB, JAI_VERSION, lineno, filepath)
+    aid = generate_jid(aname, Sys.STDLIB, JAI_VERSION, callsite)
 
     if aname == ""
         aname = string(aid, base = 16)
@@ -124,8 +122,7 @@ function jai_kernel(
         kdef        ::Union{JAI_TYPE_KERNELDEF, String},
         kname       ::String,
         aname       ::String,
-        lineno      ::Integer,
-        filepath    ::String;
+        callsite    ::UInt32;
         framework   ::Union{JAI_TYPE_CONFIG, Nothing}= nothing,
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing}= nothing
     )
@@ -142,7 +139,7 @@ function jai_kernel(
         push!(kdef_frames, sec.header.frame)
     end
     # generate kernel context id
-    kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, lineno, filepath) # 31/0, 28/0
+    kid = generate_jid(ctx_accel.aid, kname, kdef.kdid, callsite) # 31/0, 28/0
  
     if kname == ""
         kname = string(kid, base = 16)
@@ -206,8 +203,7 @@ function jai_data(
         apicount    ::Integer,
         names       ::Vector{String},
         clauses     ::JAI_TYPE_CONFIG,
-        lineno      ::Integer,
-        filepath    ::String,
+        callsite    ::UInt32,
         data        ::Vararg{JAI_TYPE_DATA, N} where N
     )
 
@@ -239,8 +235,8 @@ function jai_data(
     data_compile = ctx_frame.compile
 
     extnameid   = join(extnames, "") # 5/0
-    uid         = generate_jid(ctx_accel.aid, apitype, apicount, lineno, # 90/0, 81/0
-                                data_frametype, data_compile, filepath, extnameid)
+    uid         = generate_jid(ctx_accel.aid, apitype, apicount, callsite, # 90/0, 81/0
+                                data_frametype, data_compile, extnameid)
     prefix      = generate_prefix(aname, uid)
 
     try
@@ -290,8 +286,7 @@ function jai_launch(
         outnames    ::Vector{String},
         frame_config::JAI_TYPE_CONFIG,
         clauses     ::JAI_TYPE_CONFIG,
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     apitype     = JAI_LAUNCH
@@ -346,7 +341,7 @@ function jai_launch(
     end
 
     extnameid   = join(extnames, "") # X/X, 5/0
-    uid         = generate_jid(ctx_kernel.kid, apitype, lineno, filepath, # 41/0, 39/0
+    uid         = generate_jid(ctx_kernel.kid, apitype, callsite, # 41/0, 39/0
                                 extnameid, frametype, compile)
     prefix      = generate_prefix(kname, uid)
 
@@ -428,8 +423,7 @@ Process @jwait
 
 function jai_wait(
         name       ::String,
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     ctx_accel   = get_accel(name)
@@ -462,8 +456,7 @@ Process @jdecel macro
 
 function jai_decel(
         aname       ::String,
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     # jai ccall
@@ -485,8 +478,7 @@ Process @jdiff macro
 function jai_diff(
         aname       ::String,
         cases       ::Tuple{String, String},
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     println("Starting DIFF test for $aname $cases")
@@ -499,8 +491,7 @@ end
 function _jai_diffA(
         aname       ::String,
         cases       ::Tuple{String, String},
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     case = cases[1]
@@ -520,8 +511,7 @@ end
 function _jai_diffB(
         aname       ::String,
         cases       ::Tuple{String, String},
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     case = cases[2]
@@ -541,8 +531,7 @@ end
 function _jai_diffend(
         aname       ::String,
         cases       ::Tuple{String, String},
-        lineno      ::Integer,
-        filepath    ::String
+        callsite    ::UInt32
     )
 
     println("Generate diff report for $(cases)")
