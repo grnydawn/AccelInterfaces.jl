@@ -123,7 +123,7 @@ function pack_arg(
             offsets = arg.offsets
         else
             addr = string(pointer(arg))
-            offsets = Tuple(1 for _ in 1:length(arg))
+            offsets = Tuple(1 for _ in 1:length(shape))
         end
 
         if externs isa Dict{String, String}

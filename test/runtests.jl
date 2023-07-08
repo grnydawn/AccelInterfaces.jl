@@ -49,8 +49,8 @@ elseif SYSNAME == "Frontier"
     const cpp_compile  = "CC -fPIC -shared -g"
     const cpp_omp_compile  = "CC -shared -fPIC -fopenmp"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
-    #const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
-    const workdir = "/ccs/home/grnydawn/temp/jaiwork"
+    const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
+    #const workdir = "/ccs/home/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Summit" 
 
@@ -99,8 +99,8 @@ end
 const TEST1 = 100
 const TEST2 = (1, 2)
 const TEST3 = rand(Float64, (2,3))
-#const SHAPE = (2,3,4)
-const SHAPE = (200,30,40)
+const SHAPE = (2,3,4)
+#const SHAPE = (200,30,40)
 
 const machinefile = "machine.toml"
 
