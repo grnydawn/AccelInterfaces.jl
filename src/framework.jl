@@ -578,7 +578,7 @@ function get_framework(
 
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
-        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile, #110
+        slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile,
                         workdir, cvars, args, clauses)
 
         if slib isa Ptr{Nothing}
@@ -586,14 +586,14 @@ function get_framework(
                 frames = frameworks[frametype]
             else
                 frames = OrderedDict{UInt32, JAI_TYPE_CONTEXT_FRAMEWORK}()
-                frameworks[frametype] = frames #82
+                frameworks[frametype] = frames 
             end
 
-            if cid in keys(frames) #15
+            if cid in keys(frames)
                 error("framework is already exist: " * string(cid))
             else
-                frames[cid] = JAI_TYPE_CONTEXT_FRAMEWORK(frametype, slib, compile, prefix) #84
-                return frames[cid] #8
+                frames[cid] = JAI_TYPE_CONTEXT_FRAMEWORK(frametype, slib, compile, prefix)
+                return frames[cid]
             end
         end
     end
