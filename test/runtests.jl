@@ -666,14 +666,14 @@ include("jlweather.jl")
 
     elseif SYSNAME == "Frontier"
         fortran_test_string()
-#        fortran_test_file()
-#        fortran_openacc_tests()
-#        fortran_omptarget_tests()
-#        cpp_test_string()
-#        cpp_omptarget_test()
-#        hip_test_string()
-#        hip_fortran_test_string()
-#        jlweather_test()
+        fortran_test_file()
+        fortran_openacc_tests()
+        fortran_omptarget_tests()
+        cpp_test_string()
+        cpp_omptarget_test()
+        hip_test_string()
+        hip_fortran_test_string()
+        jlweather_test()
 #        #fortran_omptarget_hip_test_string()
 
     elseif SYSNAME == "Perlmutter"
