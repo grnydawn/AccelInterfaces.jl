@@ -19,7 +19,9 @@ const JAI = Dict(
         "frameworks"    => OrderedDict{JAI_TYPE_FRAMEWORK,
                                        OrderedDict{UInt32, JAI_TYPE_CONTEXT_FRAMEWORK}}(),
         "machine"       => nothing,
-        "jids"          => Dict{UInt64, UInt32}()
+        "jids"          => Dict{UInt64, UInt32}(),
+        "pack_jids"     => Dict{UInt64, JAI_TYPE_ARG}(),
+        "ccall_jids"    => Dict{UInt64, Function}(),
     )
 
 function _find_accel(aname::String) ::Union{<:Integer, Nothing}

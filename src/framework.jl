@@ -204,39 +204,6 @@ return jai_res;
 }}
 """
 
-const _ccall_cache = Dict{Int64, Function}()
-const _dummyargs = Tuple("a[$i]" for i in range(1, stop=200))
-const _ccs = ("(f,a) -> ccall(f, Int64, (", ",), " , ")")
-
-function jai_ccall(dtypestr::String, libfunc::Ptr{Nothing}, args::JAI_TYPE_ARGS) :: Int64
-
-    funcstr = _ccs[1] * dtypestr * _ccs[2] * join(_dummyargs[1:length(args)], ",") * _ccs[3]
-    fid = read(IOBuffer(sha1(funcstr)[1:8]), Int64)
-
-    if ! haskey(_ccall_cache, fid)
-        _ccall_cache[fid] = eval(Meta.parse(funcstr))
-    end
-
-    actual_args = map(x -> x[1], args)
-    Base.invokelatest(_ccall_cache[fid], libfunc, actual_args)
-#    jai_ccall2(dtypestr, libfunc, actual_args)
-end
-
-
-#function jai_ccall2(dtypestr::String, libfunc::Ptr{Nothing}, args::Vector{Ptr{Any}}) :: Int64
-#
-#    funcstr = _ccs[1] * dtypestr * _ccs[2] * join(_dummyargs[1:length(args)], ",") * _ccs[3]
-#    fid = read(IOBuffer(sha1(funcstr)[1:8]), Int64)
-#
-#    if ! haskey(_ccall_cache, fid)
-#        _ccall_cache[fid] = eval(Meta.parse(funcstr))
-#    end
-#
-#    #actual_args = map(x -> x[1], args)
-#    #Base.invokelatest(_ccall_cache[fid], libfunc, actual_args)
-#    Base.invokelatest(_ccall_cache[fid], libfunc, args)
-#end
-
 function argsdtypes(
         frame   ::JAI_TYPE_FRAMEWORK,
         args    ::JAI_TYPE_ARGS
@@ -335,6 +302,9 @@ end
 #    end
 #end
 
+const _dummyargs = Tuple("a[$i]" for i in range(1, stop=200))
+const _ccs = ("(f,a) -> ccall(f, Int64, (", ",), " , ")")
+
 function invoke_sharedfunc(
         frame   ::JAI_TYPE_FRAMEWORK,
         slib    ::Ptr{Nothing},
@@ -346,12 +316,22 @@ function invoke_sharedfunc(
         println("Enter invoke_sharedfunc: \n    " * string(frame) * "\n    " * fname)
     end
 
-    dtypes = argsdtypes(frame, args)
-    dtypestr = join([string(t) for t in dtypes], ",")
-
     libfunc = dlsym(slib, Symbol(fname))
+    dtypes = argsdtypes(frame, args)
+    fid = hash(dtypes)
 
-    check_retval(jai_ccall(dtypestr, libfunc, args))
+    if ! haskey(JAI["ccall_jids"], fid)
+        dtypestr = join([string(t) for t in dtypes], ",")
+
+        funcstr = _ccs[1] * dtypestr * _ccs[2] * join(_dummyargs[1:length(args)], ",") * _ccs[3]
+
+        JAI["ccall_jids"][fid] = eval(Meta.parse(funcstr))
+    end
+
+    actual_args = map(x -> x[1], args)
+    retval = Base.invokelatest(JAI["ccall_jids"][fid], libfunc, actual_args)
+
+    check_retval(retval)
 
     if DEBUG
         println("Exit invoke_sharedfunc")
