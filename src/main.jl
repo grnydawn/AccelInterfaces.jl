@@ -76,7 +76,7 @@ function jai_accel(
         aname = string(aid, base = 16)
     end
 
-    externs     = Dict{String, String}()
+    externs     = Dict{UInt64, String}()
     apitype     = JAI_ACCEL
     # pack const and variable names
     cvars = JAI_TYPE_ARGS()
@@ -384,42 +384,6 @@ Process @jwait
   * invoke wait-equivalent framework api
 
 """
-#function jai_wait(
-#        name       ::String,
-#        lineno      ::Integer,
-#        filepath    ::String
-#    )
-#
-#    ctx = nothing
-#    slib = nothing
-#
-#    if name == ""
-#        ctx_accel   = get_accel(name)
-#        ctx_kernel  = get_kernel(ctx_accel, name)
-#        ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
-#    else
-#        ctx_accel   = get_accel(name)
-#        if ctx_accel == nothing
-#            ctx_kernel = nothing
-#            for ctx_accel in JAI["ctx_accels"]
-#                ctx_kernel = get_kernel(ctx_accel, name)
-#                if ctx_kernel != nothing
-#                    _jwait(ctx_kernel)
-#                    break
-#                end
-#            end
-#
-#            if ctx_kernel == nothing
-#                error("Can not find shared library for jwait with " * name)
-#            end
-#        else
-#            ctx_kernel   = get_kernel(ctx_accel, name)
-#            ctx_kernel == nothing ? _jwait(ctx_accel) : _jwait(ctx_kernel)
-#        end
-#    end
-#
-#end
-
 function jai_wait(
         name       ::String,
         callsite    ::UInt32

@@ -161,7 +161,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     data_framework  ::Vector{JAI_TYPE_CONTEXT_FRAMEWORK} # Vector is used to update after construction
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
-    externs         ::Dict{String, String}
+    externs         ::Dict{UInt64, String}
     difftest        ::Vector{Dict{String, Any}}
 end
 

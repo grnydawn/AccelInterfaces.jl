@@ -35,6 +35,7 @@ function locked_filetask(pidfile::String, target::String, fn::Function, args...)
 
     while (start + delta > now())  
         if filesize(target) > 10
+            sleep(0.1)
             break
         end
     end
@@ -89,12 +90,52 @@ macro jerror(e) :(@error sprint(showerror, $(esc(e)))) end
 
 function pack_arg(
         arg     ::JAI_TYPE_DATA,
-        externs ::Union{Nothing, Dict{String, String}},
+        externs ::Union{Nothing, Dict{UInt64, String}},
         apitype ::Union{Nothing, JAI_TYPE_API};
         name    ::String="",
         inout   ::Union{Nothing, JAI_TYPE_INOUT}=nothing
     ) :: JAI_TYPE_ARG
 
+    jid = UInt64(0)
+
+    try
+        try
+            jid = convert(UInt64, pointer(parent(arg)))
+        catch err
+            jid = convert(UInt64, pointer(arg))
+        end
+    catch err
+        jid = hash(arg)
+    end
+
+    extname = ""
+
+    if externs isa Dict{UInt64, String}
+        if apitype isa JAI_TYPE_ALLOCATE
+            lenext = length(externs)
+            extname = "jai_extern_$(lenext)_$(name)"
+            externs[jid] = extname
+        elseif apitype isa JAI_TYPE_API_DATA || apitype isa JAI_TYPE_LAUNCH
+            if haskey(externs, jid)
+                extname = externs[jid]
+            else
+            end
+        else
+        end
+    end
+
+    jid = hash(apitype, jid)
+    jid = hash(name, jid)
+    jid = hash(inout, jid)
+
+    if haskey(JAI["pack_jids"], jid)
+        s = JAI["pack_jids"][jid]
+        if extname != s[8]
+            JAI["pack_jids"][jid] = (s[1], s[2], s[3], s[4], s[5], s[6], s[7], extname)
+        end
+
+        return JAI["pack_jids"][jid]
+    end
 
     if inout == nothing
         if apitype isa JAI_TYPE_API
@@ -109,7 +150,6 @@ function pack_arg(
     end
 
     bytes   = sizeof(arg)
-    extname = ""        
 
     if arg isa AbstractArray
 
@@ -118,28 +158,10 @@ function pack_arg(
 
         if arg isa OffsetArray
             pobj = parent(arg)
-            addr = string(pointer(pobj))
             bytes   = sizeof(pobj)
             offsets = arg.offsets
         else
-            addr = string(pointer(arg))
             offsets = Tuple(1 for _ in 1:length(shape))
-        end
-
-        if externs isa Dict{String, String}
-            if apitype isa JAI_TYPE_ALLOCATE
-                lenext = length(externs)
-                extname = "jai_extern_$(lenext)_$(name)"
-                externs[addr] = extname
-                #println("DDDDDDDD ", name, " ", extname, " ", addr)
-            elseif apitype isa JAI_TYPE_API_DATA || apitype isa JAI_TYPE_LAUNCH
-                if haskey(externs, addr)
-                    extname = externs[addr]
-                    #println("EEEEEE ", name, " ", extname, " ", addr)
-                else
-                    #println("FFFFFF ", name, " ", addr)
-                end
-            end
         end
 
     elseif arg isa Tuple
@@ -153,8 +175,9 @@ function pack_arg(
         offsets = ()
         dtype   = typeof(arg)
     end
-
-    return (arg, dtype, name, inout, bytes, shape, offsets, extname)
+    
+    JAI["pack_jids"][jid] = (arg, dtype, name, inout, bytes, shape, offsets, extname)
+    return JAI["pack_jids"][jid]
 end
 
 
@@ -163,7 +186,7 @@ function pack_args(
         indata      ::NTuple{N, JAI_TYPE_DATA} where N,
         outnames    ::Vector{String},
         outdata     ::NTuple{N, JAI_TYPE_DATA} where N,
-        externs     ::Union{Nothing, Dict{String, String}},
+        externs     ::Union{Nothing, Dict{UInt64, String}},
         apitype     ::Union{Nothing, JAI_TYPE_API}
     ) :: JAI_TYPE_ARGS
 
