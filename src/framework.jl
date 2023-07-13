@@ -503,6 +503,7 @@ end
 function get_framework(
         frametype   ::JAI_TYPE_FRAMEWORK,
         fconfig     ::JAI_TYPE_CONFIG_VALUE,
+        devices     ::Dict{Integer, Bool},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
         workdir     ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
@@ -550,7 +551,8 @@ function get_framework(
     end
 
     args = JAI_TYPE_ARGS()
-    push!(args, pack_arg(fill(Int64(-1), 1), nothing, nothing))
+    vbuf = fill(Int64(0), 1)
+    push!(args, pack_arg(vbuf, nothing, nothing))
     cvars = JAI_TYPE_ARGS()
     clauses = JAI_TYPE_CONFIG()
 
@@ -562,6 +564,23 @@ function get_framework(
                         workdir, cvars, args, clauses)
 
         if slib isa Ptr{Nothing}
+
+            # check if devices is configured in accel
+            if length(devices) > 0
+
+                # for now, support only one device per accel context
+                devnum = [k for k in keys(devices)][1]
+
+                if !devices[devnum]
+                    # set device num
+                    vbuf[1] = devnum
+
+                    invoke_sharedfunc(frametype, slib, prefix * "set_device_num", args)
+
+                    devices[devnum] = true
+                end
+            end
+
             if frametype in keys(frameworks)
                 frames = frameworks[frametype]
             else

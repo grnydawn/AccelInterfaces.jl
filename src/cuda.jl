@@ -119,13 +119,26 @@ function code_c_functions(
     ) :: String
 
     funcs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
-
-    for (i, (name, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
-        if name == "wait"
-            funcs[i] = code_c_function(prefix, name, args, clauses, 
+ 
+    for (i, (fname, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
+        if fname == "wait"
+            funcs[i] = code_c_function(prefix, fname, args, clauses,
                             "CUDA_ASSERT(cudaDeviceSynchronize());")
+
+        elseif fname == "get_num_devices"
+            funcs[i] = code_c_function(prefix, fname, args, clauses,
+                            "CUDA_ASSERT(cudaGetDeviceCount((int *)$vname));")
+
+        elseif fname == "get_device_num"
+            funcs[i] = code_c_function(prefix, fname, args, clauses,
+                            "CUDA_ASSERT(cudaGetDevice((int *)$vname));")
+
+        elseif fname == "set_device_num"
+            funcs[i] = code_c_function(prefix, fname, args, clauses,
+                            "CUDA_ASSERT(cudaSetDevice($vname[0]));")
+
         else
-            funcs[i] = code_c_function(prefix, name, args, clauses, "")
+            funcs[i] = code_c_function(prefix, fname, args, clauses, "")
         end
     end
 

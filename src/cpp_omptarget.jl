@@ -44,7 +44,7 @@ function code_c_functions(
             body = ""
 
         elseif name == "get_device_num"
-            body = "$argname[0] = (int64_t) omp_get_device_num();\n"
+            body = "$argname[0] = (int64_t) omp_get_default_device();\n"
 
         elseif name == "get_num_devices"
             body =  "$argname[0] = (int64_t) omp_get_num_devices();\n"

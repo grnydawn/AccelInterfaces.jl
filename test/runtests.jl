@@ -36,6 +36,7 @@ if SYSNAME == "Crusher"
 #-fopenmp=libiomp5
     const cpp_compile  = "CC -fPIC -shared -g"
     const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
+    #const cpp_omp_compile  = "CC -shared -fPIC -fno-cray -fopenmp=libomp"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
     const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
 
@@ -189,7 +190,7 @@ function fortran_openacc_tests()
 
     #@jaccel accacc framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
     @jaccel accacc constant(TEST1, TEST2
-                    ) device(1) set(debugdir=workdir, master=ismaster,
+                    ) device(2) set(debugdir=workdir, master=ismaster,
                     workdir=workdir)
 
 
@@ -220,7 +221,7 @@ function fortran_omptarget_tests()
     ismaster = true
 
     #@jaccel framework(fortran_omptarget=omp_compile) device(1)
-    @jaccel device(1)
+    @jaccel device(3)
 
     @jkernel "ex1.knl" framework(fortran_omptarget=omp_compile)
 
@@ -316,7 +317,7 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
     ANS = X .+ Y
 
     #@jaccel myacc  
-    @jaccel myacc
+    @jaccel myacc device(5)
 
     @jkernel kernel_text mykernel framework(cpp_omptarget=cpp_omp_compile)
 
@@ -458,7 +459,7 @@ END DO
     DEV_ALLOC = true
 
 
-    @jaccel hipacc
+    @jaccel hipacc device(1)
 
 #    @jdiff hipacc fort_impl(DEV_ALLOC=false, X=1) hip_impl(DEV_ALLOC=true) begin
 
@@ -659,8 +660,8 @@ include("jlweather.jl")
         #fortran_openacc_tests()
         #fortran_omptarget_tests()
         #cpp_test_string()
-        #cpp_omptarget_test()
-        hip_test_string()
+        cpp_omptarget_test()
+        #hip_test_string()
         #hip_fortran_test_string()
         #fortran_openacc_hip_test_string()
 

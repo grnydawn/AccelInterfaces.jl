@@ -45,13 +45,13 @@ function code_module_subppart(
             execpart = ""
 
         elseif fname == "get_device_num"
-            execpart = "$dnames(1) = omp_get_device_num()\n"
+            execpart = "$dnames(1) = omp_get_num_devices()\n"
 
         elseif fname == "get_num_devices"
-            execpart =  "$dnames(1) = omp_get_num_devices()\n"
+            execpart =  "$dnames(1) = omp_get_default_devices()\n"
 
         elseif fname == "set_device_num"
-            execpart =  "CALL omp_set_device_num($dnames(1))\n"
+            execpart =  "CALL omp_set_default_device(INT($dnames(1), 4))\n"
 
         elseif fname == "wait"
             execpart =  "!\$omp taskwait"

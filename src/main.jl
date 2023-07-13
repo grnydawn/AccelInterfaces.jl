@@ -64,10 +64,6 @@ function jai_accel(
         set_config(config, set)
     end
 
-    if device == nothing
-        device = ()
-    end
-
     # TODO: apply accel specific config in set
     #
     aid = generate_jid(aname, Sys.STDLIB, JAI_VERSION, callsite)
@@ -97,8 +93,15 @@ function jai_accel(
     ctx_kernels = Vector{JAI_TYPE_CONTEXT_KERNEL}()
     data_slibs  = Dict{UInt32, PtrAny}()
     difftest    = Vector{Dict{String, Any}}()
+    devices     = Dict{Integer, Bool}()
 
-    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, device,
+    if device != nothing
+        for d in device
+            devices[d] = false
+        end
+    end
+
+    ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, devices,
                         data_framework, data_slibs, ctx_kernels, externs,
                         difftest)
 
@@ -153,7 +156,8 @@ function jai_kernel(
         for (fkey, fval) in framework
             if fkey in kdef_frames
 				try
-					frame = get_framework(fkey, fval, compiler, workdir)
+					frame = get_framework(fkey, fval, ctx_accel.devices,
+                                    compiler, workdir)
 					if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
 						push!(ctx_frames, frame)
 					end

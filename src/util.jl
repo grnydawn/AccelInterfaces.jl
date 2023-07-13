@@ -30,13 +30,14 @@ function locked_filetask(pidfile::String, target::String, fn::Function, args...)
         end
     end
 
-    delta = Second(10)
+    delta = Second(20)
     start  = now()
 
     while (start + delta > now())  
-        if filesize(target) > 10
-            sleep(0.1)
+        if filesize(target) > 1000
             break
+        else
+            sleep(0.1)
         end
     end
 end

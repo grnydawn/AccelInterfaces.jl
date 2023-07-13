@@ -156,7 +156,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     aid             ::UInt32
     config          ::JAI_TYPE_CONFIG_USER
     const_vars      ::JAI_TYPE_ARGS
-    devices         ::NTuple{N, Integer} where N
+    devices         ::Dict{Integer, Bool}
     #framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
     data_framework  ::Vector{JAI_TYPE_CONTEXT_FRAMEWORK} # Vector is used to update after construction
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}

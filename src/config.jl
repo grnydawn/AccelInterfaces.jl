@@ -74,7 +74,7 @@ end
 
 get_config(name::String)                = get_config(JAI["config"], name)
 set_config(configs::JAI_TYPE_CONFIG)    = set_config(JAI["config"], configs)
-set_config(name::String, value::Any)    = get_config(JAI["config"], name, value)
+set_config(name::String, value::Any)    = set_config(JAI["config"], name, value)
 
 function get_config(ctx::JAI_TYPE_CONTEXT_ACCEL, name::String)
     value = get_config(ctx.config, name)
@@ -85,7 +85,7 @@ function get_config(ctx::JAI_TYPE_CONTEXT_ACCEL, name::String)
 end
 
 function set_config(ctx::JAI_TYPE_CONTEXT_ACCEL, name::String, value::Any)
-    get_config(ctx.config, name, value)
+    set_config(ctx.config, name, value)
 end
 
 function set_config(ctx::JAI_TYPE_CONTEXT_ACCEL, configs::JAI_TYPE_CONFIG)
