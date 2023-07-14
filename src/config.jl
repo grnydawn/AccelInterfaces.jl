@@ -135,9 +135,8 @@ function delete_accel!(aname)
                             mv(joinpath(path, file), joinpath(debugdir, file),
                                 force=true)
                         end
-                    else
-                        rm(path, force=true, recursive=true)
                     end
+                    rm(path, force=true, recursive=true)
                 catch e
                 end
             end
