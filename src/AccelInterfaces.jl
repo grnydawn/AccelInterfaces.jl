@@ -17,5 +17,13 @@ include("api.jl")
 
 export @jconfig, @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel, @jdiff
 
+function _finalize()
+end
+
+function __init__()
+    #global sharedlib_cache = @get_scratch!("sharedlib_files")
+    atexit(_finalize)
+end
+
 end
 

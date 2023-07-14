@@ -1,8 +1,10 @@
 # framework.jl: implement common functions for framework interfaces
 
-import InteractiveUtils.subtypes
+#import InteractiveUtils.subtypes
+import UUIDs.uuid1
+import Pidfile: mkpidlock, LockMonitor
 import Libdl: dlopen, RTLD_LAZY, RTLD_DEEPBIND, RTLD_GLOBAL, dlext, dlsym, dlclose
-import IOCapture
+#import IOCapture
 import OffsetArrays: OffsetVector, OffsetArray
 
 const JAI_FORTRAN                   = JAI_TYPE_FORTRAN()
@@ -434,6 +436,7 @@ function generate_sharedlib(
         prefix      ::String,
         compile     ::String,
         workdir     ::String,
+        cachedir    ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         clauses     ::JAI_TYPE_CONFIG,
@@ -463,28 +466,54 @@ function generate_sharedlib(
     srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * suffix
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
 
-    mypid = getpid()
-    myworkdir = joinpath(workdir, string(mypid))
-    if !isdir(myworkdir)
-        mkdir(myworkdir)
-    end
-
-    slibpath= joinpath(myworkdir, outname)
+    slibpath = joinpath(cachedir, outname)
 
     if !isfile(slibpath)
-
+ 
         curdir = pwd()
 
         try
+            # geneate shared library
+            pidgenfile = joinpath(workdir, outname * ".genpid")
+            pidcopyfile = joinpath(workdir, outname * ".copypid")
+
+            genlock = nothing
+            copylock = nothing
+
+            myuid = string(uuid1())
+            myworkdir = joinpath(workdir, myuid)
+            if !isdir(myworkdir)
+                mkdir(myworkdir)
+            end
+
             cd(myworkdir)
 
-            compile_code(srcname, frametype, apitype, prefix, cvars, args,
+            try
+                genlock = mkpidlock(pidgenfile, stale_age=3)
+                if !isfile(slibpath)
+
+                    compile_code(srcname, frametype, apitype, prefix, cvars, args,
                             clauses, data, launch_config, compile, outname)
 
-            #pidfile = slibpath * ".pid"
-            #locked_filetask(pidfile, slibpath, compile_code, srcname, frametype,
-            #                apitype, prefix, cvars, args, clauses, data,
-            #                launch_config, compile, outname)
+                    # copy shared library
+                    copylock = mkpidlock(pidcopyfile, stale_age=3)
+                    if !isfile(slibpath)
+                        cp(joinpath(myworkdir, outname), slibpath)
+                    end
+                end
+            catch err
+                rethrow(err)
+
+            finally
+
+                if genlock isa LockMonitor
+                    close(genlock)
+                end
+
+                if copylock isa LockMonitor
+                    close(copylock)
+                end
+            end
         catch e
             rethrow(e)
 
@@ -493,7 +522,24 @@ function generate_sharedlib(
         end
     end
 
-    slib = load_sharedlib(slibpath)
+    slib = nothing
+    delta = Second(10)
+    start  = now()
+
+    while (!(slib isa Ptr{Nothing}) && start + delta > now())  
+
+        if filesize(slibpath) < 1000
+            sleep(0.1)
+            continue
+        end
+
+        try
+            slib = load_sharedlib(slibpath)
+        catch e
+        finally
+            sleep(0.1)
+        end
+    end
 
     # init device
     if apitype == JAI_ACCEL
@@ -514,7 +560,8 @@ function get_framework(
         fconfig     ::JAI_TYPE_CONFIG_VALUE,
         devices     ::Dict{Integer, Bool},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
-        workdir     ::String
+        workdir     ::String,
+        cachedir    ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
  
     if fconfig isa String
@@ -570,7 +617,7 @@ function get_framework(
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
         slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile,
-                        workdir, cvars, args, clauses)
+                        workdir, cachedir, cvars, args, clauses)
 
         if slib isa Ptr{Nothing}
 
@@ -612,7 +659,8 @@ end
 function select_framework(
         userframe   ::Union{JAI_TYPE_CONFIG, Nothing},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
-        workdir     ::String
+        workdir     ::String,
+        cachedir     ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
 
     if userframe == nothing
@@ -630,7 +678,7 @@ function select_framework(
     end
 
     for (frametype, config) in userframe
-        framework = get_framework(frametype, config, compiler, workdir)
+        framework = get_framework(frametype, config, compiler, workdir, cachedir)
         if framework isa JAI_TYPE_CONTEXT_FRAMEWORK
             return framework
         end

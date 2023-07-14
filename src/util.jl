@@ -1,6 +1,6 @@
 # util.jl: implement utility functions
 #
-import Pidfile.mkpidlock
+import Pidfile: mkpidlock, LockMonitor
 import Serialization.serialize
 import SHA.sha1
 import Random.randstring
@@ -24,22 +24,12 @@ function locked_filetask(pidfile::String, target::String, fn::Function, args...)
 
         finally
 
-            if lock != nothing
+            if lock isa LockMonitor
                 close(lock)
             end
         end
     end
 
-    delta = Second(20)
-    start  = now()
-
-    while (start + delta > now())  
-        if filesize(target) > 1000
-            break
-        else
-            sleep(0.1)
-        end
-    end
 end
 
 function generate_jid(args...) ::UInt32

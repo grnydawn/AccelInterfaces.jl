@@ -63,15 +63,16 @@ const JAI_TYPE_CONFIG       = OrderedDict{
 
 # Jai user config type
 mutable struct JAI_TYPE_CONFIG_USER
-    debug   ::Union{Bool, Nothing}
-    workdir ::Union{String, Nothing}
+    debug       ::Union{Bool, Nothing}
+    workdir     ::Union{String, Nothing}
+    cachedir    ::Union{String, Nothing}
 
     function JAI_TYPE_CONFIG_USER()
-        new(nothing, nothing)
+        new(nothing, nothing, nothing)
     end
 
-    function JAI_TYPE_CONFIG_USER(debug, workdir)
-        new(debug, workdir)
+    function JAI_TYPE_CONFIG_USER(debug, workdir, cachedir)
+        new(debug, workdir, cachedir)
     end
 
 end

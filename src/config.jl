@@ -12,7 +12,8 @@ const _USER_CONFIGS = Tuple(string(n) for n in fieldnames(JAI_TYPE_CONFIG_USER))
 const JAI = Dict(
         "config"        => JAI_TYPE_CONFIG_USER(
                                 DEBUG,
-                                joinpath(pwd(), ".jworkdir")
+                                joinpath(pwd(), ".jworkdir"),
+                                nothing
                            ),
         "pidfile"       => ".jtask.pid",
         "ctx_accels"    => Vector{JAI_TYPE_CONTEXT_ACCEL}(),
@@ -56,8 +57,8 @@ end
 
 function set_config(CFG::JAI_TYPE_CONFIG_USER, name::String, value)
     if name in _USER_CONFIGS
-        type = fieldtype(JAI_TYPE_CONFIG_USER, Symbol(name))
-        setproperty!(CFG, Symbol(name), value::type)
+        valuetype = fieldtype(JAI_TYPE_CONFIG_USER, Symbol(name))
+        setproperty!(CFG, Symbol(name), value::valuetype)
     else
         println(name * " can not be changed.")
     end
@@ -118,6 +119,19 @@ function delete_accel!(aname)
 
         for ctx_kernel in ctx_accel.ctx_kernels
             # TODO: terminate ctx_kernel
+        end
+
+        workdir = get_config(ctx_accel, "workdir")
+        cachedir = get_config(ctx_accel, "cachedir")
+
+        for name in readdir(workdir)
+            path = joinpath(workdir, name)
+            if path != cachedir
+                try
+                    rm(path, force=true, recursive=true)
+                catch e
+                end
+            end
         end
 
         # call fini
