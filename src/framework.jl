@@ -462,20 +462,29 @@ function generate_sharedlib(
 
     srcname = prefix * JAI_MAP_API_FUNCNAME[apitype] * suffix
     outname = prefix * JAI_MAP_API_FUNCNAME[apitype] * "." * dlext
-    slibpath= joinpath(workdir, outname)
+
+    mypid = getpid()
+    myworkdir = joinpath(workdir, string(mypid))
+    if !isdir(myworkdir)
+        mkdir(myworkdir)
+    end
+
+    slibpath= joinpath(myworkdir, outname)
 
     if !isfile(slibpath)
 
         curdir = pwd()
 
         try
-            cd(workdir)
+            cd(myworkdir)
 
-            pidfile = slibpath * ".pid"
+            compile_code(srcname, frametype, apitype, prefix, cvars, args,
+                            clauses, data, launch_config, compile, outname)
 
-            locked_filetask(pidfile, slibpath, compile_code, srcname, frametype,
-                            apitype, prefix, cvars, args, clauses, data,
-                            launch_config, compile, outname)
+            #pidfile = slibpath * ".pid"
+            #locked_filetask(pidfile, slibpath, compile_code, srcname, frametype,
+            #                apitype, prefix, cvars, args, clauses, data,
+            #                launch_config, compile, outname)
         catch e
             rethrow(e)
 

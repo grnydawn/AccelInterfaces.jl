@@ -92,19 +92,19 @@ function code_c_header(
 
 end
 
-function code_c_function(
-        prefix      ::String,
-        suffix      ::String,
-        args        ::JAI_TYPE_ARGS,
-        clauses     ::JAI_TYPE_CONFIG,
-        body        ::String
-    ) ::String
-
-    name = prefix * suffix
-    dargs = code_c_dummyargs(args)
-
-    return jaifmt(C_TEMPLATE_FUNCTION, name=name, dargs=dargs, body=body)
-end
+#function code_c_function(
+#        prefix      ::String,
+#        suffix      ::String,
+#        args        ::JAI_TYPE_ARGS,
+#        clauses     ::JAI_TYPE_CONFIG,
+#        body        ::String
+#    ) ::String
+#
+#    name = prefix * suffix
+#    dargs = code_c_dummyargs(args)
+#
+#    return jaifmt(C_TEMPLATE_FUNCTION, name=name, dargs=dargs, body=body)
+#end
 
 
 ###### START of ACCEL #######
