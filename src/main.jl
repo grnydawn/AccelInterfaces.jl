@@ -90,8 +90,26 @@ function jai_accel(
         workdir = config.workdir
     end
 
+    if config.debug == nothing
+        debug = get_config("debug")
+        set_config(config, "debug", debug)
+    end
+
+    if config.debug
+        debugdir = joinpath(workdir, "debugdir")
+
+        if !isdir(debugdir)
+            try
+                locked_filetask("debugdir" * JAI["pidfile"],
+                        debugdir, mkdir, debugdir)
+            catch e
+            end
+        end
+    end
+
     if config.cachedir == nothing
         cachedir = get_config("cachedir")
+
         if cachedir == nothing
             cachedir = joinpath(workdir, "cachedir")
         end
@@ -99,7 +117,7 @@ function jai_accel(
     else
         cachedir = config.cachedir
     end
-        
+
     if !isdir(cachedir)
         try
             locked_filetask("cachedir" * JAI["pidfile"], cachedir, mkdir, cachedir)

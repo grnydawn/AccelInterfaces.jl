@@ -132,7 +132,6 @@ END DO
 
     fcompile = Dict("compile" => fort_compile)
 
-    #@jaccel fortacc framework(fortran=fcompile) constant(TEST1, TEST2, TEST3) set(debug=true)
     @jaccel fortacc constant(TEST1, TEST2, TEST3) set(debug=true) # 177/0, 173/0 ### 118 , 
     @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile) # 1362/0, 1300/0 ### 1082, 1039
 
@@ -190,8 +189,7 @@ function fortran_openacc_tests()
 
     #@jaccel accacc framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
     @jaccel accacc constant(TEST1, TEST2
-                    ) device(2) set(debugdir=workdir, master=ismaster,
-                    workdir=workdir)
+                    ) device(2) set(workdir=workdir, debug=true)
 
 
     @jkernel "ex1.knl" mykernel accacc framework(fortran_openacc=acc_compile)
@@ -248,8 +246,7 @@ function fortran_omptarget_cuda_tests()
 
     #@jaccel ompcuda framework(fortran_omptarget=omp_compile, cuda=cuda_compile) constant(TEST1, TEST2
     @jaccel ompcuda constant(TEST1, TEST2
-                    ) device(1, 2) set(master=ismaster,
-                    debugdir=workdir, workdir=workdir)
+                    ) device(1, 2) set(workdir=workdir)
 
 
     @jkernel  "ex1.knl" mykernel ompcuda framework(fortran_omptarget=omp_compile, cuda=cuda_compile)
@@ -356,7 +353,7 @@ function cuda_test_string()
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    @jaccel cudaacc set(debugdir=workdir, workdir=workdir) 
+    @jaccel cudaacc set(workdir=workdir) 
     @jkernel kernel_text mykernel cudaacc framework(cuda=cuda_compile)
 
     @jenterdata cudaacc alloc(X, Y, Z) updateto(X, Y) async
@@ -402,8 +399,7 @@ CALL RANDOM_NUMBER(Z)
     #println("#######")
     #println(Z)
 
-    #@jaccel fortran_hip set(debugdir=workdir, workdir=workdir)
-    @jaccel fortran_hip set(debugdir=workdir, workdir=workdir)
+    @jaccel fortran_hip set(workdir=workdir)
 
     @jkernel kernel_fortran initarrays fortran_hip framework(fortran=fort_compile) 
     @jkernel kernel_hip vecadd fortran_hip framework(hip=hip_compile)
@@ -518,8 +514,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     Z1 = fill(0.::Float64, SHAPE)
     ANS = X1 .+ Y1
 
-    #@jaccel acchipacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
-    @jaccel acchipacc set(debugdir=workdir, workdir=workdir)
+    @jaccel acchipacc set(workdir=workdir)
     @jkernel kernel_text mykernel acchipacc framework(hip=hip_compile)
 
     @jenterdata acchipacc alloc(X1, Y1, Z1) updateto(X1, Y1)
@@ -556,8 +551,7 @@ for(int k=0; k<JSHAPE(X, 0); k++) {
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    #@jaccel acccudaacc framework(fortran_openacc=acc_compile) set(debugdir=workdir, workdir=workdir)
-    @jaccel acccudaacc set(debugdir=workdir, workdir=workdir)
+    @jaccel acccudaacc set(workdir=workdir)
     @jkernel kernel_text mykernel acccudaacc framework(cuda=cuda_compile)
 
     @jenterdata acccudaacc alloc(X, Y, Z) updateto(X, Y)

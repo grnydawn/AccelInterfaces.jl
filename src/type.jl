@@ -158,8 +158,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     config          ::JAI_TYPE_CONFIG_USER
     const_vars      ::JAI_TYPE_ARGS
     devices         ::Dict{Integer, Bool}
-    #framework       ::JAI_TYPE_CONTEXT_FRAMEWORK
-    data_framework  ::Vector{JAI_TYPE_CONTEXT_FRAMEWORK} # Vector is used to update after construction
+    data_framework  ::Vector{JAI_TYPE_CONTEXT_FRAMEWORK}
     data_slibs      ::Dict{UInt32, Ptr{Nothing}}
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
     externs         ::Dict{UInt64, String}

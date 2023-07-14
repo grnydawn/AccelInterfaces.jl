@@ -121,22 +121,27 @@ function delete_accel!(aname)
             # TODO: terminate ctx_kernel
         end
 
+        debug = get_config(ctx_accel, "debug")
         workdir = get_config(ctx_accel, "workdir")
         cachedir = get_config(ctx_accel, "cachedir")
+        debugdir = joinpath(workdir, "debugdir")
 
         for name in readdir(workdir)
             path = joinpath(workdir, name)
-            if path != cachedir
+            if path != cachedir && path != debugdir
                 try
-                    rm(path, force=true, recursive=true)
+                    if debug
+                        for file in readdir(path)
+                            mv(joinpath(path, file), joinpath(debugdir, file),
+                                force=true)
+                        end
+                    else
+                        rm(path, force=true, recursive=true)
+                    end
                 catch e
                 end
             end
         end
-
-        # call fini
-        #prefix = "jai_" * JAI_MAP_FRAMEWORK_STRING[ctx.frame] * "_accel_"
-        # TODO: terminate ctx_accel
     end
 
 end

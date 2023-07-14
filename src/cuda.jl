@@ -250,10 +250,7 @@ function code_cuda_driver_body(
 
     nargs   = length(args)
     buf     = fill("", nargs)
-    dbuf    = fill("", nargs)
     anames  = fill("", nargs)
-    pf  = Vector{String}()
-    #dname   = args[end][3]
 
     for (i, arg) in enumerate(args)
 
@@ -266,31 +263,17 @@ function code_cuda_driver_body(
 
             buf[i] = "$t (*ptr_$n)$d = reinterpret_cast<$t (*)$d>($ename);"
             anames[i] = "(*ptr_$n)" 
-            #push!(pf, "printf(\"KERNEL PPPPP $n = %p\\n\", $n);")
-            #push!(pf, "printf(\"KERNEL QQQQQ $ename = %p\\n\", $ename);")
         else
             anames[i] = aname
         end
-
-        #anames[i] = "*ptr_" * arg[3] 
-        #anames[i] = "$dname[$(i-1)]"
-        #dbuf[i] = "printf(\"AT LAUNCH, $aname: dptr= %p\\n\", (void *)$aname);"
-
     end
 
     reintepret  = join(buf, "\n")
-    #reintepret  = ""
     dvarnames   = join(anames, ", \n")
-    debug       = join(dbuf, "\n")
-    printf      = join(pf, "\n")
 
     push!(out, """
 
-$debug
-
 $reintepret
-
-$printf
 
 $kname<<<dim3($grid), dim3($block), $shared, $stream>>>(
     $dvarnames
