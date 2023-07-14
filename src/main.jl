@@ -101,7 +101,10 @@ function jai_accel(
     end
         
     if !isdir(cachedir)
-        mkdir(cachedir)
+        try
+            locked_filetask("cachedir" * JAI["pidfile"], cachedir, mkdir, cachedir)
+        catch e
+        end
     end
 
     #ctx_framework   = select_framework(framework, compiler, workdir)

@@ -45,7 +45,7 @@ function get_config(CFG::JAI_TYPE_CONFIG_USER, name::String)
 
         if name == "workdir"
             if ret isa String && !isdir(ret)
-                locked_filetask(JAI["pidfile"], ret, mkdir, ret)
+                locked_filetask("workdir" * JAI["pidfile"], ret, mkdir, ret)
             end
         end
     else

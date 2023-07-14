@@ -471,53 +471,59 @@ function generate_sharedlib(
     if !isfile(slibpath)
  
         curdir = pwd()
+        genlock = nothing
 
         try
+
             # geneate shared library
             pidgenfile = joinpath(workdir, outname * ".genpid")
-            pidcopyfile = joinpath(workdir, outname * ".copypid")
+            genlock = mkpidlock(pidgenfile, stale_age=3)
 
-            genlock = nothing
-            copylock = nothing
+            if !isfile(slibpath)
 
-            myuid = string(uuid1())
-            myworkdir = joinpath(workdir, myuid)
-            if !isdir(myworkdir)
-                mkdir(myworkdir)
-            end
+                myuid = string(uuid1())
+                myworkdir = joinpath(workdir, myuid)
+                if !isdir(myworkdir)
+                    mkdir(myworkdir)
+                end
 
-            cd(myworkdir)
+                cd(myworkdir)
 
-            try
-                genlock = mkpidlock(pidgenfile, stale_age=3)
-                if !isfile(slibpath)
-
-                    compile_code(srcname, frametype, apitype, prefix, cvars, args,
+                compile_code(srcname, frametype, apitype, prefix, cvars, args,
                             clauses, data, launch_config, compile, outname)
+
+                copylock = nothing
+
+                try
+
+                    pidcopyfile = joinpath(workdir, outname * ".copypid")
 
                     # copy shared library
                     copylock = mkpidlock(pidcopyfile, stale_age=3)
+
                     if !isfile(slibpath)
                         cp(joinpath(myworkdir, outname), slibpath)
                     end
-                end
             catch err
                 rethrow(err)
 
             finally
 
-                if genlock isa LockMonitor
-                    close(genlock)
-                end
-
                 if copylock isa LockMonitor
                     close(copylock)
                 end
             end
+
+                end
         catch e
             rethrow(e)
 
         finally
+
+            if genlock isa LockMonitor
+                close(genlock)
+            end
+
             cd(curdir)
         end
     end
