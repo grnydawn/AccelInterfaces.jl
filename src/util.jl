@@ -7,15 +7,18 @@ import Random.randstring
 import DataStructures.Stack
 import Dates: Second, now
 
-function locked_filetask(pidfile::String, target::String, fn::Function, args...)
+function locked_filetask(pidfile::String, target::String, fn::Function,
+            args...; delete=false)
 
-    if !ispath(target)
+    check = (d, t) -> (d ? ispath(t) : !ispath(t))
+
+    if check(delete, target)
         lock = nothing
 
         try
             lock = mkpidlock(pidfile, stale_age=3)
 
-            if !ispath(target)
+            if check(delete, target)
                 fn(args...)
             end
 

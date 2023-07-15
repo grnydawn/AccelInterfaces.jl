@@ -437,6 +437,7 @@ function generate_sharedlib(
         compile     ::String,
         workdir     ::String,
         cachedir    ::String,
+        debugdir    ::String,
         cvars       ::JAI_TYPE_ARGS,
         args        ::JAI_TYPE_ARGS,
         clauses     ::JAI_TYPE_CONFIG,
@@ -473,6 +474,9 @@ function generate_sharedlib(
         curdir = pwd()
         genlock = nothing
 
+        myuid = string(uuid1())
+        myworkdir = joinpath(workdir, myuid)
+
         try
 
             # geneate shared library
@@ -481,8 +485,6 @@ function generate_sharedlib(
 
             if !isfile(slibpath)
 
-                myuid = string(uuid1())
-                myworkdir = joinpath(workdir, myuid)
                 if !isdir(myworkdir)
                     mkdir(myworkdir)
                 end
@@ -494,27 +496,33 @@ function generate_sharedlib(
 
                 copylock = nothing
 
+                # copy shared library
                 try
 
                     pidcopyfile = joinpath(workdir, outname * ".copypid")
-
-                    # copy shared library
                     copylock = mkpidlock(pidcopyfile, stale_age=3)
 
                     if !isfile(slibpath)
-                        cp(joinpath(myworkdir, outname), slibpath)
+
+                        cp(outname, slibpath)
                     end
-            catch err
-                rethrow(err)
 
-            finally
+                    if isdir(debugdir)
+                        for name in readdir(myworkdir)
+                            mv(name, joinpath(debugdir, name), force=true)
+                        end
+                    end
 
-                if copylock isa LockMonitor
-                    close(copylock)
+                catch err
+                    rethrow(err)
+
+                finally
+
+                    if copylock isa LockMonitor
+                        close(copylock)
+                    end
                 end
             end
-
-                end
         catch e
             rethrow(e)
 
@@ -525,6 +533,10 @@ function generate_sharedlib(
             end
 
             cd(curdir)
+
+            if isdir(myworkdir)
+                rm(myworkdir, force=true, recursive=true)
+            end
         end
     end
 
@@ -567,7 +579,8 @@ function get_framework(
         devices     ::Dict{Integer, Bool},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
         workdir     ::String,
-        cachedir    ::String
+        cachedir    ::String,
+        debugdir    ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
  
     if fconfig isa String
@@ -623,7 +636,7 @@ function get_framework(
         cid     = generate_jid(compile)
         prefix  = generate_prefix(JAI_MAP_FRAMEWORK_STRING[frametype], cid)
         slib    = generate_sharedlib(frametype, JAI_ACCEL, prefix, compile,
-                        workdir, cachedir, cvars, args, clauses)
+                        workdir, cachedir, debugdir, cvars, args, clauses)
 
         if slib isa Ptr{Nothing}
 
@@ -666,7 +679,8 @@ function select_framework(
         userframe   ::Union{JAI_TYPE_CONFIG, Nothing},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
         workdir     ::String,
-        cachedir     ::String
+        cachedir    ::String,
+        debugdir    ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
 
     if userframe == nothing
@@ -684,7 +698,8 @@ function select_framework(
     end
 
     for (frametype, config) in userframe
-        framework = get_framework(frametype, config, compiler, workdir, cachedir)
+        framework = get_framework(frametype, config, compiler, workdir,
+                        cachedir, debugdir)
         if framework isa JAI_TYPE_CONTEXT_FRAMEWORK
             return framework
         end
@@ -699,7 +714,8 @@ function select_framework(
         ctx_accel   ::JAI_TYPE_CONTEXT_ACCEL,
         userframe   ::Union{JAI_TYPE_CONFIG, Nothing},
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing},
-        workdir     ::String
+        workdir     ::String,
+        debugdir    ::String
     ) :: Union{JAI_TYPE_CONTEXT_FRAMEWORK, Nothing}
 
     if userframe == nothing
@@ -710,7 +726,7 @@ function select_framework(
         userframe[ctx_accel.framework.type] = nothing
     end
 
-    return select_framework(userframe, compiler, workdir)
+    return select_framework(userframe, compiler, workdir, debugdir)
 end
 
 # data framework

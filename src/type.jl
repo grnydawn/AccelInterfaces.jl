@@ -66,13 +66,14 @@ mutable struct JAI_TYPE_CONFIG_USER
     debug       ::Union{Bool, Nothing}
     workdir     ::Union{String, Nothing}
     cachedir    ::Union{String, Nothing}
+    debugdir    ::Union{String, Nothing}
 
     function JAI_TYPE_CONFIG_USER()
-        new(nothing, nothing, nothing)
+        new(nothing, nothing, nothing, nothing)
     end
 
-    function JAI_TYPE_CONFIG_USER(debug, workdir, cachedir)
-        new(debug, workdir, cachedir)
+    function JAI_TYPE_CONFIG_USER(debug, workdir, cachedir, debugdir)
+        new(debug, workdir, cachedir, debugdir)
     end
 
 end

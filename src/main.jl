@@ -91,12 +91,17 @@ function jai_accel(
     end
 
     if config.debug == nothing
-        debug = get_config("debug")
-        set_config(config, "debug", debug)
+        set_config(config, "debug", get_config("debug"))
     end
 
     if config.debug
+
         debugdir = joinpath(workdir, "debugdir")
+        if config.debugdir == nothing
+            set_config(config, "debugdir", debugdir)
+        else
+            debugdir = get_config(config, "debugdir")
+        end
 
         if !isdir(debugdir)
             try
@@ -105,6 +110,8 @@ function jai_accel(
             catch e
             end
         end
+    else
+        set_config(config, "debugdir", "")
     end
 
     if config.cachedir == nothing
@@ -188,6 +195,7 @@ function jai_kernel(
        
     workdir     = get_config(ctx_accel, "workdir")
     cachedir    = get_config(ctx_accel, "cachedir")
+    debugdir    = get_config(ctx_accel, "debugdir")
 
     ctx_frames = Vector{JAI_TYPE_CONTEXT_FRAMEWORK}()
 
@@ -196,14 +204,13 @@ function jai_kernel(
             if fkey in kdef_frames
 				try
 					frame = get_framework(fkey, fval, ctx_accel.devices,
-                                    compiler, workdir, cachedir)
+                                    compiler, workdir, cachedir, debugdir)
 					if frame isa JAI_TYPE_CONTEXT_FRAMEWORK
 						push!(ctx_frames, frame)
 					end
 
 				catch err
 					if err isa Base.IOError
-
 					elseif err isa JAI_ERROR_COMPILE_NOSHAREDLIB
 
 					else
@@ -290,12 +297,13 @@ function jai_data(
             #compile = ctx_accel.framework.compile
             workdir = get_config(ctx_accel, "workdir")
             cachedir = get_config(ctx_accel, "cachedir")
+            debugdir = get_config(ctx_accel, "debugdir")
 
             #data_frametype, data_compile = select_data_framework(ctx_accel)
 
             slib    = generate_sharedlib(data_frametype, apitype,
                         prefix, data_compile, workdir, cachedir,
-                        ctx_accel.const_vars, args, clauses)
+                        debugdir, ctx_accel.const_vars, args, clauses)
 
             ctx_accel.data_slibs[uid] = slib
         end
@@ -394,14 +402,15 @@ function jai_launch(
         else
             workdir = get_config(ctx_accel, "workdir")
             cachedir = get_config(ctx_accel, "cachedir")
+            debugdir = get_config(ctx_accel, "debugdir")
             knlcode = get_kernel_code(ctx_kernel, frametype)
             difftest = (length(ctx_accel.difftest) > 0
                        ) ? ctx_accel.difftest[end] : nothing
 
             #data_frametype, data_compile = select_data_framework(ctx_accel)
 
-            slib    = generate_sharedlib(frametype, apitype,
-                        prefix, compile, workdir, cachedir, ctx_accel.const_vars,
+            slib    = generate_sharedlib(frametype, apitype, prefix, compile,
+                        workdir, cachedir, debugdir, ctx_accel.const_vars,
                         args, clauses, knlcode, launch_config=frame_config,
                         difftest=difftest)
 

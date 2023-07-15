@@ -13,6 +13,7 @@ const JAI = Dict(
         "config"        => JAI_TYPE_CONFIG_USER(
                                 DEBUG,
                                 joinpath(pwd(), ".jworkdir"),
+                                nothing,
                                 nothing
                            ),
         "pidfile"       => ".jtask.pid",
@@ -93,6 +94,20 @@ function set_config(ctx::JAI_TYPE_CONTEXT_ACCEL, configs::JAI_TYPE_CONFIG)
     set_config(ctx.config, configs)
 end
 
+#function _jdecel_tasks(path, debug, debugdir) :: Nothing
+#
+#    if isdir(path)
+#        if debug
+#            for file in readdir(path)
+#                mv(joinpath(path, file), joinpath(debugdir, file),
+#                    force=true)
+#            end
+#        end
+#        rm(path, force=true, recursive=true)
+#    end
+#
+#end
+
 function delete_accel!(aname)
 
     ctx_accel = nothing
@@ -121,26 +136,21 @@ function delete_accel!(aname)
             # TODO: terminate ctx_kernel
         end
 
-        debug = get_config(ctx_accel, "debug")
-        workdir = get_config(ctx_accel, "workdir")
-        cachedir = get_config(ctx_accel, "cachedir")
-        debugdir = joinpath(workdir, "debugdir")
-
-        for name in readdir(workdir)
-            path = joinpath(workdir, name)
-            if path != cachedir && path != debugdir
-                try
-                    if debug
-                        for file in readdir(path)
-                            mv(joinpath(path, file), joinpath(debugdir, file),
-                                force=true)
-                        end
-                    end
-                    rm(path, force=true, recursive=true)
-                catch e
-                end
-            end
-        end
+#        debug = get_config(ctx_accel, "debug")
+#        workdir = get_config(ctx_accel, "workdir")
+#        cachedir = get_config(ctx_accel, "cachedir")
+#        debugdir = joinpath(workdir, "debugdir")
+#
+#        for name in readdir(workdir)
+#            path = joinpath(workdir, name)
+#
+#            if path != cachedir && path != debugdir
+#                try
+#                    locked_filetask("jdecel." * name * JAI["pidfile"],
+#                            path, _jdecel_tasks, path, debug, debugdir, delete=true)
+#                catch e
+#                end
+#            end
+#        end
     end
-
 end
