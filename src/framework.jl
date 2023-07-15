@@ -503,7 +503,6 @@ function generate_sharedlib(
                     copylock = mkpidlock(pidcopyfile, stale_age=3)
 
                     if !isfile(slibpath)
-
                         cp(outname, slibpath)
                     end
 
@@ -514,6 +513,19 @@ function generate_sharedlib(
                     end
 
                 catch err
+                    if isdir(debugdir)
+                        try
+                            if isfile(outname)
+                                mv(outname, joinpath(debugdir, outname), force=true)
+                            end
+                            fd = open(joinpath(debugdir, outname * ".compile"), "w")
+                            fd.write(string(err) * "\n\n")
+                            fd.write(compile * "\n\n")
+                            fd.write(string(launch_config))
+                            fd.close()
+                        catch e
+                        end
+                    end
                     rethrow(err)
 
                 finally
@@ -524,6 +536,20 @@ function generate_sharedlib(
                 end
             end
         catch e
+            if isdir(debugdir)
+                try
+                    if isfile(srcname)
+                        mv(srcname, joinpath(debugdir, srcname), force=true)
+                    end
+                    fd = open(joinpath(debugdir, srcname * ".compile"), "w")
+                    fd.write(string(e) * "\n\n")
+                    fd.write(compile * "\n\n")
+                    fd.write(string(launch_config))
+                    fd.close()
+                catch e
+                end
+            end
+
             rethrow(e)
 
         finally
