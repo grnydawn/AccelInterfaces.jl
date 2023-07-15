@@ -137,6 +137,7 @@ END DO
 
     @jenterdata fortacc alloc(X, Y, Z) # 1567/93, 819/84 ### 1059, 454
 
+    #@jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2") # 477/82, 362/64 ### 560, 714
     @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2") # 477/82, 362/64 ### 560, 714
 
     @jexitdata fortacc delete(X, Y, Z) #289/43  , 235/48 ### 258, 289

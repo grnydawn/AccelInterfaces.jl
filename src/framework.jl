@@ -519,10 +519,12 @@ function generate_sharedlib(
                                 mv(outname, joinpath(debugdir, outname), force=true)
                             end
                             fd = open(joinpath(debugdir, outname * ".compile"), "w")
-                            fd.write(string(err) * "\n\n")
-                            fd.write(compile * "\n\n")
-                            fd.write(string(launch_config))
-                            fd.close()
+                            io = IOBuffer();
+                            showerror(io, e)
+                            write(fd, String(take!(io)) * "\n\n")
+                            write(fd, compile * "\n\n")
+                            #write(fd, string(launch_config))
+                            close(fd)
                         catch e
                         end
                     end
@@ -541,11 +543,13 @@ function generate_sharedlib(
                     if isfile(srcname)
                         mv(srcname, joinpath(debugdir, srcname), force=true)
                     end
-                    fd = open(joinpath(debugdir, srcname * ".compile"), "w")
-                    fd.write(string(e) * "\n\n")
-                    fd.write(compile * "\n\n")
-                    fd.write(string(launch_config))
-                    fd.close()
+                    fd = open(joinpath(debugdir, outname * ".compile"), "w")
+                    io = IOBuffer();
+                    showerror(io, e)
+                    write(fd, String(take!(io)) * "\n\n")
+                    write(fd, compile * "\n\n")
+                    #write(fd, string(launch_config))
+                    close(fd)
                 catch e
                 end
             end
