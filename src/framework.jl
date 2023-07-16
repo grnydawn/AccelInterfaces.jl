@@ -260,14 +260,10 @@ function compile_code(
         end
     end
 
-    #cmds = get_prerun()
-    #cmd = Cmd(`bash -c "module load rocm; module load craype-accel-amd-gfx90a; $(compile) -o $(outname) $(srcname); env"`, dir=workdir)
-    #c = IOCapture.capture() do
-    #    run(cmd3)
-    #end
-    output = read(run(`$(split(compile)) -o $outname $srcname`), String)
+    serr = IOBuffer()
+    run(pipeline(`$(split(compile)) -o $outname $srcname`, stderr=serr))
 
-    isfile(outname) || throw(JAI_ERROR_COMPILE_NOSHAREDLIB(compile, output))
+    isfile(outname) || throw(JAI_ERROR_COMPILE_NOSHAREDLIB(compile, take!(serr)))
 end
 
 
@@ -793,6 +789,12 @@ function select_data_framework(
                     end
                 end
             end
+            if length(data_frames) == 0
+                break
+            end
+        end
+        if length(data_frames) == 0
+            break
         end
     end
 

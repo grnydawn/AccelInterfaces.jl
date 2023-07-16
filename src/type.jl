@@ -31,7 +31,7 @@ const JAI_NULLAPI           = JAI_TYPE_NULLAPI()
 
 # Jai data types
 const PtrAny    = Ptr{Any}
-const JAI_TYPE_DATA = Union{Nothing, String, T, NTuple{N, T}, AbstractArray{T, N},
+const JAI_TYPE_DATA = Union{Nothing, String, Bool, T, NTuple{N, T}, AbstractArray{T, N},
                             AbstractArray{PtrAny, N}} where {N, T<:Number}
 
 # Jai Framework types
@@ -164,6 +164,7 @@ struct JAI_TYPE_CONTEXT_ACCEL <: JAI_TYPE_CONTEXT
     ctx_kernels     ::Vector{JAI_TYPE_CONTEXT_KERNEL}
     externs         ::Dict{UInt64, String}
     difftest        ::Vector{Dict{String, Any}}
+    framework       ::Union{JAI_TYPE_CONFIG, Nothing}
 end
 
 struct JAI_TYPE_OS

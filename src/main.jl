@@ -55,8 +55,11 @@ function jai_accel(
         device      ::Union{NTuple{N, Integer} where N, Nothing}      = nothing,
         machine     ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
         compiler    ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
+        framework   ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing,
         set         ::Union{JAI_TYPE_CONFIG, Nothing}   = nothing
     )
+
+    # TODO: framework : possible value type (Nothing, Bool, String, Dict)
 
     config = JAI_TYPE_CONFIG_USER()
     
@@ -139,6 +142,17 @@ function jai_accel(
     difftest    = Vector{Dict{String, Any}}()
     devices     = Dict{Integer, Bool}()
 
+    if framework isa JAI_TYPE_CONFIG
+        for (key, value) in framework
+            if value in (nothing, false)
+                pop!(framework, key)
+            elseif value isa Dict && haskey(value, "enable"
+                    ) && value["enable"] in (false, nothing)
+                pop!(framework, key)
+            end
+        end
+    end
+
     if device != nothing
         for d in device
             devices[d] = false
@@ -147,7 +161,7 @@ function jai_accel(
 
     ctx_accel = JAI_TYPE_CONTEXT_ACCEL(aname, aid, config, cvars, devices,
                         data_framework, data_slibs, ctx_kernels, externs,
-                        difftest)
+                        difftest, framework)
 
     push!(JAI["ctx_accels"], ctx_accel)
 end
@@ -199,8 +213,20 @@ function jai_kernel(
 
     ctx_frames = Vector{JAI_TYPE_CONTEXT_FRAMEWORK}()
 
+    if framework isa Nothing
+        framework = ctx_accel.framework
+    end
+
     if framework isa JAI_TYPE_CONFIG
         for (fkey, fval) in framework
+
+            if fval in (nothing, false)
+                continue
+            elseif fval isa Dict && haskey(fval, "enable"
+                    ) && fval["enable"] in (false, nothing)
+                continue
+            end
+
             if fkey in kdef_frames
 				try
 					frame = get_framework(fkey, fval, ctx_accel.devices,

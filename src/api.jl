@@ -28,8 +28,7 @@ function _jaccel_clause_handler(output, clauses)
             end
             push!(output.args, Expr(:kw, clause.args[1], t))
 
-        #elseif clause.args[1] in (:framework, :set, :compiler)
-        elseif clause.args[1] in (:set, :compiler)
+        elseif clause.args[1] in (:set, :compiler, :framework)
 
             d = :(JAI_TYPE_CONFIG())
 
@@ -47,11 +46,11 @@ function _jaccel_clause_handler(output, clauses)
                     error("Wrong syntax: " * string(clause))
                 end
 
-                #if clause.args[1]== :framework
-                #    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
-                #else
+                if clause.args[1]== :framework
+                    push!(d.args, Expr(:call, :(=>), JAI_MAP_SYMBOL_FRAMEWORK[key], value))
+                else
                     push!(d.args, Expr(:call, :(=>), string(key), value))
-                #end
+                end
             end
 
             push!(output.args, Expr(:kw, clause.args[1], d))

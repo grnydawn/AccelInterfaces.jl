@@ -38,6 +38,7 @@ if SYSNAME == "Crusher"
     const cpp_omp_compile  = "CC -shared -fPIC -h omp,noacc"
     #const cpp_omp_compile  = "CC -shared -fPIC -fno-cray -fopenmp=libomp"
     const hip_compile  = "hipcc -shared -fPIC -lamdhip64 -g"
+    const cuda_compile  = nothing
     const workdir = "/lustre/orion/cli115/scratch/grnydawn/temp/jaiwork"
 
 elseif SYSNAME == "Frontier" 
@@ -189,7 +190,7 @@ function fortran_openacc_tests()
     #@jconfig test compiler(gnu="testeg")
 
     #@jaccel accacc framework(fortran_openacc=acc_compile) constant(TEST1, TEST2
-    @jaccel accacc constant(TEST1, TEST2
+    @jaccel accacc framework(fortran_openacc=acc_compile, cuda=cuda_compile) constant(TEST1, TEST2
                     ) device(2) set(workdir=workdir, debug=true)
 
 

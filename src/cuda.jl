@@ -119,7 +119,10 @@ function code_c_functions(
     ) :: String
 
     funcs = Vector{String}(undef, length(JAI_ACCEL_FUNCTIONS))
- 
+
+     # first arg in args should be 1-length integer vector
+    vname = args[1][3]
+
     for (i, (fname, inout)) in enumerate(JAI_ACCEL_FUNCTIONS)
         if fname == "wait"
             funcs[i] = code_c_function(prefix, fname, args, clauses,
