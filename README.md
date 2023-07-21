@@ -4,16 +4,15 @@
 
 **Jai** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
 
-**Jai** focuses on reusing Fortran and C/C++ application codes. The codes may include directive based GPU programming such as OpenAcc and OpenMP Target.
-
-This package is still in the early phase of development. Only a subset of mentioned features are developed. Please use this package at your own risk.
+**Jai** focuses on reusing Fortran and C/C++ codes, especially for large-scale simulation applications. Jai does not limit its support to specific languages or programming frameworks, as long as the code can be compiled as a shared library. In practice, **Jai** currently supports Fortran, C/C++, Fortran OpenMP, Fortran OpenACC, C++ OpenMP, CUDA, and HIP.
 
 ## Package features
 
-- Creates a shared library from pre-existing Fortran/C/C++ code
-- Generates arguments for [ccall](https://docs.julialang.org/en/v1/base/c/#ccall) function that uses the created shared library
-- Simplifies User interface using Julia macros
-- Takes advantages of Just-in-time(JIT) compilations
+- Provides Julia users with an OpenMP-like macro interface to run CPU and GPU code.
+- Automatically generates a shared library of pre-existing Fortran/C/C++ code so that it can be called from Julia.
+- Provides a simple interface to exchange data between Julia Arrays and GPU memory.
+- Allows different CPU and GPU programming frameworks to coexist within an application.
+- Boosts the performance of original code through just-in-time compilation.
 
 ## Installation
 
@@ -23,102 +22,88 @@ Pkg.add("AccelInterfaces")
 
 ## Quickstart
 
-The following Julia code calculates a vector sum whose main algorithm is written in Fortran.
+The following Julia code calculates a vector sum, whose main algorithm is written in Fortran.
 
 ```julia
 using AccelInterfaces
 
 kernel_text = """
+[fortran, fortran_openacc]
+    INTEGER i
 
-[fortran]
-
-INTEGER i
-
-DO i=LBOUND(x, 1), UBOUND(x, 1)
-z(i) = x(i) + y(i)
-END DO
-
-[fortran_openacc]
-
-INTEGER i
-
-!\$acc parallel loop present(x, y, z)
-DO i=LBOUND(x, 1), UBOUND(x, 1)
-z(i) = x(i) + y(i)
-END DO
-!\$acc end parallel loop
-
+    !\$acc parallel loop
+    DO i=LBOUND(x, 1), UBOUND(x, 1)
+        z(i) = x(i) + y(i)
+    END DO
+    !\$acc end parallel loop
 """
 
-const N = 10
-const x = fill(1, N)
-const y = fill(2, N)
-const z = fill(0, N)
-const answer = fill(3, N)
+    @jaccel
 
-@jaccel myaccel1 framework(fortran="gfortran -fPIC -shared")
+    @jkernel kernel_text mykernel1 framework(fortran="gfortran -fPIC -shared")
 
-@jkernel mykernel1 myaccel1 kernel_text
+    @jlaunch mykernel1 input(x, y)  output(z)
 
-@jlaunch(mykernel1, x, y; output=(z,))
+    @assert z == answer
 
-@assert z == answer
 ```
 
-"kernel_text" variable contains a Fortran DO loop that actually calculates the vector sum. There are two versions of DO loop: Fortran and Fortran_OpenAcc. Users can select one of them using the "framework" clause of "@jaccel" Jai directive explained below.
+### Using Jai for Fortran(CPU) application
 
-"@jaccel" creates a Jai accelerator context. To identify the context, here we use the literal name of "myaccel1". "framework" clause specifies the kind of acceleration(fortran in this example). The user can provide Jai with the actual compiler command line to generate a shared library. The command line should include the compiler and all compiler flags except the "-o" flag with the name of an output file and the path to an input source file.
+#### Specifies a kernel
+The "kernel_text" string contains a Fortran DO loop that actually calculates the vector sum. OpenACC annotations surround the DO loop, and the header at the top of the string specifies that the code contains both of Fortran and Fortran OpenACC code. Users can select one of fortran or fortran_openacc using the framework clause of the @jaccel Jai directive, which is explained below.
 
-"@jkernel" creates a Jai kernel context. To identify the kernel context, here we uses the literal name of "mykernel1". The last clause is the kernel program written in Fortran. User can provide Jai with the kernel program in Julia string or external file path.
+#### Creates a Jai accelerator context
+The @jaccel directive creates a Jai accelerator context.
 
-"@jlaunch" uses syntax similar to function calls with a pair of parentheses. Note that there should not be a space between "@jlaunch" and "(mykernel1...". The first argument is the name of kernel context. All the variable names right before the semicolon are input variables to the kernel. "output" keyword argument specifies the names of output variables in a Julia Tuple.
+#### Creates a Jai kernel context
+The @jkernel directive creates a Jai kernel context. The user must specify the string of the kernel, as in this example. Alternatively, the user can provide Jai with a path string to a text file that contains the kernel. To identify the kernel context, we use the literal name mykernel1.
 
-Please note that you should use only simple variable names for inputs and outputs to/from the kernel in "@jlaunch". For example, you can not write like this: "@jlaunch(mykernel1, x+1, func(y); output=(z::Vector,))."
+The framework clause specifies the kind of acceleration, which in this example is Fortran. The user can provide Jai with the actual compiler command line to generate a shared library. The command line should include the compiler and all compiler flags, except the -o flag, which specifies the name of the output file and the path to the input source file.
 
+#### Launches a kernel
+The first argument to the @jlaunch directive is the name of the kernel context used in the @jkernel directive. The user then adds the names of variables to the input and output clauses accordingly. However, it is important to note that you should only use simple variable names for inputs and outputs to/from the kernel in the @jlaunch directive. For example, you cannot write something like this:
+```julia
+@jlaunch mykernel1 input(x+1, func(y)) output(z::Vector) # Jai Syntax Error
+```
 
-To use GPU, you need to add additional Jai directives such as "@jenterdata", "@jexitdata", and "@jdecel". 
+### Using Jai for Fortran OpenACC(GPU) application
+
+NOTE: To run the Fortran OpenACC case, copy the following code lines at the end of the previous example.
 
 ```julia
-fill!(z, 0)
+    fill!(z, 0)
 
-@jaccel framework(fortran_openacc="ftn -h acc,noomp -fPIC -shared")
+    @jkernel kernel_text mykernel2 framework(fortran_openacc="ftn -h acc,noomp -fPIC -shared")
 
-@jkernel mykernel2 kernel_text
+    @jenterdata alloc(x, y, z) updateto(x, y)
 
-@jenterdata allocate(x, y, z) updateto(x, y)
+    @jlaunch mykernel2 input(x, y)  output(z)
 
-@jlaunch(mykernel2, x, y; output=(z,))
+    @jexitdata updatefrom(z) delete(x, y, z)
 
-@jexitdata updatefrom(z) deallocate(x, y, z)
+    @jdecel
 
-@jdecel
-
-@assert z == answer
+    @assert z == answer
 ```
+#### Specifies a kernel
+The Fortran OpenACC code shares most of the code with the above Fortran example, with the exception of additional lines for OpenACC annotations. To use fortran_openacc, the user can simply add the name fortran_openacc to the header of the kernel string, as shown in the "kernel_text" variable in the example.
 
-Similar to above Fortran example, we use "@jaccel" directive to create Jai accelerator context. In this example, we used Cray compiler wrapper to compile Fortran program with OpenAcc. But you may modify the compile command for your needs. we use "fortran_openacc" for "framework" clause which let Jai choose the content under "[fortran_openacc]" instead of "[fortran]" of kernel_text text. Please note that we did not add the literal name for Jai accelerator context. Without specifying the name for Jai accelerator context, Jai creates a default Jai accelerator name (jai_accel_default) for you. you can skip specifying the default name in the following Jai directives as shown in this example.
+#### Creates a Jai kernel context
+To compile the example code for Fortran OpenACC, the framework clause in the @jaccel macro must contain the compile string for OpenACC arrays.
 
-"@jkernel" directive creates a Jai kernel context with the literal name of "mykernel2."
+#### Allocate GPU memory and copy data from Julia Arrays to GPU memory
+The @jenterdata directive is used to allocate GPU memory and copy data from CPU to GPU. Once the user adds Julia variable names, Jai uses the data movement API according to the framework used, OpenACC in this case.
 
-"allocate" clause in "@jenterdata" allocates device memory for the variables of "x", "y", and "z". "updateto" clause copies the content of "x" and "y" to the allocated corresponding device variables.
+#### Launches a kernel
+The same as the above Fortran example. However, some frameworks such as CUDA may require additional information, including kernel launch configuration.
 
-In "@jexitdata", users can copy back data from the device using "updatefrom" clause. "deallocate" clause deallocates device memory allocated for "x", "y", and "z".
+#### Copy data from GPU memory to Julia Arrays and deallocate GPU memory
+The @jexitdata directive is used to deallocate GPU memory and copy data from GPU to CPU. Once the user adds Julia variable names, Jai uses the data movement API according to the framework used, OpenACC in this case.
 
-"@jdecel" directive notifies Jai that the user will not use current accelerator context anymore.
+#### Remove a Jai accelerator context
+Lastly, "@jdecel" is used to declare the end of the Jai accelerator context.
 
-You may notice that the Jai usage for fortran_openacc framework has similarity to fortran framework usage shown above. In fact, you can use the same code in fortran_openacc case for supporting not only fortran_openacc but also fortran if you switch "@jaccel" with proper information of framework and compile as shown below.
-
-To use fortran_openacc
-```julia
-@jaccel myaccel2 framework(fortran_openacc) compile("ftn -h acc,noomp -fPIC -shared")
-```
-
-To use fortran
-```julia
-@jaccel myaccel2 framework(fortran) compile("gfortran -fPIC -shared")
-```
-
-In case of fortram framework, "@jenterdata" and "@jexitdata" silently exit without doing any work. Therefore, user can maintain the same Jai code for supporting multiple acceleration frameworks.
 
 ## Questions and Suggestions
 
