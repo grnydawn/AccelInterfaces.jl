@@ -6,6 +6,8 @@
 
 **Jai** focuses on reusing Fortran and C/C++ codes, especially for large-scale simulation applications. Jai does not limit its support to specific languages or programming frameworks, as long as the code can be compiled as a shared library. In practice, **Jai** currently supports Fortran, C/C++, Fortran OpenMP, Fortran OpenACC, C++ OpenMP, CUDA, and HIP.
 
+This package is still in the early stages of development. Please use this package at your own risk.
+
 ## Package features
 
 - Provides Julia users with an OpenMP-like macro interface to run CPU and GPU code.
