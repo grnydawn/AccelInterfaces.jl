@@ -92,7 +92,7 @@ NOTE: To run the Fortran OpenACC case, copy the following code lines at the end 
 The Fortran OpenACC code shares most of the code with the above Fortran example, with the exception of additional lines for OpenACC annotations. To use fortran_openacc, the user can simply add the name fortran_openacc to the header of the kernel string, as shown in the "kernel_text" variable in the example.
 
 #### Creates a Jai kernel context
-To compile the example code for Fortran OpenACC, the framework clause in the @jaccel macro must contain the compile string for OpenACC arrays.
+To compile the example code for Fortran OpenACC, the framework clause in the @jkernel macro must contain the compile string for OpenACC arrays.
 
 #### Allocate GPU memory and copy data from Julia Arrays to GPU memory
 The @jenterdata directive is used to allocate GPU memory and copy data from CPU to GPU. Once the user adds Julia variable names, Jai uses the data movement API according to the framework used, OpenACC in this case.
