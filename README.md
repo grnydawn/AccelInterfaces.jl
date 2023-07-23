@@ -40,6 +40,12 @@ kernel_text = """
     !\$acc end parallel loop
 """
 
+    const N = 10
+    x = fill(1, N)
+    y = fill(2, N)
+    z = fill(0, N)
+    answer = fill(3, N)
+
     @jaccel
 
     @jkernel kernel_text mykernel1 framework(fortran="gfortran -fPIC -shared")
