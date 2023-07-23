@@ -4,7 +4,7 @@
 
 **Jai** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
 
-**Jai** focuses on reusing Fortran and C/C++ codes, especially for large-scale simulation applications. Jai does not limit its support to specific languages or programming frameworks, as long as the code can be compiled as a shared library. In practice, **Jai** currently supports Fortran, C/C++, Fortran OpenMP, Fortran OpenACC, C++ OpenMP, CUDA, and HIP.
+**Jai** focuses on reusing Fortran and C/C++ codes, especially for large-scale simulation applications. Jai does not limit its support to specific languages or programming frameworks, as long as the code can be compiled as a shared library. Currently, Jai supports the basic capabilities of Fortran, C/C++, Fortran OpenMP, Fortran OpenACC, C++ OpenMP, as well as HIP.
 
 This package is still in the early stages of development. Please use this package at your own risk.
 
