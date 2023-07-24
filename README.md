@@ -1,6 +1,6 @@
 # Jai: Julia accelerator interfaces
 
-[![Build Status](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Build Status](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 
 **Jai** is an accelerator programming interfaces for [Julia](http://julialang.org/) programmers.
 
@@ -21,6 +21,9 @@ This package is still in the early stages of development. Please use this packag
 ```julia
 Pkg.add("AccelInterfaces")
 ```
+
+## Manual
+This README is a quick introduction in using AccelInterfaces.jl (Jai). For more details you can read the latest [documentation](https://grnydawn.github.io/AccelInterfaces.jl/).
 
 ## Quickstart
 
