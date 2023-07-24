@@ -2,6 +2,7 @@
 
 #import InteractiveUtils.subtypes
 import UUIDs.uuid1
+import Dates: Second, now
 import Pidfile: mkpidlock, LockMonitor
 import Libdl: dlopen, RTLD_LAZY, RTLD_DEEPBIND, RTLD_GLOBAL, dlext, dlsym, dlclose
 #import IOCapture

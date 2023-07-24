@@ -5,7 +5,6 @@ import Serialization.serialize
 import SHA.sha1
 import Random.randstring
 import DataStructures.Stack
-import Dates: Second, now
 
 function locked_filetask(pidfile::String, target::String, fn::Function,
             args...; delete=false)

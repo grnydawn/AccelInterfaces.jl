@@ -1,4 +1,6 @@
 using AccelInterfaces
+import Dates: now
+
 #using Profile
 
 import OffsetArrays.OffsetArray,
@@ -457,7 +459,7 @@ END DO
     DEV_ALLOC = true
 
 
-    @jaccel hipacc device(1)
+    @jaccel hipacc device(1) set(debug=true)
 
 #    @jdiff hipacc fort_impl(DEV_ALLOC=false, X=1) hip_impl(DEV_ALLOC=true) begin
 
@@ -473,14 +475,17 @@ END DO
  
     @jkernel kernel_text mykernel hipacc framework(hip=hip_compile, fortran=fort_compile)
 
-    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y) enable_if(DEV_ALLOC)
+    @jenterdata hipacc alloc(X, Y, Z) updateto(X, Y) enable_if(DEV_ALLOC) async
 
-    @jlaunch mykernel hipacc input(X, Y, val) output(Z) hip(threads=(SHAPE,1), enable_if=DEV_ALLOC)
+    @jlaunch mykernel hipacc input(X, Y, val) output(Z) hip(threads=(SHAPE,1), enable_if=DEV_ALLOC) async
 
     @jexitdata hipacc updatefrom(Z) delete(X, Y, Z) enable_if(DEV_ALLOC) async
 
+    stime = now()
+
     @jwait hipacc
 
+    println("elapsed time of @jwait = ", string(now()-stime))
 #    end
 
     @jdecel hipacc
@@ -658,10 +663,10 @@ include("gitreadme.jl")
 #        fortran_omptarget_tests()
 #        cpp_test_string()
 #        #cpp_omptarget_test()
-#        hip_test_string()
+        hip_test_string()
 #        hip_fortran_test_string()
 #        jlweather_test()
-        gitreadme_test()
+#        gitreadme_test()
         #fortran_openacc_hip_test_string()
 
     elseif SYSNAME == "Frontier"
