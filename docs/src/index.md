@@ -1,24 +1,25 @@
-# Julia Accelerator Interfaces(Jai)
+# Julia AccelInterfaces.jl (**Jai**)
 
-Jai is a GPU and CPU programming interface for Julia programmers.
+*Accelerator programming interfaces for Julia programmers*
 
-Jai focuses on reusing Fortran and C/C++ codes. The Fortran and C/C++ codes could include directive based GPU programming such as OpenAcc and OpenMP Target. Or even the codes are written in CUDA or HIP.
+A package for reusing Fortran/C/C++ codes of large-scale simulations in Julia.
 
-# AccelInterfaces.jl
+!!! warning
 
-```@docs
-AccelInterfaces
-```
+    This package is in the early stages of development. Please use it at your own risk.
 
-## Module Index
+## Package Features
 
-```@index
-Modules = [AccelInterfaces]
-Order   = [:constant, :type, :function, :macro]
-```
-## Detailed API
+- Provides Julia users with an OpenMP-like macro interface to run CPU and GPU code.
+- Automatically generates a shared library of pre-existing Fortran/C/C++ code so that it can be called from Julia.
+- Provides a simple interface to exchange data between Julia Arrays and GPU memory.
+- Allows different CPU and GPU programming frameworks to coexist within an application.
+- Boosts the performance of original code through just-in-time compilation.
 
-```@autodocs
-Modules = [AccelInterfaces]
-Order   = [:constant, :type, :function, :macro]
-```
+The [Getting-Started](@ref) provides a tutorial explaining how to get started using AccelInterfaces.
+
+The [Examples](@ref) shows a Jai example for OpenACC.
+
+[jlweather](@ref) is a Julia port of [miniWeather](https://github.com/mrnorman/miniWeather) using [Jai](https://github.com/grnydawn/AccelInterfaces.jl).
+
+Please see [Jai API](@ref) for the explations of Jai macros.

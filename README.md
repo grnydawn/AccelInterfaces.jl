@@ -2,9 +2,9 @@
 
 [![Build Status](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-**Jai** is a GPU and CPU programming interface for [Julia](http://julialang.org/) programmers.
+**Jai** is an accelerator programming interfaces for [Julia](http://julialang.org/) programmers.
 
-**Jai** focuses on reusing Fortran and C/C++ codes, especially for large-scale simulation applications. Jai does not limit its support to specific languages or programming frameworks, as long as the code can be compiled as a shared library. Currently, Jai supports the basic capabilities of Fortran, C/C++, Fortran OpenMP, Fortran OpenACC, C++ OpenMP, CUDA, as well as HIP.
+**Jai** focuses on reusing Fortran and C/C++ codes, especially for large-scale simulation applications, within Julia. Jai does not limit its support to specific languages or programming frameworks, as long as the code can be compiled as a shared library. Currently, Jai supports the basic capabilities of Fortran, C/C++, Fortran OpenMP, Fortran OpenACC, C++ OpenMP, CUDA, as well as HIP.
 
 This package is still in the early stages of development. Please use this package at your own risk.
 

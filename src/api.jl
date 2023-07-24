@@ -77,11 +77,8 @@ See also [`@jaccel`](@jaccel), [`@jdecel`](@jdecel)
 ```julia-repl
 julia> @jconfig framework(fortran="gfortran -fPIC -shared -g")
 ```
-
-# Implementation
-T.B.D.
-
 """
+
 macro jconfig(clauses...)
 
     config = Expr(:call)
@@ -110,13 +107,11 @@ Create accelerator context.
 If `name` is not specified, this context can be accessed only as the currently active context.
 
 # Arguments
-- `name`::String: a unique name for this accelerator context
-- `framework`::NamedTuple: 
-- `device`::Integer: 
-- `compiler`::Integer: 
-- `machine`::Integer: 
-- `constant`::Tuple of Variable literal :
-- `set`::Named Tuple: 
+- `name`: a unique name for this accelerator context
+- `framework`: a list the framework names and compiler-command for the frameworks
+- `device`: device number 
+- `constant`: list of constant variables to be available in all kernels
+- `set`: set several options for the accelerator context including "workdir" for working directory, "debug" for enabling debugging feature.
 
 See also [`@jdecel`](@jdecel), [`@jkernel`](@jkernel)
 
@@ -125,10 +120,6 @@ See also [`@jdecel`](@jdecel), [`@jkernel`](@jkernel)
 julia> @jaccel myacc framework(fortran="gfortran -fPIC -shared -g")
 AccelInfo
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jaccel(clauses...)
 
@@ -304,22 +295,16 @@ Allocate device memory or copy data to device memory.
 If `name` is not specified, the currently active accel context will be used.
 
 # Arguments
-- `name`::String: a unique name for the accelerator context
-- `alloc`::NTuple: 
-- `updateto`::NTuple: 
-- `async`::Keyword :
+- `name`: a unique name for the accelerator context
+- `alloc`: a list of variable names to be allocated in an accelerator memory
+- `updateto`: a list of variable names whose content will be copied to an accelerator 
 
 See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 
 # Examples
 ```julia-repl
-julia> @jenterdata myacc alloc(X, Y, Z), updateto(X, Y, Z)
-0
+julia> @jenterdata myacc alloc(X, Y, Z) updateto(X, Y, Z)
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jenterdata(directs...)
     return _jdata(:alloc, JAI_ALLOCATE, :updateto, JAI_UPDATETO,
@@ -335,28 +320,21 @@ Dealloc device memory or copy data from device memory.
 If `name` is not specified, the currently active accel context will be used.
 
 # Arguments
-- `name`::String: a unique name for the accelerator context
-- `delete`::NTuple: 
-- `updatefrom`::NTuple: 
-- `async`::Keyword :
+- `name`: a unique name for the accelerator context
+- `delete`: a list of variable names to be deallocated in an accelerator memory
+- `updatefrom`: a list of variable names whose GPU content will be copied to host
 
 See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 
 # Examples
 ```julia-repl
 julia> @jexitdata myacc delete(X, Y, Z), updatefrom(X, Y, Z)
-0
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jexitdata(directs...)
     return _jdata(:delete, JAI_DEALLOCATE, :updatefrom, JAI_UPDATEFROM,
                   directs, __source__.line, __source__.file)
 end
-
 
 """
     @jkernel kerneldef, [kernelname, [accelname, ]][clauses...]
@@ -366,21 +344,17 @@ Create kernel context.
 If `kernelname` or `accelname` is not specified, the currently active accel or kernel context will be used.
 
 # Arguments
-- `kerneldef`::String: Jai kernel definition
-- `kernelname`::String: Kernel context name
-- `accelname`::String: Accel context name
+- `kerneldef`: Jai kernel definition
+- `kernelname`: Kernel context name
+- `accelname`: Accelerator context name
+- `framework`: a list the framework names and compiler-command for the frameworks
 
 See also [`@jaccel`](@jaccel), [`@jenterdata`](@jenterdata)
 
 # Examples
 ```julia-repl
-julia> @jkernel knlfilepath mykernel myaccel
-0
+julia> @jkernel filepath mykernel myaccel framework(fortran="gfortran -fPIC -shared -g")
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jkernel(kdef, clauses...)
 
@@ -467,20 +441,19 @@ Launch a kernel on an accelerator.
 If `kernelname` or `accelname` is not specified, the currently active accel or kernel context will be used.
 
 # Arguments
-- `kernelname`::String: Kernel context name
-- `accelname`::String: Accel context name
+- `kernelname`: Kernel context name
+- `accelname`: Accel context name
+- `input`: a list of input variables to the kernel
+- `output`: a list of output variables to the kernel
+- `hip`: a list of hip launch configurations
+- `cuda`: a list of cuda launch configurations
 
 See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 
 # Examples
 ```julia-repl
-julia> @jlaunch mykernel myaccel input(X, Y) output(Z)
-0
+julia> @jlaunch mykernel myaccel input(X, Y) output(Z) hip(threads=((1,1,1), (256,1,1)),enable_if=true)
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jlaunch(clauses...)
 
@@ -580,25 +553,21 @@ end
 
 
 """
-    @jwait [kernelname[ accelname]]
+    @jwait [accelname]
 
 Wait to finish device operation
 
-If `kernelname` or `accelname` is not specified, the currently active accel or kernel context will be used.
+If `accelname` is not specified, the currently active accel context will be used.
 
 # Arguments
+- `accelname`: Accel context name
 
 See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 
 # Examples
 ```julia-repl
-julia> @jwait mykernel
-0
+julia> @jwait myaccel
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jwait(clauses...)
 
@@ -622,14 +591,14 @@ macro jwait(clauses...)
 end
 
 """
-    @jdecel [name][, clauses...]
+    @jdecel [name]
 
-Destroy accelerator context.
+Delete an accelerator context.
 
 If `name` is not specified, this context can be accessed only as the currently active context.
 
 # Arguments
-- `name`::String: a unique name for this accelerator context
+- `name`: a unique name for this accelerator context
 
 See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 
@@ -637,10 +606,6 @@ See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 ```julia-repl
 julia> @jdecel myacc
 ```
-
-# Implementation
-T.B.D.
-
 """
 macro jdecel(clauses...)
 
@@ -688,6 +653,7 @@ end
 T.B.D.
 
 """
+
 macro jdiff(items...)
 
     block   = Expr(:block)

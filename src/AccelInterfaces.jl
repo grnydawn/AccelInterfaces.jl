@@ -2,7 +2,7 @@
 
 
 """
-Julia Accelerator Interfaces(Jai) module
+Julia Accelerator Interfaces (Jai) is a Julia package to reuse large-scale simulations written in Fortran/C/C++.
 """
 module AccelInterfaces
 
@@ -15,7 +15,8 @@ include("kernel.jl")
 include("main.jl")
 include("api.jl")
 
-export @jconfig, @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel, @jdiff
+export @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel
+#export @jconfig, @jaccel, @jenterdata, @jkernel, @jlaunch, @jexitdata, @jwait, @jdecel, @jdiff
 
 function _finalize()
 end
