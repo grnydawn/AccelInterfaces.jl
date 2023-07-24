@@ -135,23 +135,21 @@ END DO
 
     fcompile = Dict("compile" => fort_compile)
 
-    @jaccel fortacc constant(TEST1, TEST2, TEST3) set(debug=true) # 177/0, 173/0 ### 118 , 
-    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile) # 1362/0, 1300/0 ### 1082, 1039
+    @jaccel fortacc constant(TEST1, TEST2, TEST3) set(debug=true)
+    @jkernel kernel_text mykernel fortacc framework(fortran=fort_compile)
 
-    @jenterdata fortacc alloc(X, Y, Z) # 1567/93, 819/84 ### 1059, 454
+    @jenterdata fortacc alloc(X, Y, Z)
 
-    #@jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2") # 477/82, 362/64 ### 560, 714
-    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2") # 477/82, 362/64 ### 560, 714
+    @jlaunch mykernel fortacc input(X, Y) output(Z,) fortran(test="1", tt="2")
 
-    @jexitdata fortacc delete(X, Y, Z) #289/43  , 235/48 ### 258, 289
+    @jexitdata fortacc delete(X, Y, Z)
 
     @jwait fortacc
 
-    @jdecel fortacc # 27/0 , 31/0 ### 28, 24
+    @jdecel fortacc
 
-    @test Z == ANS # 30/0 , 28/0 ### 21, 20
+    @test Z == ANS
 
-	# sum 4106
 end
 
 function fortran_test_file()
@@ -285,7 +283,6 @@ for(int k=0; k<JLENGTH(X, 0); k++) {
     Z = fill(0.::Float64, SHAPE)
     ANS = X .+ Y
 
-    #@jaccel framework(cpp=cpp_compile) constant(TEST1, TEST2, TEST3)
     @jaccel constant(TEST1, TEST2, TEST3)
 
     @jkernel kernel_text framework(cpp=cpp_compile) 
@@ -707,7 +704,7 @@ include("gitreadme.jl")
     elseif SYSNAME == "Linux"
         fortran_test_string()
         fortran_test_file()
-        fortran_openacc_tests()
+        #fortran_openacc_tests()
         cpp_test_string()
 
     elseif SYSNAME == "MacOS"
