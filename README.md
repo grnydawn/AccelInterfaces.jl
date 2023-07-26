@@ -1,7 +1,7 @@
 # Jai: Julia accelerator interfaces
 
 [![Build Status](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/grnydawn/AccelInterfaces.jl/actions/workflows/CI.yml?query=branch%3Amaster)
-[![documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://grnydawn.github.io/AccelInterfaces.jl/)
+[![documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://grnydawn.github.io/AccelInterfaces.jl/)
 
 **Jai** is an accelerator programming interfaces for [Julia](http://julialang.org/) programmers.
 
