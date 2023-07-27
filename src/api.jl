@@ -328,7 +328,7 @@ See also [`@jaccel`](@jaccel), [`@jkernel`](@jkernel)
 
 # Examples
 ```julia-repl
-julia> @jexitdata myacc delete(X, Y, Z), updatefrom(X, Y, Z)
+julia> @jexitdata myacc delete(X, Y, Z) updatefrom(X, Y, Z)
 ```
 """
 macro jexitdata(directs...)
